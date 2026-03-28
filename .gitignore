@@ -1,0 +1,15 @@
+# dependencies
+node_modules
+
+# next
+.next/
+out/
+
+# env (NEVER commit)
+.env
+.env.local
+.env.*.local
+
+# misc
+.DS_Store
+*.log

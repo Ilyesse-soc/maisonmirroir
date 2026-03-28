@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { getProductById } from '@/lib/products'
 import PayPalButton from '@/components/PayPalButton'
 import {
@@ -17,17 +17,21 @@ import {
 
 export default function ProductPage() {
   const params = useParams()
-  const router = useRouter()
   const product = getProductById(params.id as string)
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [customValues, setCustomValues] = useState<Record<string, string>>({})
+  const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [address, setAddress] = useState({ firstName: '', lastName: '', email: '', street: '', city: '', zip: '', country: 'France' })
   const [step, setStep] = useState<'customize' | 'address' | 'payment'>('customize')
   const [error, setError] = useState('')
 
   useEffect(() => {
     setSelectedImageIndex(0)
+    setCustomValues({})
+    setSelectedOptions({})
+    setStep('customize')
+    setError('')
   }, [params.id])
 
   if (!product)
@@ -61,8 +65,36 @@ export default function ProductPage() {
   const total = unitPrice * quantity
   const displayAmount = total.toFixed(2)
 
+  const optionLabels: Record<string, string> = {
+    boxColor: 'Box Color',
+    roseColor: 'Rose Color',
+    decoration: 'Decoration',
+    size: 'Size',
+    textColor: 'Text Color',
+    ringHolder: 'Ring Holder',
+  }
+
+  const optionEntries = Object.entries(product.options ?? {}).filter(([, values]) => Array.isArray(values) && values.length > 0)
+  const optionsComplete = optionEntries.every(([key]) => Boolean(selectedOptions[key]))
+
+  const formattedOptions: Record<string, string> = optionEntries.reduce((acc, [key]) => {
+    const selected = selectedOptions[key]
+    if (selected) acc[optionLabels[key] || key] = selected
+    return acc
+  }, {} as Record<string, string>)
+
+  const mergedCustomValues: Record<string, string> = {
+    ...formattedOptions,
+    ...customValues,
+  }
+
   const validateStep = () => {
     if (step === 'customize') {
+      if (optionEntries.length > 0 && !optionsComplete) {
+        setError('Veuillez sélectionner toutes les options de personnalisation.')
+        return
+      }
+      setError('')
       setStep('address')
       return
     }
@@ -81,8 +113,6 @@ export default function ProductPage() {
 
   const paypalClientId = (process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? '').trim()
   const paypalConfigured = paypalClientId.length > 0
-
-  void router
 
   return (
     <div style={{ paddingTop: 80, minHeight: '100vh', background: theme.marble }}>
@@ -296,6 +326,44 @@ export default function ProductPage() {
                 <h3 style={{ fontFamily: fonts.display, fontSize: 20, fontWeight: 300, marginBottom: 8, color: theme.textDark }}>
                   Personnalisez votre création
                 </h3>
+
+                {optionEntries.length > 0 && (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                    {optionEntries.map(([key, values]) => (
+                      <div key={key}>
+                        <label
+                          style={{
+                            display: 'block',
+                            fontSize: 12,
+                            letterSpacing: '0.20em',
+                            textTransform: 'uppercase',
+                            marginBottom: 8,
+                            fontFamily: fonts.body,
+                            color: theme.textMid,
+                          }}
+                        >
+                          {optionLabels[key] || key} *
+                        </label>
+                        <select
+                          className="mm-input"
+                          style={inputLuxuryStyle}
+                          value={selectedOptions[key] || ''}
+                          onChange={(e) => setSelectedOptions((prev) => ({ ...prev, [key]: e.target.value }))}
+                        >
+                          <option value="" disabled>
+                            Choisir...
+                          </option>
+                          {(values as string[]).map((v) => (
+                            <option key={v} value={v}>
+                              {v}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 {product.customFields.map((field) => (
                   <div key={field}>
                     <label
@@ -321,6 +389,8 @@ export default function ProductPage() {
                     />
                   </div>
                 ))}
+
+                {error && <p style={{ color: '#ef4444', fontSize: 12, fontFamily: fonts.body }}>{error}</p>}
                 <button className="btn-gold" onClick={validateStep} style={{ ...buttonGoldStyle({ fullWidth: true }), marginTop: 16 }}>
                   Continuer →
                 </button>
@@ -498,6 +568,43 @@ export default function ProductPage() {
 
                   {/* Personalization details */}
                   {Object.entries(customValues)
+                    .filter(([, v]) => v)
+                    .map(([k, v]) => (
+                      <div
+                        key={k}
+                        style={{
+                          padding: '10px 22px',
+                          borderBottom: '1px solid #faf4e8',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '12px',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "'Jost',sans-serif",
+                            fontSize: '11px',
+                            color: '#a08060',
+                            letterSpacing: '0.08em',
+                          }}
+                        >
+                          {k}
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: "'Cormorant Garamond',serif",
+                            fontSize: '14px',
+                            color: 'var(--text)',
+                            fontStyle: 'italic',
+                          }}
+                        >
+                          {v}
+                        </span>
+                      </div>
+                    ))}
+
+                  {Object.entries(formattedOptions)
                     .filter(([, v]) => v)
                     .map(([k, v]) => (
                       <div
@@ -742,7 +849,7 @@ export default function ProductPage() {
                           unitPrice,
                           quantity,
                         },
-                        customValues,
+                        customValues: mergedCustomValues,
                         customer: address,
                       }}
                     />

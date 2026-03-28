@@ -1,3 +1,12 @@
+export type ProductOptions = {
+  boxColor?: string[]
+  roseColor?: string[]
+  decoration?: string[]
+  size?: string[]
+  textColor?: string[]
+  ringHolder?: string[]
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -8,6 +17,7 @@ export interface Product {
   description: string;
   features: string[];
   customFields: string[];
+  options?: ProductOptions;
 }
 
 export const products: Product[] = [
@@ -16,7 +26,7 @@ export const products: Product[] = [
     name: 'Nuée élégance',
     category: 'plateaux',
     categoryLabel: 'Plateaux personnalisés',
-    price: 89,
+    price: 65,
     images: ['/images/tray-dark-2.jpg','/images/tray-dark.jpg'],
     description:
       'Un nuage organique, posé sur un drap satin chocolat, sublimé par une bougie ambrée et une rose blanche. Gravé à la main avec la basmala et vos initiales, il devient la pièce centrale de votre décoration de fiançailles ou de mariage.',
@@ -28,13 +38,17 @@ export const products: Product[] = [
       'Livraison en boîte cadeau',
     ],
     customFields: ['Initiales (ex: A & C)', 'Date (ex: 04.04.2026)', 'Phrase personnalisée'],
+    options: {
+      textColor: ['doré', 'noir'],
+      ringHolder: ['rond', 'hexagone'],
+    },
   },
   {
     id: 'plateau-ceremonie-bordeaux',
     name: 'Reflet élégance',
     category: 'plateaux',
     categoryLabel: 'Plateaux personnalisés',
-    price: 80,
+    price: 75,
     images: ['/images/tray-ring.jpg'],
     description:
       'Plateau miroir rond, bordé de perles et de strass nacrés, accompagné d\'écrins velours bordeaux pour les alliances. Une composition raffinée avec roses artificielles et calligraphie dorée. Idéal pour la présentation des bagues lors de la cérémonie.',
@@ -46,6 +60,13 @@ export const products: Product[] = [
       'Prénom des mariés et date gravés',
     ],
     customFields: ['Prénom mariée', 'Prénom marié', 'Date (ex: 04.04.2026)', 'Verset ou phrase'],
+    options: {
+      boxColor: ['rouge', 'blanc', 'beige'],
+      roseColor: ['rouge', 'beige', 'blanc'],
+      decoration: ['perles', 'diamants'],
+      size: ['petit', 'grand'],
+      textColor: ['blanc', 'doré', 'noir'],
+    },
   },
   {
     id: 'panneau-acrylique-or-layla',

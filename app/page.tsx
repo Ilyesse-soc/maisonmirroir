@@ -348,7 +348,7 @@ export default function HomePage() {
                   <h3 style={{ fontFamily: fonts.display, fontSize: 18, fontWeight: 300, marginBottom: 8, color: theme.textDark }}>
                     {product.name}
                   </h3>
-                  <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.textMid }}>
+                  <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.gold }}>
                     À partir de {product.price} €
                   </p>
                 </div>

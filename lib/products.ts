@@ -13,7 +13,6 @@ export interface Product {
   category: 'plateaux' | 'panneaux';
   categoryLabel: string;
   price: number;
-  originalPrice?: number;
   images: string[];
   description: string;
   features: string[];
@@ -27,8 +26,7 @@ export const products: Product[] = [
     name: 'Nuée élégance',
     category: 'plateaux',
     categoryLabel: 'Plateaux personnalisés',
-    price: 35,
-    originalPrice: 65,
+    price: 65,
     images: ['/images/tray-dark-2.jpg','/images/tray-dark.jpg'],
     description:
       'Un nuage organique, posé sur un drap satin chocolat, sublimé par une bougie ambrée et une rose blanche. Gravé à la main avec la basmala et vos initiales, il devient la pièce centrale de votre décoration de fiançailles ou de mariage.',
@@ -50,8 +48,7 @@ export const products: Product[] = [
     name: 'Reflet élégance',
     category: 'plateaux',
     categoryLabel: 'Plateaux personnalisés',
-    price: 46,
-    originalPrice: 75,
+    price: 75,
     images: ['/images/tray-ring.jpg'],
     description:
       'Plateau miroir rond, bordé de perles et de strass nacrés, accompagné d\'écrins velours bordeaux pour les alliances. Une composition raffinée avec roses artificielles et calligraphie dorée. Idéal pour la présentation des bagues lors de la cérémonie.',

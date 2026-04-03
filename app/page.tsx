@@ -1,7 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { categories, products } from '@/lib/products'
-import ProductCard from '@/components/ProductCard'
 import {
   buttonGoldStyle,
   buttonOutlineGoldStyle,
@@ -326,8 +325,34 @@ export default function HomePage() {
               gap: 24,
             }}
           >
-            {featured.map((product) => (
-              <ProductCard key={product.id} product={product} />
+            {featured.map((product, i) => (
+              <Link
+                key={product.id}
+                href={`/product/${product.id}`}
+                className="mm-prod-card mm-reveal"
+                style={{ display: 'block', textDecoration: 'none' }}
+              >
+                <div className="mm-prod-img" style={{ position: 'relative', aspectRatio: '1 / 1', overflow: 'hidden', marginBottom: 16, background: '#fafaf9' }}>
+                  <Image
+                    src={product.images[0]}
+                    alt={product.name}
+                    fill
+                    style={{ objectFit: 'cover' }}
+                  />
+                  <div className="mm-prod-hover" style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.06)' }} />
+                </div>
+                <div style={{ textAlign: 'center', padding: '0 8px' }}>
+                  <p style={{ fontSize: 12, letterSpacing: '0.20em', textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 4, color: theme.gold }}>
+                    {product.categoryLabel}
+                  </p>
+                  <h3 style={{ fontFamily: fonts.display, fontSize: 18, fontWeight: 300, marginBottom: 8, color: theme.textDark }}>
+                    {product.name}
+                  </h3>
+                  <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.textMid }}>
+                    À partir de {product.price} €
+                  </p>
+                </div>
+              </Link>
             ))}
           </div>
         </div>

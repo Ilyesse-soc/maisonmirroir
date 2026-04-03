@@ -66,12 +66,14 @@ export default function ProductPage() {
   const displayAmount = total.toFixed(2)
 
   const optionLabels: Record<string, string> = {
-    boxColor: 'Box Color',
-    roseColor: 'Rose Color',
-    decoration: 'Decoration',
-    size: 'Size',
-    textColor: 'Text Color',
-    ringHolder: 'Ring Holder',
+    boxColor: 'Couleur des boîtes',
+    roseColor: 'Couleur des roses',
+    decoration: 'Décoration',
+    handles: 'Poignets',
+    ringBoxes: 'Boîtes alliances',
+    size: 'Taille',
+    textColor: 'Couleur du texte',
+    ringHolder: 'Support bague',
   }
 
   const optionEntries = Object.entries(product.options ?? {}).filter(([, values]) => Array.isArray(values) && values.length > 0)

@@ -2,6 +2,8 @@ export type ProductOptions = {
   boxColor?: string[]
   roseColor?: string[]
   decoration?: string[]
+  handles?: string[]
+  ringBoxes?: string[]
   size?: string[]
   textColor?: string[]
   ringHolder?: string[]
@@ -89,6 +91,30 @@ export const products: Product[] = [
       'Présentation élégante et symbolique',
     ],
     customFields: ['Prénom 1', 'Prénom 2', 'Date (ex: 09.05.2026)', 'Citation / verset (optionnel)'],
+  },
+  {
+    id: 'plateau-elegance-nuptial',
+    name: 'ÉLEGANCE NUPTIAL',
+    category: 'plateaux',
+    categoryLabel: 'Plateaux personnalisés',
+    price: 50,
+    originalPrice: 65,
+    images: ['/images/elegance-nuptial-1.jpg', '/images/elegance-nuptial-2.jpg'],
+    description:
+      'Plateau miroir au style luxueux, rehaussé d’écrins géométriques dorés suspendus, garnis de roses rouges profondes pour accueillir les alliances. Le ruban en velours bordeaux apporte une touche noble et contrastée, tandis que les détails floraux et dorés créent une composition riche et élégante. Idéal pour une mise en scène romantique et sophistiquée lors de la cérémonie.',
+    features: [
+      'Plateau miroir style luxueux',
+      'Écrins géométriques dorés suspendus',
+      'Roses rouges pour alliances',
+      'Ruban velours bordeaux',
+      'Composition romantique & sophistiquée',
+    ],
+    customFields: ['Prénom 1', 'Prénom 2', 'Date (ex: 09.05.2026)', 'Verset ou phrase (optionnel)'],
+    options: {
+      decoration: ['perles', 'strass'],
+      handles: ['avec poignets', 'sans poignets'],
+      ringBoxes: ['hexagone doré sans roses', 'hexagone doré avec roses'],
+    },
   },
   {
     id: 'panneau-acrylique-or-layla',

@@ -72,6 +72,25 @@ export const products: Product[] = [
     },
   },
   {
+    id: 'plateau-reflet-purete',
+    name: 'Reflet & Pureté',
+    category: 'plateaux',
+    categoryLabel: 'Plateaux personnalisés',
+    price: 35,
+    originalPrice: 40,
+    images: ['/images/reflet-purete-1.jpg', '/images/reflet-purete-2.jpg'],
+    description:
+      'Plateau miroir rond au design épuré, sublimé par un contour délicat de strass et de perles transparentes. Accompagné d’écrins en velours ivoire pour les alliances, il offre une esthétique lumineuse et minimaliste. La calligraphie fine associée à la citation coranique apporte une touche spirituelle et intemporelle. Idéal pour une présentation élégante et symbolique des bagues lors de la cérémonie.',
+    features: [
+      'Miroir rond design épuré',
+      'Contour strass & perles transparentes',
+      'Écrins velours ivoire pour alliances',
+      'Calligraphie fine + citation coranique',
+      'Présentation élégante et symbolique',
+    ],
+    customFields: ['Prénom 1', 'Prénom 2', 'Date (ex: 09.05.2026)', 'Citation / verset (optionnel)'],
+  },
+  {
     id: 'panneau-acrylique-or-layla',
     name: 'Panneau Bienvenue Acrylique Or',
     category: 'panneaux',

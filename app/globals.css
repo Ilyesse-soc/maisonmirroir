@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 /* ── ANIMATIONS ── */
 @keyframes mm-fadeUp {
   from { opacity: 0; transform: translateY(28px); }

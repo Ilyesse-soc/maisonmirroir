@@ -1,7 +1,7 @@
 import Image from 'next/image'
-import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getProductsByCategory, categories } from '@/lib/products'
+import ProductCard from '@/components/ProductCard'
 import { dividerStyle, fonts, pageMaxWidth, theme } from '@/lib/uiStyles'
 
 export function generateStaticParams() {
@@ -58,53 +58,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
               }}
             >
               {products.map((product) => (
-                <Link
-                  key={product.id}
-                  href={`/product/${product.id}`}
-                  style={{ display: 'block', textDecoration: 'none' }}
-                >
-                  <div style={{ position: 'relative', aspectRatio: '1 / 1', overflow: 'hidden', marginBottom: 20, background: '#fafaf9' }}>
-                    <Image
-                      src={product.images[0]}
-                      alt={product.name}
-                      fill
-                      style={{ objectFit: 'cover' }}
-                    />
-                    <div
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        display: 'flex',
-                        alignItems: 'flex-end',
-                        justifyContent: 'center',
-                        paddingBottom: 24,
-                        background: 'linear-gradient(180deg, rgba(0,0,0,0.00), rgba(0,0,0,0.25))',
-                      }}
-                    >
-                      <span
-                        style={{
-                          color: 'white',
-                          fontSize: 12,
-                          letterSpacing: '0.25em',
-                          textTransform: 'uppercase',
-                          fontFamily: fonts.body,
-                          border: '1px solid rgba(255,255,255,0.60)',
-                          padding: '10px 20px',
-                        }}
-                      >
-                        Personnaliser
-                      </span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'center' }}>
-                    <h3 style={{ fontFamily: fonts.display, fontSize: 22, fontWeight: 300, marginBottom: 8, color: theme.textDark }}>
-                      {product.name}
-                    </h3>
-                    <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.gold }}>
-                      {product.price} €
-                    </p>
-                  </div>
-                </Link>
+                <ProductCard key={product.id} product={product} />
               ))}
             </div>
           )}

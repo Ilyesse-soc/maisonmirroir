@@ -263,9 +263,41 @@ export default function ProductPage() {
             >
               {product.name}
             </h1>
-            <p style={{ fontFamily: fonts.display, fontSize: 26, marginBottom: 20, color: theme.gold }}>
-              {displayAmount} €
-            </p>
+            {typeof product.originalPrice === 'number' && product.originalPrice > unitPrice ? (
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
+                <span
+                  style={{
+                    fontFamily: fonts.body,
+                    fontSize: 14,
+                    color: theme.textMid,
+                    textDecoration: 'line-through',
+                    letterSpacing: '0.06em',
+                  }}
+                >
+                  {product.originalPrice.toFixed(2)} €
+                </span>
+                <span style={{ fontFamily: fonts.display, fontSize: 30, color: theme.gold }}>
+                  {displayAmount} €
+                </span>
+                <span
+                  style={{
+                    fontFamily: fonts.body,
+                    fontSize: 11,
+                    letterSpacing: '0.18em',
+                    textTransform: 'uppercase',
+                    color: theme.gold,
+                    border: `1px solid ${theme.gold}`,
+                    padding: '6px 10px',
+                  }}
+                >
+                  -{Math.round((1 - unitPrice / product.originalPrice) * 100)}%
+                </span>
+              </div>
+            ) : (
+              <p style={{ fontFamily: fonts.display, fontSize: 26, marginBottom: 20, color: theme.gold }}>
+                {displayAmount} €
+              </p>
+            )}
             <div style={{ ...dividerStyle(120), margin: '0 0 24px' }} />
             <p style={{ fontSize: 14, lineHeight: 1.9, fontFamily: fonts.body, letterSpacing: '0.04em', marginBottom: 32, color: theme.textMid }}>
               {product.description}

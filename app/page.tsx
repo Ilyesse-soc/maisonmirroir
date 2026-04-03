@@ -348,9 +348,40 @@ export default function HomePage() {
                   <h3 style={{ fontFamily: fonts.display, fontSize: 18, fontWeight: 300, marginBottom: 8, color: theme.textDark }}>
                     {product.name}
                   </h3>
-                  <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.gold }}>
-                    À partir de {product.price} €
-                  </p>
+                  {typeof product.originalPrice === 'number' && product.originalPrice > product.price ? (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <span
+                        style={{
+                          fontFamily: fonts.body,
+                          fontSize: 12,
+                          color: theme.textMid,
+                          textDecoration: 'line-through',
+                        }}
+                      >
+                        {product.originalPrice} €
+                      </span>
+                      <span style={{ fontFamily: fonts.display, fontSize: 16, fontWeight: 400, color: theme.gold }}>
+                        {product.price} €
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: fonts.body,
+                          fontSize: 10,
+                          letterSpacing: '0.18em',
+                          textTransform: 'uppercase',
+                          color: theme.gold,
+                          border: `1px solid ${theme.gold}`,
+                          padding: '4px 8px',
+                        }}
+                      >
+                        -{Math.round((1 - product.price / product.originalPrice) * 100)}%
+                      </span>
+                    </div>
+                  ) : (
+                    <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.gold }}>
+                      À partir de {product.price} €
+                    </p>
+                  )}
                 </div>
               </Link>
             ))}

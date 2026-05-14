@@ -26,6 +26,11 @@ type ProductInfo = {
 type OrderPayload = {
   product: ProductInfo
   customValues?: Record<string, string>
+  attachments?: Array<{
+    filename: string
+    contentType: string
+    base64: string
+  }>
   customer: CustomerInfo
 }
 
@@ -36,6 +41,10 @@ type IncomingBody = {
   paypalOrderId?: string
   paypalCapture?: unknown
   order: OrderPayload
+}
+
+function isSafeBase64(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9+/=\s]+$/.test(value)
 }
 
 type DirectOrderBody = {
@@ -124,12 +133,21 @@ export async function POST(req: NextRequest) {
     let product: ProductInfo | null = null
     let customer: CustomerInfo | null = null
     let customValues: Record<string, string> = {}
+    let attachments: Array<{ filename: string; contentType: string; base64: string }> = []
 
     if (rawBody.order && typeof rawBody.order === 'object') {
       const op = rawBody.order as OrderPayload
       product = op.product
       customer = op.customer
       customValues = (op.customValues && typeof op.customValues === 'object' ? op.customValues : {}) as Record<string, string>
+      const atts = Array.isArray(op.attachments) ? op.attachments : []
+      attachments = atts
+        .filter((a) => a && typeof a === 'object')
+        .map((a) => ({
+          filename: typeof (a as any).filename === 'string' ? (a as any).filename : '',
+          contentType: typeof (a as any).contentType === 'string' ? (a as any).contentType : '',
+          base64: typeof (a as any).base64 === 'string' ? (a as any).base64 : '',
+        }))
     } else {
       const name = isNonEmptyString(rawBody.name) ? rawBody.name.trim() : ''
       const [firstName, ...rest] = name.split(' ')
@@ -162,6 +180,7 @@ export async function POST(req: NextRequest) {
         country: 'France',
       }
       customValues = {}
+      attachments = []
     }
 
     const validationErrors: string[] = []
@@ -194,6 +213,18 @@ export async function POST(req: NextRequest) {
     const total = product.unitPrice * product.quantity
 
     const safeCustomValues = customValues && typeof customValues === 'object' ? customValues : {}
+
+    const safeAttachments = attachments
+      .filter((a) => isNonEmptyString(a.filename) && isNonEmptyString(a.contentType) && isSafeBase64(a.base64))
+      .slice(0, 2)
+      .filter((a) => {
+        const allowedTypes = ['application/pdf', 'image/png']
+        if (!allowedTypes.includes(a.contentType)) return false
+
+        // Approx bytes = base64 length * 3/4
+        const approxBytes = Math.floor(a.base64.replace(/\s/g, '').length * 0.75)
+        return approxBytes > 0 && approxBytes <= 2 * 1024 * 1024
+      })
 
     const safeCustomerName = `${customer.firstName} ${customer.lastName}`.trim().replace(/\s+/g, ' ')
     const safeTotal = formatEUR(total)
@@ -254,6 +285,7 @@ export async function POST(req: NextRequest) {
             ['Total', `${safeTotal} €`],
             ['Référence', orderId],
           ])}
+          ${buildSection('Personnalisation', Object.entries(safeCustomValues).map(([k, v]) => [k, String(v)]))}
           ${buildSection('Livraison', [
             ['Adresse', customer.street],
             ['Ville', customer.city],
@@ -271,6 +303,11 @@ export async function POST(req: NextRequest) {
       replyTo: customer.email,
       subject,
       html: sellerHtml,
+      attachments: safeAttachments.map((a) => ({
+        filename: a.filename,
+        content: a.base64.replace(/\s/g, ''),
+        contentType: a.contentType,
+      })),
     } as any)
 
     if ((sellerSend as any)?.error) {

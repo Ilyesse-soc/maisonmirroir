@@ -12,6 +12,7 @@ import {
 
 export default function HomePage() {
   const featured = products.slice(0, 4)
+  const formatPrice = (n: number) => (Number.isFinite(n) ? n.toFixed(2).replace('.00', '') : String(n))
 
   return (
     <div style={{ overflow: 'hidden' }}>
@@ -117,18 +118,18 @@ export default function HomePage() {
           </p>
 
           <div className="mm-hero-btns mm-fade mm-d4" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center' }}>
-            <Link href="/category/plateaux" className="btn-gold" style={buttonGoldStyle()}>
-              Découvrir les plateaux
+            <Link href="/category/sacs" className="btn-gold" style={buttonGoldStyle()}>
+              Découvrir les sacs
             </Link>
             <Link
-              href="/category/panneaux"
+              href="/category/gourmandises"
               style={{
                 ...buttonOutlineGoldStyle(),
                 color: 'white',
                 border: '1px solid rgba(255,255,255,0.60)',
               }}
             >
-              Voir les panneaux
+              Voir les gourmandises
             </Link>
           </div>
         </div>
@@ -379,7 +380,7 @@ export default function HomePage() {
                     </div>
                   ) : (
                     <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.gold }}>
-                      À partir de {product.price} €
+                      À partir de {formatPrice(product.price)} €
                     </p>
                   )}
                 </div>

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { getProductById } from '@/lib/products'
+import { getProductById, type OptionChoice } from '@/lib/products'
 import PayPalButton from '@/components/PayPalButton'
 import {
   buttonGoldStyle,
@@ -22,6 +22,16 @@ export default function ProductPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [customValues, setCustomValues] = useState<Record<string, string>>({})
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
+  const [quantity, setQuantity] = useState(1)
+  const [artworkFile, setArtworkFile] = useState<
+    | {
+        filename: string
+        contentType: string
+        base64: string
+        size: number
+      }
+    | null
+  >(null)
   const [address, setAddress] = useState({ firstName: '', lastName: '', email: '', street: '', city: '', zip: '', country: 'France' })
   const [step, setStep] = useState<'customize' | 'address' | 'payment'>('customize')
   const [error, setError] = useState('')
@@ -30,6 +40,8 @@ export default function ProductPage() {
     setSelectedImageIndex(0)
     setCustomValues({})
     setSelectedOptions({})
+    setQuantity(1)
+    setArtworkFile(null)
     setStep('customize')
     setError('')
   }, [params.id])
@@ -60,9 +72,42 @@ export default function ProductPage() {
     setAddress(prev => ({ ...prev, [field]: value }))
   }
 
-  const quantity = 1
-  const unitPrice = product.price
-  const total = unitPrice * quantity
+  const clampQuantity = (value: number) => {
+    if (!Number.isFinite(value)) return 1
+    return Math.max(1, Math.min(999, Math.trunc(value)))
+  }
+
+  const normalizeChoices = (values: OptionChoice[]) =>
+    values.map((v) => (typeof v === 'string' ? { value: v, label: v } : v))
+
+  const getSelectedChoice = (key: string) => {
+    const rawValues = product.options?.[key]
+    const selected = selectedOptions[key]
+    if (!rawValues || !selected) return null
+    const choices = normalizeChoices(rawValues)
+    return choices.find((c) => c.value === selected) ?? null
+  }
+
+  const computeUnitPrice = () => {
+    let price = product.price
+    const entries = Object.entries(product.options ?? {})
+    for (const [key] of entries) {
+      if (key === 'artworkFile') continue
+      const choice = getSelectedChoice(key)
+      if (!choice) continue
+      if (typeof choice.priceOverride === 'number' && Number.isFinite(choice.priceOverride)) {
+        price = choice.priceOverride
+      } else if (typeof choice.priceDelta === 'number' && Number.isFinite(choice.priceDelta)) {
+        price += choice.priceDelta
+      }
+    }
+    if (!Number.isFinite(price) || price <= 0) price = product.price
+    return price
+  }
+
+  const unitPrice = computeUnitPrice()
+  const qty = clampQuantity(quantity)
+  const total = unitPrice * qty
   const displayAmount = total.toFixed(2)
 
   const optionLabels: Record<string, string> = {
@@ -74,14 +119,24 @@ export default function ProductPage() {
     size: 'Taille',
     textColor: 'Couleur du texte',
     ringHolder: 'Support bague',
+    style: 'Style souhaité',
+    model: 'Modèle',
+    artworkFile: 'Logo / design',
   }
 
   const optionEntries = Object.entries(product.options ?? {}).filter(([, values]) => Array.isArray(values) && values.length > 0)
-  const optionsComplete = optionEntries.every(([key]) => Boolean(selectedOptions[key]))
+  const optionsComplete = optionEntries.every(([key]) => {
+    if (key === 'artworkFile') return Boolean(artworkFile)
+    return Boolean(selectedOptions[key])
+  })
 
   const formattedOptions: Record<string, string> = optionEntries.reduce((acc, [key]) => {
-    const selected = selectedOptions[key]
-    if (selected) acc[optionLabels[key] || key] = selected
+    if (key === 'artworkFile') {
+      if (artworkFile) acc[optionLabels[key] || key] = artworkFile.filename
+      return acc
+    }
+    const choice = getSelectedChoice(key)
+    if (choice) acc[optionLabels[key] || key] = choice.label
     return acc
   }, {} as Record<string, string>)
 
@@ -94,6 +149,10 @@ export default function ProductPage() {
     if (step === 'customize') {
       if (optionEntries.length > 0 && !optionsComplete) {
         setError('Veuillez sélectionner toutes les options de personnalisation.')
+        return
+      }
+      if (!Number.isFinite(quantity) || clampQuantity(quantity) < 1) {
+        setError('Veuillez indiquer une quantité valide (minimum 1).')
         return
       }
       setError('')
@@ -279,7 +338,7 @@ export default function ProductPage() {
                   {product.originalPrice.toFixed(2)} €
                 </span>
                 <span style={{ fontFamily: fonts.display, fontSize: 30, color: theme.gold }}>
-                  {displayAmount} €
+                  {unitPrice.toFixed(2)} €
                 </span>
                 <span
                   style={{
@@ -296,10 +355,14 @@ export default function ProductPage() {
                 </span>
               </div>
             ) : (
-              <p style={{ fontFamily: fonts.display, fontSize: 26, marginBottom: 20, color: theme.gold }}>
-                {displayAmount} €
+              <p style={{ fontFamily: fonts.display, fontSize: 26, marginBottom: 12, color: theme.gold }}>
+                {unitPrice.toFixed(2)} €
               </p>
             )}
+
+            <p style={{ fontFamily: fonts.body, fontSize: 12, letterSpacing: '0.06em', color: theme.textMid, marginBottom: 20 }}>
+              Total ({qty} × {unitPrice.toFixed(2)} €) : <strong style={{ color: theme.textDark }}>{displayAmount} €</strong>
+            </p>
             <div style={{ ...dividerStyle(120), margin: '0 0 24px' }} />
             <p style={{ fontSize: 14, lineHeight: 1.9, fontFamily: fonts.body, letterSpacing: '0.04em', marginBottom: 32, color: theme.textMid }}>
               {product.description}
@@ -378,25 +441,102 @@ export default function ProductPage() {
                         >
                           {optionLabels[key] || key} *
                         </label>
-                        <select
-                          className="mm-input"
-                          style={inputLuxuryStyle}
-                          value={selectedOptions[key] || ''}
-                          onChange={(e) => setSelectedOptions((prev) => ({ ...prev, [key]: e.target.value }))}
-                        >
-                          <option value="" disabled>
-                            Choisir...
-                          </option>
-                          {(values as string[]).map((v) => (
-                            <option key={v} value={v}>
-                              {v}
+                        {key === 'artworkFile' ? (
+                          <div>
+                            <input
+                              className="mm-input"
+                              style={inputLuxuryStyle}
+                              type="file"
+                              accept=".pdf,.png"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) {
+                                  setArtworkFile(null)
+                                  return
+                                }
+                                const allowed = ['application/pdf', 'image/png']
+                                if (!allowed.includes(file.type)) {
+                                  setError('Format non supporté. Formats acceptés : PDF ou PNG.')
+                                  setArtworkFile(null)
+                                  return
+                                }
+                                const maxSize = 2 * 1024 * 1024
+                                if (file.size > maxSize) {
+                                  setError('Fichier trop volumineux (max 2 Mo).')
+                                  setArtworkFile(null)
+                                  return
+                                }
+                                const buf = await file.arrayBuffer()
+                                const bytes = new Uint8Array(buf)
+                                let binary = ''
+                                for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+                                const base64 = btoa(binary)
+                                setArtworkFile({
+                                  filename: file.name,
+                                  contentType: file.type,
+                                  base64,
+                                  size: file.size,
+                                })
+                                setError('')
+                              }}
+                            />
+                            {artworkFile && (
+                              <p style={{ marginTop: 8, fontSize: 12, fontFamily: fonts.body, color: theme.textMid, lineHeight: 1.6 }}>
+                                Fichier sélectionné : <strong>{artworkFile.filename}</strong>
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <select
+                            className="mm-input"
+                            style={inputLuxuryStyle}
+                            value={selectedOptions[key] || ''}
+                            onChange={(e) => setSelectedOptions((prev) => ({ ...prev, [key]: e.target.value }))}
+                          >
+                            <option value="" disabled>
+                              Choisir...
                             </option>
-                          ))}
-                        </select>
+                            {normalizeChoices(values as OptionChoice[]).map((c) => (
+                              <option key={c.value} value={c.value}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                  <div>
+                    <label
+                      style={{
+                        display: 'block',
+                        fontSize: 12,
+                        letterSpacing: '0.20em',
+                        textTransform: 'uppercase',
+                        marginBottom: 8,
+                        fontFamily: fonts.body,
+                        color: theme.textMid,
+                      }}
+                    >
+                      Quantité *
+                    </label>
+                    <input
+                      className="mm-input"
+                      type="number"
+                      min={1}
+                      step={1}
+                      style={inputLuxuryStyle}
+                      value={quantity}
+                      onChange={(e) => setQuantity(clampQuantity(Number(e.target.value)))}
+                    />
+                    <p style={{ marginTop: 8, fontSize: 12, fontFamily: fonts.body, color: theme.textMid, lineHeight: 1.6 }}>
+                      Prix unitaire : <strong>{unitPrice.toFixed(2)} €</strong> — Total : <strong>{displayAmount} €</strong>
+                    </p>
+                  </div>
+                </div>
 
                 {product.customFields.map((field) => (
                   <div key={field}>
@@ -596,9 +736,41 @@ export default function ProductPage() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {displayAmount} €
+                          {displayAmount} €
                     </span>
                   </div>
+
+                      <div
+                        style={{
+                          padding: '10px 22px',
+                          borderBottom: '1px solid #faf4e8',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          gap: '12px',
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "'Jost',sans-serif",
+                            fontSize: '11px',
+                            color: '#a08060',
+                            letterSpacing: '0.08em',
+                          }}
+                        >
+                          Quantité
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: "'Cormorant Garamond',serif",
+                            fontSize: '14px',
+                            color: 'var(--text)',
+                            fontStyle: 'italic',
+                          }}
+                        >
+                          {qty}
+                        </span>
+                      </div>
 
                   {/* Personalization details */}
                   {Object.entries(customValues)
@@ -881,9 +1053,18 @@ export default function ProductPage() {
                           category: product.category,
                           categoryLabel: product.categoryLabel,
                           unitPrice,
-                          quantity,
+                          quantity: clampQuantity(quantity),
                         },
                         customValues: mergedCustomValues,
+                        attachments: artworkFile
+                          ? [
+                              {
+                                filename: artworkFile.filename,
+                                contentType: artworkFile.contentType,
+                                base64: artworkFile.base64,
+                              },
+                            ]
+                          : [],
                         customer: address,
                       }}
                     />

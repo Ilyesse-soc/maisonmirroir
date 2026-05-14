@@ -28,6 +28,11 @@ type ProductInfo = {
 type OrderPayload = {
   product: ProductInfo;
   customValues?: Record<string, string>;
+  attachments?: Array<{
+    filename: string;
+    contentType: string;
+    base64: string;
+  }>;
   customer: CustomerInfo;
 };
 
@@ -72,6 +77,8 @@ export default function PayPalButton({
           disabled={status === "processing"}
           createOrder={(_data, actions) => {
             const value = safeAmount.toFixed(2);
+            const unitAmount = order.product.unitPrice.toFixed(2);
+            const qty = String(order.product.quantity);
             return actions.order.create({
               intent: "CAPTURE",
               purchase_units: [
@@ -79,7 +86,21 @@ export default function PayPalButton({
                   amount: {
                     currency_code: "EUR",
                     value,
+                    breakdown: {
+                      item_total: { currency_code: "EUR", value },
+                      shipping: { currency_code: "EUR", value: "0.00" },
+                    },
                   },
+                  description: order.product.name,
+                  custom_id: order.product.id,
+                  items: [
+                    {
+                      name: order.product.name,
+                      unit_amount: { currency_code: "EUR", value: unitAmount },
+                      quantity: qty,
+                      category: "PHYSICAL_GOODS",
+                    },
+                  ],
                 },
               ],
             });

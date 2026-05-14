@@ -13,6 +13,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
   if (!cat) notFound()
 
   const products = getProductsByCategory(params.slug)
+  const formatPrice = (n: number) => (Number.isFinite(n) ? n.toFixed(2).replace('.00', '') : String(n))
 
   return (
     <div style={{ paddingTop: 80 }}>
@@ -61,15 +62,17 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
                 <Link
                   key={product.id}
                   href={`/product/${product.id}`}
+                  className="mm-prod-card"
                   style={{ display: 'block', textDecoration: 'none' }}
                 >
-                  <div style={{ position: 'relative', aspectRatio: '1 / 1', overflow: 'hidden', marginBottom: 20, background: '#fafaf9' }}>
+                  <div className="mm-prod-img" style={{ position: 'relative', aspectRatio: '1 / 1', overflow: 'hidden', marginBottom: 20, background: '#fafaf9' }}>
                     <Image
                       src={product.images[0]}
                       alt={product.name}
                       fill
                       style={{ objectFit: 'cover' }}
                     />
+                    <div className="mm-prod-hover" style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.06)' }} />
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <h3 style={{ fontFamily: fonts.display, fontSize: 22, fontWeight: 300, marginBottom: 8, color: theme.textDark }}>
@@ -106,7 +109,7 @@ export default function CategoryPage({ params }: { params: { slug: string } }) {
                       </div>
                     ) : (
                       <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.gold }}>
-                        {product.price} €
+                        À partir de {formatPrice(product.price)} €
                       </p>
                     )}
                   </div>

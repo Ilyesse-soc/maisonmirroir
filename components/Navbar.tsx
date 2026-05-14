@@ -90,8 +90,10 @@ export default function Navbar() {
           <div className="mm-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
             {[
               { href: '/', label: 'Accueil' },
+              { href: '/catalogue', label: 'Catalogue' },
+              { href: '/category/sacs', label: 'Sacs' },
+              { href: '/category/gourmandises', label: 'Gourmandises' },
               { href: '/category/plateaux', label: 'Plateaux' },
-              { href: '/category/panneaux', label: 'Panneaux' },
             ].map(({ href, label }) => (
               <Link
                 key={href}
@@ -108,7 +110,7 @@ export default function Navbar() {
                 {label}
               </Link>
             ))}
-            <Link href="/category/plateaux" className="btn-gold" style={buttonGoldStyle({ fontSize: 12 })}>
+            <Link href="/catalogue" className="btn-gold" style={buttonGoldStyle({ fontSize: 12 })}>
               Commander
             </Link>
           </div>
@@ -176,8 +178,10 @@ export default function Navbar() {
         >
           {[
             { href: '/', label: 'Accueil' },
+            { href: '/catalogue', label: 'Catalogue' },
+            { href: '/category/sacs', label: 'Sacs personnalisés' },
+            { href: '/category/gourmandises', label: 'Gourmandises' },
             { href: '/category/plateaux', label: 'Plateaux personnalisés' },
-            { href: '/category/panneaux', label: 'Panneaux décoratifs' },
           ].map(({ href, label }) => (
             <Link
               key={href}
@@ -196,7 +200,7 @@ export default function Navbar() {
             </Link>
           ))}
           <Link
-            href="/category/plateaux"
+            href="/catalogue"
             className="btn-gold"
             style={buttonGoldStyle({ fullWidth: true, fontSize: 12 })}
             onClick={() => setMenuOpen(false)}

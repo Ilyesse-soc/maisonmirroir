@@ -74,8 +74,10 @@ export default function Footer() {
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
+                { href: '/category/sacs', label: 'Sacs personnalisés' },
+                { href: '/category/gourmandises', label: 'Gourmandises personnalisées' },
+                { href: '/category/welcome', label: 'Panneaux & welcome' },
                 { href: '/category/plateaux', label: 'Plateaux personnalisés' },
-                { href: '/category/panneaux', label: 'Panneaux décoratifs' },
               ].map(({ href, label }) => (
                 <Link
                   key={href}

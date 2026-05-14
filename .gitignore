@@ -13,3 +13,7 @@ out/
 # misc
 .DS_Store
 *.log
+
+# local working files (do not commit)
+tmp_pdf_extract.txt
+Sacs en jute logo personnalisé.pdf

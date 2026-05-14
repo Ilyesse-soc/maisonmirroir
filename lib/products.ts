@@ -1,18 +1,18 @@
-export type ProductOptions = {
-  boxColor?: string[]
-  roseColor?: string[]
-  decoration?: string[]
-  handles?: string[]
-  ringBoxes?: string[]
-  size?: string[]
-  textColor?: string[]
-  ringHolder?: string[]
-}
+export type OptionChoice =
+  | string
+  | {
+      value: string
+      label: string
+      priceDelta?: number
+      priceOverride?: number
+    }
+
+export type ProductOptions = Record<string, OptionChoice[]>
 
 export interface Product {
   id: string;
   name: string;
-  category: 'plateaux' | 'panneaux';
+  category: 'sacs' | 'welcome' | 'gourmandises' | 'rituels' | 'certificats' | 'plateaux';
   categoryLabel: string;
   price: number;
   originalPrice?: number;
@@ -25,13 +25,228 @@ export interface Product {
 
 export const products: Product[] = [
   {
-    id: 'plateau-satin-noir',
-    name: 'Nuée élégance',
+    id: 'tote-bag-premium',
+    name: 'Tote Bag Premium',
+    category: 'sacs',
+    categoryLabel: 'Sacs personnalisés',
+    price: 35,
+    images: ['/images/tote-bag-premium1.png', '/images/tote-bag-premium2.jpg'],
+    description:
+      'Sac en jute personnalisable – 35 x 32 cm. Élégant et pratique, idéal pour les entreprises, marques et créateurs de contenu souhaitant mettre en avant leur identité visuelle. Personnalisable avec votre logo, texte ou design selon votre demande.',
+    features: [
+      'Dimensions : 35 x 32 cm',
+      'Matière : toile de jute',
+      'Personnalisation : logo / texte / design',
+    ],
+    customFields: [
+      'Décrivez votre personnalisation (emplacement, texte, couleurs, style, etc.)',
+    ],
+    options: {
+      artworkFile: [
+        { value: 'upload', label: 'Importer un fichier (PDF / PNG)' },
+      ],
+    },
+  },
+  {
+    id: 'collection-signature',
+    name: 'Collection Signature',
+    category: 'sacs',
+    categoryLabel: 'Sacs personnalisés',
+    price: 25,
+    images: ['/images/collection-signature.jpg', '/images/collection-signature2.jpg', '/images/collection-signature3.jpg'],
+    description:
+      'Sac en jute personnalisé en vinyle thermocollant – 22 x 32 cm. Élégant et tendance, avec une finition soignée et moderne. Personnalisation possible avec une initiale + prénom, uniquement le prénom, ou une petite phrase selon vos envies.',
+    features: [
+      'Dimensions : 22 x 32 cm',
+      'Matière : toile de jute',
+      'Personnalisation : vinyle thermocollant',
+    ],
+    customFields: [
+      'Prénom / texte',
+      'Détails supplémentaires (police, emplacement, style particulier, etc.)',
+    ],
+    options: {
+      textColor: ['noir', 'doré', 'doré pailleté'],
+      style: ['initiale + prénom', 'prénom seul', 'phrase'],
+    },
+  },
+  {
+    id: 'welcome-signature',
+    name: 'Welcome Signature',
+    category: 'welcome',
+    categoryLabel: 'Panneaux & welcome',
+    price: 45,
+    images: ['/images/welcome-signature.jpg', '/images/welcome-signature2.jpg'],
+    description:
+      'Panneau de bienvenue personnalisé en plexiglas givré. Forme arrondie en haut, finition moderne et épurée — idéal pour mariages, fiançailles, anniversaires et autres événements. Personnalisation réalisée en vinyle, avec plusieurs couleurs d’écriture disponibles.',
+    features: [
+      'Matière : plexiglas givré',
+      'Finition : haut arrondi / bas plat',
+      'Personnalisation : vinyle',
+    ],
+    customFields: [
+      'Texte personnalisé',
+      'Style souhaité (élégant, minimaliste, moderne, calligraphie, etc.)',
+      'Détails supplémentaires (date, disposition, police, éléments, etc.)',
+    ],
+    options: {
+      textColor: ['doré', 'noir', 'blanc'],
+    },
+  },
+  {
+    id: 'delices-du-mariage',
+    name: 'Les Délices du Mariage',
+    category: 'gourmandises',
+    categoryLabel: 'Gourmandises personnalisées',
+    price: 2.8,
+    images: ['/images/delices-mariage.jpg', '/images/delices-mariage2.jpg', '/images/delices-mariage3.jpg'],
+    description:
+      'Chocolats personnalisés mariage. Une attention délicate et unique qui sublimera votre décoration de table et laissera un joli souvenir à vos proches. Personnalisation possible avec les prénoms des mariés ainsi que la date de l’événement.',
+    features: [
+      'Personnalisation : sticker / étiquette',
+      'Style : élégant, raffiné et moderne',
+      'Occasion : mariage',
+    ],
+    customFields: [
+      'Prénoms des mariés',
+      'Date du mariage',
+      'Thème / couleurs',
+      'Détails supplémentaires (police, symbole, etc.)',
+    ],
+    options: {
+      model: [
+        { value: 'modele-1', label: 'Modèle 1', priceOverride: 2.8 },
+        { value: 'modele-2', label: 'Modèle 2', priceOverride: 2.99 },
+      ],
+    },
+  },
+  {
+    id: 'douceurs-prestige',
+    name: 'Les Douceurs Prestige',
+    category: 'gourmandises',
+    categoryLabel: 'Gourmandises personnalisées',
+    price: 2.9,
+    images: ['/images/douceurs-prestige.jpg', '/images/douceurs-prestige2.jpg', '/images/douceurs-prestige3.jpg'],
+    description:
+      'Dragées personnalisées mariage. Présentées avec soin, elles sublimeront votre décoration de table tout en offrant un souvenir délicat et mémorable à vos proches. Personnalisation possible avec les prénoms des mariés ainsi que la date de l’événement.',
+    features: [
+      'Personnalisation : étiquette / sticker',
+      'Style : élégant, raffiné et moderne',
+      'Occasion : mariage',
+    ],
+    customFields: [
+      'Prénoms des mariés',
+      'Date du mariage',
+      'Thème / couleurs',
+      'Détails supplémentaires (police, symbole, etc.)',
+    ],
+  },
+  {
+    id: 'rituel-de-henne',
+    name: 'Rituel de Henné',
+    category: 'rituels',
+    categoryLabel: 'Rituels & cadeaux invités',
+    price: 2.9,
+    images: ['/images/rituel-henne.jpg', '/images/rituel-henne2.jpg', '/images/rituel-henne3.jpg'],
+    description:
+      'Rituel de Henné – Cadeaux invités personnalisés. Une collection inspirée du rituel du henné, pensée pour sublimer vos cérémonies et offrir un souvenir unique et raffiné. Personnalisation possible selon le modèle choisi (texte, prénom, design, couleur).',
+    features: [
+      'Occasion : fête du henné, mariage, fiançailles',
+      'Personnalisation : texte / prénom / design / couleurs',
+    ],
+    customFields: [
+      'Prénoms / texte',
+      'Date de l’événement',
+      'Couleurs / thème',
+      'Détails supplémentaires (style, police, disposition, etc.)',
+    ],
+    options: {
+      model: [
+        { value: 'carte-cadeau', label: 'Carte cadeau henné personnalisée', priceOverride: 2.7 },
+        { value: 'chocolats', label: 'Chocolats personnalisés', priceOverride: 2.9 },
+        { value: 'fiole-poudre', label: 'Fiole de poudre de henné naturelle', priceOverride: 2.9 },
+        { value: 'fiole-roses', label: 'Fiole de roses séchées', priceOverride: 2.9 },
+      ],
+    },
+  },
+  {
+    id: 'certificat-mariage-religieux',
+    name: 'Certificat de Mariage Religieux',
+    category: 'certificats',
+    categoryLabel: 'Certificats',
+    price: 15,
+    images: ['/images/certificat-mariage.jpg', '/images/certificat-mariage2.jpg', '/images/certificat-mariage3.jpg'],
+    description:
+      'Certificat de mariage religieux – Certificat d’Union Sacrée. Une touche symbolique, élégante et spirituelle à votre union. Personnalisation possible avec les prénoms des mariés, la date du mariage et le modèle souhaité.',
+    features: [
+      'Souvenir unique et raffiné',
+      'Occasion : mariage religieux',
+      'Modèles au choix',
+    ],
+    customFields: [
+      'Prénoms des mariés',
+      'Date du mariage',
+      'Lieu du mariage',
+      'Citation / texte souhaité',
+      'Détails supplémentaires (couleurs, style, police, mise en page, etc.)',
+    ],
+    options: {
+      model: ['modèle 1', 'modèle 2', 'modèle 3'],
+    },
+  },
+  {
+    id: 'aid-al-adha-chocolats',
+    name: 'Collection Aïd al-Adha Chocolats',
+    category: 'gourmandises',
+    categoryLabel: 'Gourmandises personnalisées',
+    price: 2.9,
+    images: ['/images/aid-chocolats.jpg', '/images/aid-chocolats2.jpg'],
+    description:
+      'Pour célébrer l’Aïd al-Adha avec élégance et douceur, découvrez une collection de chocolats personnalisés conçus pour vos invités. Une attention unique, raffinée et pleine de sens, personnalisée selon vos envies.',
+    features: [
+      'Deux modèles au choix',
+      'Personnalisation selon vos envies',
+      'Idéal pour vos invités',
+    ],
+    customFields: [
+      'Message personnalisé',
+      'Détails supplémentaires (style, police, disposition, etc.)',
+    ],
+    options: {
+      model: ['modèle 1', 'modèle 2'],
+    },
+  },
+  {
+    id: 'reflet-elegance',
+    name: 'Reflet Élégance',
     category: 'plateaux',
     categoryLabel: 'Plateaux personnalisés',
-    price: 35,
-    originalPrice: 65,
-    images: ['/images/tray-dark-2.jpg','/images/tray-dark.jpg'],
+    price: 75,
+    images: ['/images/tray-ring.jpg'],
+    description:
+      'Plateau miroir rond, bordé de perles et de strass nacrés, accompagné d\'écrins velours bordeaux pour les alliances. Une composition raffinée avec roses artificielles et calligraphie dorée. Idéal pour la présentation des bagues lors de la cérémonie.',
+    features: [
+      'Miroir rond grand format',
+      'Bordure perles et strass',
+      'Basmala gravée',
+      'Texte bilingue arabe / français',
+      'Prénom des mariés et date gravés',
+    ],
+    customFields: ['Prénom mariée', 'Prénom marié', 'Date (ex: 04.04.2026)', 'Verset ou phrase'],
+    options: {
+      boxColor: ['rouge', 'blanc', 'beige'],
+      roseColor: ['rouge', 'blanc', 'beige'],
+      decoration: ['perles petites', 'perles grandes', 'diamants petits', 'diamants grands'],
+      textColor: ['doré', 'blanc', 'noir'],
+    },
+  },
+  {
+    id: 'nuee-elegance',
+    name: 'Nuée Élégance',
+    category: 'plateaux',
+    categoryLabel: 'Plateaux personnalisés',
+    price: 65,
+    images: ['/images/tray-dark-2.jpg', '/images/tray-dark.jpg'],
     description:
       'Un nuage organique, posé sur un drap satin chocolat, sublimé par une bougie ambrée et une rose blanche. Gravé à la main avec la basmala et vos initiales, il devient la pièce centrale de votre décoration de fiançailles ou de mariage.',
     features: [
@@ -47,125 +262,44 @@ export const products: Product[] = [
       ringHolder: ['rond', 'hexagone'],
     },
   },
-  {
-    id: 'plateau-ceremonie-bordeaux',
-    name: 'Reflet élégance',
-    category: 'plateaux',
-    categoryLabel: 'Plateaux personnalisés',
-    price: 45,
-    originalPrice: 75,
-    images: ['/images/tray-ring.jpg'],
-    description:
-      'Plateau miroir rond, bordé de perles et de strass nacrés, accompagné d\'écrins velours bordeaux pour les alliances. Une composition raffinée avec roses artificielles et calligraphie dorée. Idéal pour la présentation des bagues lors de la cérémonie.',
-    features: [
-      'Miroir rond grand format',
-      'Bordure perles et strass',
-      'Basmala gravée',
-      'Texte bilingue arabe / français',
-      'Prénom des mariés et date gravés',
-    ],
-    customFields: ['Prénom mariée', 'Prénom marié', 'Date (ex: 04.04.2026)', 'Verset ou phrase'],
-    options: {
-      boxColor: ['rouge', 'blanc', 'beige'],
-      roseColor: ['rouge', 'beige', 'blanc'],
-      decoration: ['perles', 'diamants'],
-      size: ['petit', 'grand'],
-      textColor: ['blanc', 'doré', 'noir'],
-    },
-  },
-  {
-    id: 'plateau-reflet-purete',
-    name: 'Reflet & Pureté',
-    category: 'plateaux',
-    categoryLabel: 'Plateaux personnalisés',
-    price: 35,
-    originalPrice: 40,
-    images: ['/images/reflet-purete-1.jpg', '/images/reflet-purete-2.jpg'],
-    description:
-      'Plateau miroir rond au design épuré, sublimé par un contour délicat de strass et de perles transparentes. Accompagné d’écrins en velours ivoire pour les alliances, il offre une esthétique lumineuse et minimaliste. La calligraphie fine associée à la citation coranique apporte une touche spirituelle et intemporelle. Idéal pour une présentation élégante et symbolique des bagues lors de la cérémonie.',
-    features: [
-      'Miroir rond design épuré',
-      'Contour strass & perles transparentes',
-      'Écrins velours ivoire pour alliances',
-      'Calligraphie fine + citation coranique',
-      'Présentation élégante et symbolique',
-    ],
-    customFields: ['Prénom 1', 'Prénom 2', 'Date (ex: 09.05.2026)', 'Citation / verset (optionnel)'],
-  },
-  {
-    id: 'plateau-elegance-nuptial',
-    name: 'ÉLEGANCE NUPTIAL',
-    category: 'plateaux',
-    categoryLabel: 'Plateaux personnalisés',
-    price: 50,
-    originalPrice: 65,
-    images: ['/images/elegance-nuptial-1.jpg', '/images/elegance-nuptial-2.jpg'],
-    description:
-      'Plateau miroir au style luxueux, rehaussé d’écrins géométriques dorés suspendus, garnis de roses rouges profondes pour accueillir les alliances. Le ruban en velours bordeaux apporte une touche noble et contrastée, tandis que les détails floraux et dorés créent une composition riche et élégante. Idéal pour une mise en scène romantique et sophistiquée lors de la cérémonie.',
-    features: [
-      'Plateau miroir style luxueux',
-      'Écrins géométriques dorés suspendus',
-      'Roses rouges pour alliances',
-      'Ruban velours bordeaux',
-      'Composition romantique & sophistiquée',
-    ],
-    customFields: ['Prénom 1', 'Prénom 2', 'Date (ex: 09.05.2026)', 'Verset ou phrase (optionnel)'],
-    options: {
-      decoration: ['perles', 'strass'],
-      handles: ['avec poignets', 'sans poignets'],
-      ringBoxes: ['hexagone doré sans roses', 'hexagone doré avec roses'],
-    },
-  },
-  {
-    id: 'panneau-acrylique-or-layla',
-    name: 'Panneau Bienvenue Acrylique Or',
-    category: 'panneaux',
-    categoryLabel: 'Panneaux décoratifs',
-    price: 149,
-    images: ['/images/panel-layla.png'],
-    description:
-      'Panneau acrylique transparent avec éclats dorés, monté sur chevalet doré. La basmala en calligraphie arabe trône en haut, suivie du texte de bienvenue "Au Mariage de" et des prénoms en lettres script élégantes. Effet marbre et or de toute beauté.',
-    features: [
-      'Acrylique transparent haute qualité',
-      'Éclats dorés effet geode',
-      'Basmala dorée en calligraphie',
-      'Prénoms en police script luxe',
-      'Chevalet doré inclus',
-    ],
-    customFields: ['Prénom mariée', 'Prénom marié', 'Date de mariage'],
-  },
-  {
-    id: 'panneau-acrylique-or-salma',
-    name: 'Panneau Bienvenue Or & Blanc',
-    category: 'panneaux',
-    categoryLabel: 'Panneaux décoratifs',
-    price: 149,
-    images: ['/images/panel-salma.png'],
-    description:
-      'Même modèle signature, personnalisé à vos prénoms. Le panneau acrylique transparent avec dorures artistiques et basmala calligraphiée crée une entrée inoubliable pour votre mariage. Dimensions généreuses pour une visibilité parfaite.',
-    features: [
-      'Acrylique transparent 5mm',
-      'Dorures or 24k appliquées à la main',
-      'Texte entièrement personnalisable',
-      'Chevalet doré inclus',
-      'Expédition sécurisée',
-    ],
-    customFields: ['Prénom mariée', 'Prénom marié', 'Date de mariage', 'Texte d\'accueil (optionnel)'],
-  },
 ];
 
 export const categories = [
+  {
+    slug: 'sacs',
+    label: 'Sacs personnalisés',
+    description: 'Tote bags et sacs en jute personnalisés pour votre marque ou événement',
+    image: '/images/tote-bag-premium2.jpg',
+  },
+  {
+    slug: 'welcome',
+    label: 'Panneaux & welcome',
+    description: 'Panneaux de bienvenue élégants, modernes et sur mesure',
+    image: '/images/welcome-signature.jpg',
+  },
+  {
+    slug: 'gourmandises',
+    label: 'Gourmandises personnalisées',
+    description: 'Chocolats, dragées et attentions raffinées pour vos invités',
+    image: '/images/delices-mariage.jpg',
+  },
+  {
+    slug: 'rituels',
+    label: 'Rituels & cadeaux invités',
+    description: 'Cadeaux invités inspirés du rituel du henné, personnalisables',
+    image: '/images/rituel-henne.jpg',
+  },
+  {
+    slug: 'certificats',
+    label: 'Certificats',
+    description: 'Certificats religieux personnalisés, élégants et symboliques',
+    image: '/images/certificat-mariage.jpg',
+  },
   {
     slug: 'plateaux',
     label: 'Plateaux personnalisés',
     description: 'Plateaux miroir gravés pour alliances et décoration de cérémonie',
     image: '/images/tray-ring.jpg',
-  },
-  {
-    slug: 'panneaux',
-    label: 'Panneaux décoratifs',
-    description: 'Panneaux acrylique personnalisés pour accueillir vos invités',
-    image: '/images/panel-layla.png',
   },
 ];
 

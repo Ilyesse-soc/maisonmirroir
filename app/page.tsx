@@ -106,15 +106,15 @@ export default function HomePage() {
           <p
             className="mm-fade mm-d3"
             style={{
-              color: 'rgba(255,255,255,0.80)',
-              fontSize: 14,
-              lineHeight: 1.8,
-              letterSpacing: '0.04em',
-              fontFamily: fonts.body,
+              color: 'rgba(255,255,255,0.88)',
+              fontSize: 'clamp(1.15rem, 2.6vw, 1.8rem)',
+              lineHeight: 1.6,
+              fontFamily: fonts.script,
+              whiteSpace: 'pre-line',
               marginBottom: 40,
             }}
           >
-            Maison Miroir vous aide à créer des détails uniques et raffinés pour les plus beaux moments de votre vie.
+            {"Bienvenue chez Maison Miroir, un univers dédié à la création d’objets personnalisés pensés pour refléter votre histoire, votre style et vos émotions.\n\nChaque création est réalisée avec soin et attention, afin de s’adapter parfaitement à vos goûts et à vos événements. Ici, rien n’est standard : tout est conçu sur mesure pour vous offrir des pièces uniques, élégantes et mémorables.\n\nSacs personnalisés, cadeaux invités, décorations d’événements, panneaux de bienvenue, certificats et bien plus encore… Maison Miroir transforme vos idées en créations réelles, afin de rendre chaque moment encore plus spécial.\n\nMariage, fiançailles, fête du henné, anniversaires ou événements professionnels : chaque projet est pensé pour sublimer vos célébrations et laisser une empreinte inoubliable.\n\nMaison Miroir, c’est l’art de créer du beau à partir de vos envies 🤍"}
           </p>
 
           <div className="mm-hero-btns mm-fade mm-d4" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center' }}>

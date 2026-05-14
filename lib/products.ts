@@ -170,6 +170,29 @@ export const products: Product[] = [
     },
   },
   {
+    id: 'ruban-elegance',
+    name: 'Ruban Élégance',
+    category: 'rituels',
+    categoryLabel: 'Rituels & cadeaux invités',
+    price: 15,
+    images: ['/images/ruban-elegance.jpg', '/images/ruban-elegance2.jpg'],
+    description:
+      'Rubans personnalisés – Bouquet de la mariée. Apportez une touche élégante et unique au bouquet avec des rubans délicats et raffinés. Personnalisation possible avec prénom, date ou petit texte selon vos envies.',
+    features: [
+      'Idéal pour mariage, fiançailles et cérémonies élégantes',
+      'Personnalisation : prénom / date / petit texte',
+      'Couleurs d’écriture : noir ou doré',
+    ],
+    customFields: [
+      'Texte à personnaliser',
+      'Style souhaité (élégant, minimaliste, calligraphie, moderne, etc.)',
+      'Détails supplémentaires (disposition du texte, longueur du ruban, police, etc.)',
+    ],
+    options: {
+      textColor: ['noir', 'doré'],
+    },
+  },
+  {
     id: 'certificat-mariage-religieux',
     name: 'Certificat de Mariage Religieux',
     category: 'certificats',

@@ -153,7 +153,7 @@
 
 /* Brand message text: mobile x2, desktop x3 */
 .mm-brand-text {
-  font-size: 28px;
+  font-size: 14px;
 }
 
 @media (min-width: 768px) {

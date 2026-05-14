@@ -104,10 +104,9 @@ export default function HomePage() {
           <div className="divider mm-fade mm-d3" style={{ ...dividerStyle(60), margin: '24px auto' }} />
 
           <p
-            className="mm-fade mm-d3"
+            className="mm-hero-tagline mm-fade mm-d3"
             style={{
               color: 'rgba(255,255,255,0.80)',
-              fontSize: 14,
               lineHeight: 1.8,
               letterSpacing: '0.04em',
               fontFamily: fonts.script,

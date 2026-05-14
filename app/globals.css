@@ -161,3 +161,14 @@
     font-size: 42px;
   }
 }
+
+/* Hero tagline: desktop x3 only */
+.mm-hero-tagline {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  .mm-hero-tagline {
+    font-size: 42px;
+  }
+}

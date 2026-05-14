@@ -110,7 +110,7 @@ export default function HomePage() {
               fontSize: 14,
               lineHeight: 1.8,
               letterSpacing: '0.04em',
-              fontFamily: fonts.body,
+              fontFamily: fonts.script,
               marginBottom: 40,
             }}
           >

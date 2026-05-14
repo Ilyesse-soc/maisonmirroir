@@ -239,6 +239,7 @@ export const products: Product[] = [
       model: ['modèle 1', 'modèle 2'],
     },
   },
+  /*
   {
     id: 'reflet-elegance',
     name: 'Reflet Élégance',
@@ -285,6 +286,7 @@ export const products: Product[] = [
       ringHolder: ['rond', 'hexagone'],
     },
   },
+  */
 ];
 
 export const categories = [
@@ -318,12 +320,14 @@ export const categories = [
     description: 'Certificats religieux personnalisés, élégants et symboliques',
     image: '/images/certificat-mariage.jpg',
   },
+  /*
   {
     slug: 'plateaux',
     label: 'Plateaux personnalisés',
     description: 'Plateaux miroir gravés pour alliances et décoration de cérémonie',
     image: '/images/tray-ring.jpg',
   },
+  */
 ];
 
 export function getProductById(id: string): Product | undefined {

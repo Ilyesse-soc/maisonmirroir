@@ -153,7 +153,7 @@
 
 /* Brand message text: mobile (comme hero), desktop x3 */
 .mm-brand-text {
-  font-size: 14px;
+  font-size: 17px;
 }
 
 @media (min-width: 768px) {
@@ -164,7 +164,7 @@
 
 /* Hero tagline: desktop x3 only */
 .mm-hero-tagline {
-  font-size: 14px;
+  font-size: 17px;
 }
 
 @media (min-width: 768px) {

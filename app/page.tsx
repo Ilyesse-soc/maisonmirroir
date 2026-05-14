@@ -193,7 +193,7 @@ export default function HomePage() {
           <div style={{ ...dividerStyle(60), margin: '24px auto' }} />
           <p
             style={{
-              fontSize: 14,
+              fontSize: 42,
               lineHeight: 2,
               letterSpacing: '0.04em',
               fontFamily: fonts.script,

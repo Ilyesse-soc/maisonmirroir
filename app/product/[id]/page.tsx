@@ -22,7 +22,7 @@ export default function ProductPage() {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [customValues, setCustomValues] = useState<Record<string, string>>({})
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
-  const [quantity, setQuantity] = useState(1)
+  const [quantity, setQuantity] = useState('')
   const [artworkFile, setArtworkFile] = useState<
     | {
         filename: string
@@ -40,7 +40,7 @@ export default function ProductPage() {
     setSelectedImageIndex(0)
     setCustomValues({})
     setSelectedOptions({})
-    setQuantity(1)
+    setQuantity('')
     setArtworkFile(null)
     setStep('customize')
     setError('')
@@ -74,7 +74,15 @@ export default function ProductPage() {
 
   const clampQuantity = (value: number) => {
     if (!Number.isFinite(value)) return 1
-    return Math.max(1, Math.min(999, Math.trunc(value)))
+    return Math.max(1, Math.trunc(value))
+  }
+
+  const parseQuantity = (raw: string): number | null => {
+    const trimmed = raw.trim()
+    if (!trimmed) return null
+    const value = Number(trimmed)
+    if (!Number.isFinite(value)) return null
+    return clampQuantity(value)
   }
 
   const normalizeChoices = (values: OptionChoice[]) =>
@@ -106,9 +114,9 @@ export default function ProductPage() {
   }
 
   const unitPrice = computeUnitPrice()
-  const qty = clampQuantity(quantity)
-  const total = unitPrice * qty
-  const displayAmount = total.toFixed(2)
+  const qty = parseQuantity(quantity)
+  const total = qty ? unitPrice * qty : 0
+  const displayAmount = qty ? total.toFixed(2) : '—'
 
   const optionLabels: Record<string, string> = {
     boxColor: 'Couleur des boîtes',
@@ -151,7 +159,8 @@ export default function ProductPage() {
         setError('Veuillez sélectionner toutes les options de personnalisation.')
         return
       }
-      if (!Number.isFinite(quantity) || clampQuantity(quantity) < 1) {
+      const q = parseQuantity(quantity)
+      if (!q) {
         setError('Veuillez indiquer une quantité valide (minimum 1).')
         return
       }
@@ -361,7 +370,7 @@ export default function ProductPage() {
             )}
 
             <p style={{ fontFamily: fonts.body, fontSize: 12, letterSpacing: '0.06em', color: theme.textMid, marginBottom: 20 }}>
-              Total ({qty} × {unitPrice.toFixed(2)} €) : <strong style={{ color: theme.textDark }}>{displayAmount} €</strong>
+              Total ({qty ?? '—'} × {unitPrice.toFixed(2)} €) : <strong style={{ color: theme.textDark }}>{qty ? `${displayAmount} €` : '—'}</strong>
             </p>
             <div style={{ ...dividerStyle(120), margin: '0 0 24px' }} />
             <p style={{ fontSize: 14, lineHeight: 1.9, fontFamily: fonts.body, letterSpacing: '0.04em', marginBottom: 32, color: theme.textMid }}>
@@ -530,10 +539,25 @@ export default function ProductPage() {
                       step={1}
                       style={inputLuxuryStyle}
                       value={quantity}
-                      onChange={(e) => setQuantity(clampQuantity(Number(e.target.value)))}
+                      placeholder=""
+                      onChange={(e) => {
+                        const raw = e.target.value
+                        if (!raw) {
+                          setQuantity('')
+                          setError('')
+                          return
+                        }
+                        const digitsOnly = raw.replace(/[^0-9]/g, '')
+                        setQuantity(digitsOnly)
+                        setError('')
+                      }}
+                      onBlur={() => {
+                        const q = parseQuantity(quantity)
+                        if (q) setQuantity(String(q))
+                      }}
                     />
                     <p style={{ marginTop: 8, fontSize: 12, fontFamily: fonts.body, color: theme.textMid, lineHeight: 1.6 }}>
-                      Prix unitaire : <strong>{unitPrice.toFixed(2)} €</strong> — Total : <strong>{displayAmount} €</strong>
+                      Prix unitaire : <strong>{unitPrice.toFixed(2)} €</strong> — Total : <strong>{qty ? `${displayAmount} €` : '—'}</strong>
                     </p>
                   </div>
                 </div>
@@ -768,7 +792,7 @@ export default function ProductPage() {
                             fontStyle: 'italic',
                           }}
                         >
-                          {qty}
+                          {qty ?? '—'}
                         </span>
                       </div>
 
@@ -1053,7 +1077,7 @@ export default function ProductPage() {
                           category: product.category,
                           categoryLabel: product.categoryLabel,
                           unitPrice,
-                          quantity: clampQuantity(quantity),
+                          quantity: qty ?? 1,
                         },
                         customValues: mergedCustomValues,
                         attachments: artworkFile

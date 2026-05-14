@@ -77,7 +77,6 @@ export default function Footer() {
                 { href: '/category/sacs', label: 'Sacs personnalisés' },
                 { href: '/category/gourmandises', label: 'Gourmandises personnalisées' },
                 { href: '/category/welcome', label: 'Panneaux & welcome' },
-                // { href: '/category/plateaux', label: 'Plateaux personnalisés' },
               ].map(({ href, label }) => (
                 <Link
                   key={href}

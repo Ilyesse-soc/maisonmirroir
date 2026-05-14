@@ -93,7 +93,6 @@ export default function Navbar() {
               { href: '/catalogue', label: 'Catalogue' },
               { href: '/category/sacs', label: 'Sacs' },
               { href: '/category/gourmandises', label: 'Gourmandises' },
-              // { href: '/category/plateaux', label: 'Plateaux' },
             ].map(({ href, label }) => (
               <Link
                 key={href}
@@ -181,7 +180,6 @@ export default function Navbar() {
             { href: '/catalogue', label: 'Catalogue' },
             { href: '/category/sacs', label: 'Sacs personnalisés' },
             { href: '/category/gourmandises', label: 'Gourmandises' },
-            // { href: '/category/plateaux', label: 'Plateaux personnalisés' },
           ].map(({ href, label }) => (
             <Link
               key={href}

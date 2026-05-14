@@ -12,7 +12,7 @@ export type ProductOptions = Record<string, OptionChoice[]>
 export interface Product {
   id: string;
   name: string;
-  category: 'sacs' | 'welcome' | 'gourmandises' | 'rituels' | 'certificats' | 'plateaux';
+  category: 'sacs' | 'welcome' | 'gourmandises' | 'rituels' | 'certificats';
   categoryLabel: string;
   price: number;
   originalPrice?: number;
@@ -239,54 +239,6 @@ export const products: Product[] = [
       model: ['modèle 1', 'modèle 2'],
     },
   },
-  /*
-  {
-    id: 'reflet-elegance',
-    name: 'Reflet Élégance',
-    category: 'plateaux',
-    categoryLabel: 'Plateaux personnalisés',
-    price: 75,
-    images: ['/images/tray-ring.jpg'],
-    description:
-      'Plateau miroir rond, bordé de perles et de strass nacrés, accompagné d\'écrins velours bordeaux pour les alliances. Une composition raffinée avec roses artificielles et calligraphie dorée. Idéal pour la présentation des bagues lors de la cérémonie.',
-    features: [
-      'Miroir rond grand format',
-      'Bordure perles et strass',
-      'Basmala gravée',
-      'Texte bilingue arabe / français',
-      'Prénom des mariés et date gravés',
-    ],
-    customFields: ['Prénom mariée', 'Prénom marié', 'Date (ex: 04.04.2026)', 'Verset ou phrase'],
-    options: {
-      boxColor: ['rouge', 'blanc', 'beige'],
-      roseColor: ['rouge', 'blanc', 'beige'],
-      decoration: ['perles petites', 'perles grandes', 'diamants petits', 'diamants grands'],
-      textColor: ['doré', 'blanc', 'noir'],
-    },
-  },
-  {
-    id: 'nuee-elegance',
-    name: 'Nuée Élégance',
-    category: 'plateaux',
-    categoryLabel: 'Plateaux personnalisés',
-    price: 65,
-    images: ['/images/tray-dark-2.jpg', '/images/tray-dark.jpg'],
-    description:
-      'Un nuage organique, posé sur un drap satin chocolat, sublimé par une bougie ambrée et une rose blanche. Gravé à la main avec la basmala et vos initiales, il devient la pièce centrale de votre décoration de fiançailles ou de mariage.',
-    features: [
-      'Miroir organique forme unique',
-      'Gravure laser personnalisée',
-      'Basmala et initiales incluses',
-      'Finition dorée mate',
-      'Livraison en boîte cadeau',
-    ],
-    customFields: ['Initiales (ex: A & C)', 'Date (ex: 04.04.2026)', 'Phrase personnalisée'],
-    options: {
-      textColor: ['doré', 'noir'],
-      ringHolder: ['rond', 'hexagone'],
-    },
-  },
-  */
 ];
 
 export const categories = [
@@ -320,14 +272,6 @@ export const categories = [
     description: 'Certificats religieux personnalisés, élégants et symboliques',
     image: '/images/certificat-mariage.jpg',
   },
-  /*
-  {
-    slug: 'plateaux',
-    label: 'Plateaux personnalisés',
-    description: 'Plateaux miroir gravés pour alliances et décoration de cérémonie',
-    image: '/images/tray-ring.jpg',
-  },
-  */
 ];
 
 export function getProductById(id: string): Product | undefined {

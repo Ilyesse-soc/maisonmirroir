@@ -6,8 +6,8 @@ import { fonts, theme } from '@/lib/uiStyles'
 
 export const metadata: Metadata = {
   title: 'Maison Miroir — Décoration de Mariage Luxe',
-  description: 'Plateaux personnalisés et panneaux décoratifs pour votre mariage. Création sur mesure, gravure laser, finitions dorées.',
-  keywords: 'mariage, décoration, plateau miroir, panneau acrylique, personnalisé, or, luxe',
+  description: 'Créations personnalisées pour votre mariage : sacs, panneaux, gourmandises et cadeaux invités. Sur mesure, gravure laser, finitions dorées.',
+  keywords: 'mariage, décoration, personnalisé, panneau acrylique, gravure, or, luxe',
 }
 
 export default function RootLayout({

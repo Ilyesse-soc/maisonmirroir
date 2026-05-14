@@ -18,7 +18,7 @@ Ouvre http://localhost:3000
 ```
 app/
 ├── page.tsx                  → Homepage
-├── category/[slug]/          → Plateaux / Panneaux
+├── category/[slug]/          → Pages catégories
 ├── product/[id]/             → Page produit + commande
 ├── success/                  → Page de confirmation
 ├── api/send-email/           → API emails (Resend)

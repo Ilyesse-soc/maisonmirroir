@@ -30,7 +30,7 @@ export default function HomePage() {
         {/* Background image */}
         <div style={{ position: 'absolute', inset: 0 }}>
           <Image
-            src="/images/tray-ring.jpg"
+            src="/images/welcome-signature.jpg"
             alt="Maison Miroir"
             fill
             style={{ objectFit: 'cover' }}

@@ -174,7 +174,7 @@ export default function SuccessPage() {
           <Link href="/" className="btn-gold" style={buttonGoldStyle()}>
             Retour à l'accueil
           </Link>
-          <Link href="/category/plateaux" style={buttonOutlineGoldStyle()}>
+          <Link href="/catalogue" style={buttonOutlineGoldStyle()}>
             Continuer mes achats
           </Link>
         </div>

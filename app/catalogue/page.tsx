@@ -17,7 +17,7 @@ export default function CataloguePage() {
         }}
       >
         <div style={{ position: 'absolute', inset: 0 }}>
-          <Image src="/images/tray-ring.jpg" alt="Catalogue Maison Miroir" fill style={{ objectFit: 'cover', opacity: 0.12 }} priority />
+          <Image src="/images/welcome-signature.jpg" alt="Catalogue Maison Miroir" fill style={{ objectFit: 'cover', opacity: 0.12 }} priority />
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.88), rgba(255,255,255,0.96))' }} />
         </div>
 
@@ -30,7 +30,7 @@ export default function CataloguePage() {
           </h1>
           <div style={{ ...dividerStyle(72), margin: '22px auto' }} />
           <p style={{ maxWidth: 760, margin: '0 auto', fontSize: 14, lineHeight: 1.9, letterSpacing: '0.04em', fontFamily: fonts.body, color: theme.textMid }}>
-            Découvrez l’ensemble de nos produits personnalisés — sacs, panneaux de bienvenue, gourmandises, cadeaux invités et plateaux miroir.
+            Découvrez l’ensemble de nos produits personnalisés — sacs, panneaux de bienvenue, gourmandises et cadeaux invités.
           </p>
         </div>
       </section>

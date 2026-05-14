@@ -151,7 +151,7 @@
 .mm-hero-content > * { opacity: 0; }
 .mm-hero-content .mm-fade { animation: mm-fadeUp 0.9s ease forwards; }
 
-/* Brand message text: mobile x2, desktop x3 */
+/* Brand message text: mobile (comme hero), desktop x3 */
 .mm-brand-text {
   font-size: 14px;
 }

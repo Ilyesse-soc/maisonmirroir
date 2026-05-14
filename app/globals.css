@@ -150,3 +150,14 @@
 /* Page load — hero content stagger */
 .mm-hero-content > * { opacity: 0; }
 .mm-hero-content .mm-fade { animation: mm-fadeUp 0.9s ease forwards; }
+
+/* Brand message text: mobile x2, desktop x3 */
+.mm-brand-text {
+  font-size: 28px;
+}
+
+@media (min-width: 768px) {
+  .mm-brand-text {
+    font-size: 42px;
+  }
+}

@@ -196,11 +196,12 @@ export default function HomePage() {
               fontSize: 14,
               lineHeight: 2,
               letterSpacing: '0.04em',
-              fontFamily: fonts.body,
+              fontFamily: fonts.script,
+              whiteSpace: 'pre-line',
               color: theme.textMid,
             }}
           >
-            De la gravure laser au choix des matières, nous concevons avec soin chaque plateau miroir et chaque panneau acrylique selon vos désirs. Basmala, prénoms, date et message personnalisé — votre cérémonie mérite des détails inoubliables.
+            {"Bienvenue chez Maison Miroir, un univers dédié à la création d’objets personnalisés pensés pour refléter votre histoire, votre style et vos émotions.\n\nChaque création est réalisée avec soin et attention, afin de s’adapter parfaitement à vos goûts et à vos événements. Ici, rien n’est standard : tout est conçu sur mesure pour vous offrir des pièces uniques, élégantes et mémorables.\n\nSacs personnalisés, cadeaux invités, décorations d’événements, panneaux de bienvenue, certificats et bien plus encore… Maison Miroir transforme vos idées en créations réelles, afin de rendre chaque moment encore plus spécial.\n\nMariage, fiançailles, fête du henné, anniversaires ou événements professionnels : chaque projet est pensé pour sublimer vos célébrations et laisser une empreinte inoubliable.\n\nMaison Miroir, c’est l’art de créer du beau à partir de vos envies 🤍"}
           </p>
         </div>
       </section>

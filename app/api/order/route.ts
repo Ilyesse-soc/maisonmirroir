@@ -221,6 +221,8 @@ export async function POST(req: NextRequest) {
     const fromEmail = getEmailFrom()
     const adminEmail = getAdminEmail()
     const hasResendApiKey = Boolean((process.env.RESEND_API_KEY || '').trim())
+    const isFromEmailValid = isValidEmail(fromEmail)
+    const isAdminEmailValid = isValidEmail(adminEmail)
     logOrderEvent('diagnostic config email', {
       provider: 'resend',
       hasResendApiKey,
@@ -230,6 +232,8 @@ export async function POST(req: NextRequest) {
       hasEmailAdmin: Boolean((process.env.EMAIL_ADMIN || '').trim()),
       resolvedFromEmail: fromEmail || null,
       resolvedAdminEmail: adminEmail || null,
+      isFromEmailValid,
+      isAdminEmailValid,
     })
 
     const subtotal = normalizedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
@@ -409,40 +413,50 @@ export async function POST(req: NextRequest) {
 
     const emailWarnings: string[] = []
 
-    if (!hasResendApiKey || !fromEmail || !adminEmail) {
-      const message = 'email skipped: configuration incomplete'
+    if (!hasResendApiKey || !fromEmail || !isFromEmailValid) {
+      const message = 'email skipped: resend configuration incomplete or invalid sender'
       emailWarnings.push(message)
       console.error('[order] email skipped', {
         orderId,
         hasResendApiKey,
         hasFromEmail: Boolean(fromEmail),
-        hasAdminEmail: Boolean(adminEmail),
+        isFromEmailValid,
       })
     } else {
-      try {
-        logOrderEvent('tentative email vendeur', { orderId, from: fromEmail, to: adminEmail, provider: 'resend' })
-        const sellerResult = await sendEmailOrThrow({
-          from: fromEmail,
-          to: adminEmail,
-          replyTo: customer.email,
-          subject,
-          html: sellerHtml,
-          attachments: safeAttachments.map((a) => ({
-            filename: a.filename,
-            content: a.base64.replace(/\s/g, ''),
-            contentType: a.contentType,
-          })),
-        })
-        logOrderEvent('reponse fournisseur email vendeur', { orderId, response: sanitizeProviderResponse(sellerResult) })
-        logOrderEvent('email vendeur envoyé', { orderId, to: adminEmail })
-      } catch (error) {
-        const message = normalizeEmailError(error)
-        emailWarnings.push(`seller: ${message}`)
-        console.error('[order] email vendeur failed', {
+      if (!isAdminEmailValid) {
+        const message = 'seller email skipped: admin recipient missing or invalid'
+        emailWarnings.push(message)
+        console.error('[order] email vendeur skipped', {
           orderId,
-          error: message,
-          detail: formatUnknownError(error),
+          adminEmail: adminEmail || null,
+          isAdminEmailValid,
         })
+      } else {
+        try {
+          logOrderEvent('tentative email vendeur', { orderId, from: fromEmail, to: adminEmail, provider: 'resend' })
+          const sellerResult = await sendEmailOrThrow({
+            from: fromEmail,
+            to: adminEmail,
+            replyTo: customer.email,
+            subject,
+            html: sellerHtml,
+            attachments: safeAttachments.map((a) => ({
+              filename: a.filename,
+              content: a.base64.replace(/\s/g, ''),
+              contentType: a.contentType,
+            })),
+          })
+          logOrderEvent('reponse fournisseur email vendeur', { orderId, response: sanitizeProviderResponse(sellerResult) })
+          logOrderEvent('email vendeur envoyé', { orderId, to: adminEmail })
+        } catch (error) {
+          const message = normalizeEmailError(error)
+          emailWarnings.push(`seller: ${message}`)
+          console.error('[order] email vendeur failed', {
+            orderId,
+            error: message,
+            detail: formatUnknownError(error),
+          })
+        }
       }
 
       try {
@@ -450,7 +464,7 @@ export async function POST(req: NextRequest) {
         const customerResult = await sendEmailOrThrow({
           from: fromEmail,
           to: customer.email,
-          replyTo: adminEmail,
+          replyTo: isAdminEmailValid ? adminEmail : undefined,
           subject: `Confirmation de votre commande - #${orderId}`,
           html: customerHtml,
         })

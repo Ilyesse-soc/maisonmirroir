@@ -37,7 +37,7 @@ export async function sendEmailOrThrow(params: {
   if (!resend) throw new Error('RESEND_API_KEY is not configured')
   if (!from) throw new Error('EMAIL_FROM is not configured')
 
-  return resend.emails.send({
+  const result = await resend.emails.send({
     from,
     to: Array.isArray(params.to) ? params.to : [params.to],
     subject: params.subject,
@@ -45,6 +45,19 @@ export async function sendEmailOrThrow(params: {
     replyTo: params.replyTo,
     attachments: params.attachments,
   } as any)
+
+  if ((result as any)?.error) {
+    const providerError = (result as any).error
+    const providerMessage =
+      typeof providerError?.message === 'string'
+        ? providerError.message
+        : typeof providerError === 'string'
+          ? providerError
+          : 'Email provider returned an error'
+    throw new Error(providerMessage)
+  }
+
+  return result
 }
 
 export function normalizeEmailError(error: unknown) {

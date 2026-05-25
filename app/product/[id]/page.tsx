@@ -1044,38 +1044,6 @@ export default function ProductPage() {
                     </span>
                   </div>
 
-                  {/* Fabrication delay */}
-                  <div
-                    style={{
-                      padding: '12px 22px',
-                      borderBottom: '1px solid #f5edd8',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontFamily: "'Jost',sans-serif",
-                        fontSize: '11px',
-                        color: '#a08060',
-                        letterSpacing: '0.08em',
-                      }}
-                    >
-                      Délai de fabrication
-                    </span>
-                    <span
-                      style={{
-                        fontFamily: "'Jost',sans-serif",
-                        fontSize: '12px',
-                        color: 'var(--mid)',
-                        letterSpacing: '0.05em',
-                      }}
-                    >
-                      7 – 14 jours ouvrés
-                    </span>
-                  </div>
-
                   {/* Total */}
                   <div
                     style={{

@@ -187,10 +187,6 @@ export default function SuccessPage() {
           </div>
         )}
 
-        <p style={{ fontSize: 12, fontFamily: fonts.body, letterSpacing: '0.04em', marginBottom: 40, color: theme.gold }}>
-          Délai de fabrication : 7 à 14 jours ouvrés
-        </p>
-
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center' }}>
           <Link href="/" className="btn-gold" style={buttonGoldStyle()}>
             Retour à l'accueil

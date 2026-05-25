@@ -5,7 +5,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 export function getEmailFrom() {
-  const value = (process.env.EMAIL_FROM || process.env.OWNER_EMAIL || '').trim()
+  const value = (process.env.EMAIL_FROM || process.env.RESEND_FROM || process.env.OWNER_EMAIL || '').trim()
   return value
 }
 
@@ -35,7 +35,7 @@ export async function sendEmailOrThrow(params: {
   const resend = getResendClient()
   const from = (params.from || getEmailFrom()).trim()
   if (!resend) throw new Error('RESEND_API_KEY is not configured')
-  if (!from) throw new Error('EMAIL_FROM is not configured')
+  if (!from) throw new Error('EMAIL_FROM or RESEND_FROM is not configured')
 
   const result = await resend.emails.send({
     from,

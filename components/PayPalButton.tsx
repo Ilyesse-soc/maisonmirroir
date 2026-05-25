@@ -10,6 +10,7 @@ type CustomerInfo = {
   firstName: string;
   lastName: string;
   email: string;
+  phone: string;
   street: string;
   city: string;
   zip: string;
@@ -28,6 +29,14 @@ type ProductInfo = {
 type OrderPayload = {
   product: ProductInfo;
   customValues?: Record<string, string>;
+  shipping: {
+    id: string;
+    label: string;
+    shortLabel: string;
+    carrier: string;
+    price: number;
+    estimatedDelay: string;
+  };
   attachments?: Array<{
     filename: string;
     contentType: string;
@@ -79,6 +88,8 @@ export default function PayPalButton({
             const value = safeAmount.toFixed(2);
             const unitAmount = order.product.unitPrice.toFixed(2);
             const qty = String(order.product.quantity);
+            const shippingAmount = order.shipping.price.toFixed(2);
+            const itemTotal = (order.product.unitPrice * order.product.quantity).toFixed(2);
             return actions.order.create({
               intent: "CAPTURE",
               purchase_units: [
@@ -87,11 +98,11 @@ export default function PayPalButton({
                     currency_code: "EUR",
                     value,
                     breakdown: {
-                      item_total: { currency_code: "EUR", value },
-                      shipping: { currency_code: "EUR", value: "0.00" },
+                      item_total: { currency_code: "EUR", value: itemTotal },
+                      shipping: { currency_code: "EUR", value: shippingAmount },
                     },
                   },
-                  description: order.product.name,
+                  description: `${order.product.name} - ${order.shipping.shortLabel}`,
                   custom_id: order.product.id,
                   items: [
                     {
@@ -170,6 +181,8 @@ export default function PayPalButton({
 
                   const orderId = apiData?.orderId || "";
                   const total = apiData?.total || displayAmount;
+                  const subtotal = (apiData as any)?.subtotal || (order.product.unitPrice * order.product.quantity).toFixed(2);
+                  const shippingTotal = (apiData as any)?.shipping || order.shipping.price.toFixed(2);
                   const paymentMethod = apiData?.paymentMethod || "PAYPAL";
 
                   if (!orderId) throw new Error("Missing orderId from API");
@@ -194,8 +207,11 @@ export default function PayPalButton({
                             categoryLabel: order.product.categoryLabel,
                             unitPrice: unitPrice.toFixed(2),
                             quantity,
+                            subtotal,
+                            shipping: shippingTotal,
                             total,
                           },
+                          shipping: order.shipping,
                           customValues: order.customValues || {},
                           address: order.customer,
                         })

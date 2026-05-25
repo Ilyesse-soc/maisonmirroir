@@ -9,12 +9,21 @@ type LastOrder = {
   orderId: string
   paymentMethod: 'PAYPAL' | 'CARD'
   paypalOrderId?: string
-  product: { id: string; name: string; categoryLabel?: string; unitPrice: string; quantity: number; total: string }
+  product: { id: string; name: string; categoryLabel?: string; unitPrice: string; quantity: number; subtotal: string; shipping: string; total: string }
+  shipping: {
+    id: string
+    label: string
+    shortLabel: string
+    carrier: string
+    price: number
+    estimatedDelay: string
+  }
   customValues?: Record<string, string>
   address: {
     firstName: string
     lastName: string
     email: string
+    phone: string
     street: string
     city: string
     zip: string
@@ -130,7 +139,13 @@ export default function SuccessPage() {
                 <span style={{ color: theme.textDark }}>Produit :</span> {lastOrder.product.name}
               </div>
               <div>
-                <span style={{ color: theme.textDark }}>Total :</span> {lastOrder.product.total} €
+                <span style={{ color: theme.textDark }}>Sous-total produits :</span> {lastOrder.product.subtotal} €
+              </div>
+              <div>
+                <span style={{ color: theme.textDark }}>Livraison :</span> {lastOrder.product.shipping} € ({lastOrder.shipping?.shortLabel || 'Mode non renseigne'})
+              </div>
+              <div>
+                <span style={{ color: theme.textDark }}>Total paye :</span> {lastOrder.product.total} €
               </div>
               <div>
                 <span style={{ color: theme.textDark }}>Paiement :</span> {lastOrder.paymentMethod}
@@ -144,7 +159,13 @@ export default function SuccessPage() {
                 <span style={{ color: theme.textDark }}>Client :</span> {lastOrder.address.firstName} {lastOrder.address.lastName} ({lastOrder.address.email})
               </div>
               <div>
+                <span style={{ color: theme.textDark }}>Telephone :</span> {lastOrder.address.phone}
+              </div>
+              <div>
                 <span style={{ color: theme.textDark }}>Adresse :</span> {lastOrder.address.street}, {lastOrder.address.zip} {lastOrder.address.city}, {lastOrder.address.country || 'France'}
+              </div>
+              <div>
+                <span style={{ color: theme.textDark }}>Delai estime :</span> {lastOrder.shipping?.estimatedDelay || 'A confirmer'}
               </div>
 
               {lastOrder.customValues && Object.values(lastOrder.customValues).some(Boolean) && (

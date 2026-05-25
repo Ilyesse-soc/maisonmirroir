@@ -1,40 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { randomUUID } from 'crypto'
-
-type CustomerInfo = {
-  firstName: string
-  lastName: string
-  email: string
-  phone?: string
-  street: string
-  city: string
-  zip: string
-  country?: string
-}
-
-type ProductInfo = {
-  id: string
-  name: string
-  category: string
-  categoryLabel?: string
-  unitPrice: number
-  quantity: number
-  message?: string
-}
-
-type OrderPayload = {
-  product: ProductInfo
-  customValues?: Record<string, string>
-  attachments?: Array<{
-    filename: string
-    contentType: string
-    base64: string
-  }>
-  customer: CustomerInfo
-}
-
-type PaymentMethod = 'PAYPAL' | 'CARD'
+import { saveOrder } from '@/lib/orderStore'
+import type { CustomerInfo, OrderPayload, OrderRecord, PaymentMethod, ProductInfo } from '@/lib/orderTypes'
+import { formatEuro, getShippingMethodById } from '@/lib/shipping'
 
 type IncomingBody = {
   paymentMethod?: PaymentMethod
@@ -58,6 +27,7 @@ type DirectOrderBody = {
   city?: string
   postalCode?: string
   message?: string
+  shippingMethodId?: string
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -85,10 +55,6 @@ function isValidPhone(value: unknown): value is string {
 
 function isPositiveNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
-}
-
-function formatEUR(value: number): string {
-  return value.toFixed(2)
 }
 
 function generateOrderId(now = new Date()): string {
@@ -134,12 +100,14 @@ export async function POST(req: NextRequest) {
     let customer: CustomerInfo | null = null
     let customValues: Record<string, string> = {}
     let attachments: Array<{ filename: string; contentType: string; base64: string }> = []
+    let shippingMethodId = ''
 
     if (rawBody.order && typeof rawBody.order === 'object') {
       const op = rawBody.order as OrderPayload
       product = op.product
       customer = op.customer
       customValues = (op.customValues && typeof op.customValues === 'object' ? op.customValues : {}) as Record<string, string>
+      shippingMethodId = isNonEmptyString(op.shippingMethodId) ? op.shippingMethodId : ''
       const atts = Array.isArray(op.attachments) ? op.attachments : []
       attachments = atts
         .filter((a) => a && typeof a === 'object')
@@ -173,12 +141,13 @@ export async function POST(req: NextRequest) {
         firstName: firstName || '',
         lastName: lastName || '',
         email: isNonEmptyString(rawBody.email) ? rawBody.email.trim() : '',
-        phone: isNonEmptyString(rawBody.phone) ? rawBody.phone.trim() : undefined,
+        phone: isNonEmptyString(rawBody.phone) ? rawBody.phone.trim() : '',
         street: isNonEmptyString(rawBody.address) ? rawBody.address.trim() : '',
         city: isNonEmptyString(rawBody.city) ? rawBody.city.trim() : '',
         zip: isNonEmptyString(rawBody.postalCode) ? rawBody.postalCode.trim() : '',
         country: 'France',
       }
+      shippingMethodId = isNonEmptyString(rawBody.shippingMethodId) ? rawBody.shippingMethodId.trim() : ''
       customValues = {}
       attachments = []
     }
@@ -191,11 +160,15 @@ export async function POST(req: NextRequest) {
 
     if (!customer || !isNonEmptyString(customer.firstName)) validationErrors.push('firstName is required')
     if (!customer || !isValidEmail(customer.email)) validationErrors.push('email is invalid')
-    // Phone can be required for direct form; for legacy payloads it's optional.
+    if (!customer || !isNonEmptyString(customer.phone)) validationErrors.push('phone is required')
     if (customer?.phone && !isValidPhone(customer.phone)) validationErrors.push('phone is invalid')
     if (!customer || !isNonEmptyString(customer.street)) validationErrors.push('street is required')
     if (!customer || !isNonEmptyString(customer.city)) validationErrors.push('city is required')
     if (!customer || !isNonEmptyString(customer.zip)) validationErrors.push('postal code is required')
+    if (!isNonEmptyString(shippingMethodId)) validationErrors.push('shipping method is required')
+
+    const shippingMethod = isNonEmptyString(shippingMethodId) ? getShippingMethodById(shippingMethodId) : null
+    if (!shippingMethod) validationErrors.push('shipping method is invalid')
 
     if (validationErrors.length > 0) {
       return NextResponse.json({ error: 'Invalid input', details: validationErrors }, { status: 400 })
@@ -210,7 +183,9 @@ export async function POST(req: NextRequest) {
     const sellerEmail = 'maison.miroirs@gmail.com'
     const fromEmail = 'contact@maison-miroir.fr'
 
-    const total = product.unitPrice * product.quantity
+    const subtotal = product.unitPrice * product.quantity
+    const shippingPrice = shippingMethod?.price ?? 0
+    const total = subtotal + shippingPrice
 
     const safeCustomValues = customValues && typeof customValues === 'object' ? customValues : {}
 
@@ -227,8 +202,8 @@ export async function POST(req: NextRequest) {
       })
 
     const safeCustomerName = `${customer.firstName} ${customer.lastName}`.trim().replace(/\s+/g, ' ')
-    const safeTotal = formatEUR(total)
-    const subject = `🛒 New Order - ${safeCustomerName} - ${safeTotal}€`
+    const subject = `Nouvelle commande reçue – #${orderId}`
+    const orderDate = new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })
 
     const baseStyle = 'font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;max-width:640px;margin:0 auto;background:#ffffff;'
     const header = `
@@ -244,28 +219,42 @@ export async function POST(req: NextRequest) {
       <div style="${baseStyle}padding:0">
         ${header}
         <div style="padding:22px 24px">
-          ${buildSection('Customer Info', [
-            ['Name', safeCustomerName],
-            ['Email', customer.email],
-            ['Phone', customer.phone || ''],
-          ])}
-          ${buildSection('Order Details', [
-            ['Product', product.name],
-            ['Quantity', String(product.quantity)],
-            ['Unit Price', `${formatEUR(product.unitPrice)} €`],
-            ['Total', `${safeTotal} €`],
-            ['Payment Method', paymentMethod],
-            ['Order ID', orderId],
+          ${buildSection('Commande', [
+            ['Numero de commande', orderId],
+            ['Date de commande', orderDate],
+            ['Statut', 'Payee'],
+            ['Mode de paiement', paymentMethod],
             ['PayPal Order ID', isNonEmptyString(rawBody.paypalOrderId) ? rawBody.paypalOrderId : ''],
           ])}
-          ${buildSection('Shipping Info', [
-            ['Address', customer.street],
-            ['City', customer.city],
-            ['Postal Code', customer.zip],
-            ['Country', customer.country || 'France'],
+          ${buildSection('Client', [
+            ['Nom complet', safeCustomerName],
+            ['Email', customer.email],
+            ['Telephone', customer.phone || ''],
           ])}
-          ${buildSection('Message', [["Message", safeMessage]])}
-          ${buildSection('Custom Fields', Object.entries(safeCustomValues).map(([k, v]) => [k, String(v)]))}
+          ${buildSection('Livraison', [
+            ['Adresse', customer.street],
+            ['Ville', customer.city],
+            ['Code postal', customer.zip],
+            ['Pays', customer.country || 'France'],
+            ['Mode choisi', shippingMethod?.label || ''],
+            ['Prix de livraison', `${formatEuro(shippingPrice)}`],
+            ['Delai estime', shippingMethod?.estimatedDelay || ''],
+            ['Numero de suivi', 'Non disponible'],
+          ])}
+          ${buildSection('Produits commandes', [
+            ['Produit', product.name],
+            ['Quantite', String(product.quantity)],
+            ['Prix unitaire', `${formatEuro(product.unitPrice)}`],
+          ])}
+          ${buildSection('Totaux', [
+            ['Sous-total', `${formatEuro(subtotal)}`],
+            ['Livraison', `${formatEuro(shippingPrice)}`],
+            ['Total final TTC', `${formatEuro(total)}`],
+          ])}
+          ${buildSection(
+            'Personnalisation / Message',
+            [["Message", safeMessage], ...Object.entries(safeCustomValues).map(([k, v]) => [k, String(v)] as [string, string])]
+          )}
           <div style="color:#999;font-size:12px;line-height:1.7;margin-top:12px">Reply to this email to contact the customer.</div>
         </div>
       </div>
@@ -279,10 +268,20 @@ export async function POST(req: NextRequest) {
         </div>
         <div style="padding:22px 24px">
           <div style="font-size:14px;color:#1f1a12;line-height:1.8;margin-bottom:14px">Bonjour ${escapeHtml(customer.firstName)}, merci pour votre commande.</div>
+          <div style="font-size:14px;color:#1f1a12;line-height:1.8;margin-bottom:14px">
+            Merci pour votre commande.<br />
+            Votre commande #${escapeHtml(orderId)} a bien ete enregistree.<br />
+            Vous avez choisi : ${escapeHtml(shippingMethod?.label || '')}.<br />
+            Delai estime : ${escapeHtml(shippingMethod?.estimatedDelay || '')}.<br />
+            Vous recevrez un email avec votre numero de suivi des l'expedition.
+          </div>
           ${buildSection('Récapitulatif', [
             ['Produit', product.name],
             ['Quantité', String(product.quantity)],
-            ['Total', `${safeTotal} €`],
+            ['Prix unitaire', `${formatEuro(product.unitPrice)}`],
+            ['Sous-total', `${formatEuro(subtotal)}`],
+            ['Livraison', `${formatEuro(shippingPrice)}`],
+            ['Total paye', `${formatEuro(total)}`],
             ['Référence', orderId],
           ])}
           ${buildSection('Personnalisation', Object.entries(safeCustomValues).map(([k, v]) => [k, String(v)]))}
@@ -291,6 +290,9 @@ export async function POST(req: NextRequest) {
             ['Ville', customer.city],
             ['Code postal', customer.zip],
             ['Pays', customer.country || 'France'],
+            ['Mode de livraison', shippingMethod?.label || ''],
+            ['Prix de livraison', `${formatEuro(shippingPrice)}`],
+            ['Delai estime de reception', shippingMethod?.estimatedDelay || ''],
           ])}
           <div style="color:#999;font-size:12px;line-height:1.7;margin-top:12px">Si vous avez une question, répondez directement à cet email.</div>
         </div>
@@ -315,13 +317,46 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Seller email failed' }, { status: 500 })
     }
 
+    const orderRecord: OrderRecord = {
+      orderId,
+      orderDate: new Date().toISOString(),
+      paymentMethod,
+      paypalOrderId: isNonEmptyString(rawBody.paypalOrderId) ? rawBody.paypalOrderId : undefined,
+      customer: {
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        email: customer.email,
+        phone: customer.phone || '',
+        street: customer.street,
+        city: customer.city,
+        zip: customer.zip,
+        country: customer.country || 'France',
+      },
+      items: [product],
+      customValues: safeCustomValues,
+      shipping: {
+        id: shippingMethod?.id || shippingMethodId,
+        label: shippingMethod?.label || '',
+        shortLabel: shippingMethod?.shortLabel || '',
+        carrier: shippingMethod?.carrier || 'Mondial Relay',
+        price: shippingPrice,
+        estimatedDelay: shippingMethod?.estimatedDelay || '',
+        trackingBaseUrl: shippingMethod?.trackingBaseUrl || '',
+      },
+      subtotal,
+      total,
+      status: 'Payee',
+    }
+
+    await saveOrder(orderRecord)
+
     // Bonus: customer confirmation (best effort)
     try {
       const customerSend = await resend.emails.send({
         from: fromEmail,
         to: [customer.email],
         replyTo: sellerEmail,
-        subject: 'Confirmation de votre commande',
+        subject: `Confirmation de votre commande - #${orderId}`,
         html: customerHtml,
       } as any)
 
@@ -336,7 +371,11 @@ export async function POST(req: NextRequest) {
       success: true,
       orderId,
       paymentMethod,
-      total: safeTotal,
+      subtotal: subtotal.toFixed(2),
+      shipping: shippingPrice.toFixed(2),
+      total: total.toFixed(2),
+      shippingMethod: shippingMethod?.label || '',
+      shippingDelay: shippingMethod?.estimatedDelay || '',
     })
   } catch (err) {
     return NextResponse.json({ error: 'Order failed' }, { status: 500 })

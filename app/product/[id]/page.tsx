@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { getProductById, type OptionChoice } from '@/lib/products'
 import PayPalButton from '@/components/PayPalButton'
+import { SHIPPING_METHODS, getShippingMethodById } from '@/lib/shipping'
 import {
   buttonGoldStyle,
   buttonOutlineGoldStyle,
@@ -23,6 +24,7 @@ export default function ProductPage() {
   const [customValues, setCustomValues] = useState<Record<string, string>>({})
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string>>({})
   const [quantity, setQuantity] = useState('')
+  const [selectedShippingId, setSelectedShippingId] = useState('')
   const [artworkFile, setArtworkFile] = useState<
     | {
         filename: string
@@ -32,7 +34,7 @@ export default function ProductPage() {
       }
     | null
   >(null)
-  const [address, setAddress] = useState({ firstName: '', lastName: '', email: '', street: '', city: '', zip: '', country: 'France' })
+  const [address, setAddress] = useState({ firstName: '', lastName: '', email: '', phone: '', street: '', city: '', zip: '', country: 'France' })
   const [step, setStep] = useState<'customize' | 'address' | 'payment'>('customize')
   const [error, setError] = useState('')
 
@@ -41,6 +43,7 @@ export default function ProductPage() {
     setCustomValues({})
     setSelectedOptions({})
     setQuantity('')
+    setSelectedShippingId('')
     setArtworkFile(null)
     setStep('customize')
     setError('')
@@ -115,7 +118,11 @@ export default function ProductPage() {
 
   const unitPrice = computeUnitPrice()
   const qty = parseQuantity(quantity)
-  const total = qty ? unitPrice * qty : 0
+  const selectedShipping = getShippingMethodById(selectedShippingId)
+  const subtotal = qty ? unitPrice * qty : 0
+  const shippingPrice = selectedShipping?.price ?? 0
+  const total = qty ? subtotal + shippingPrice : 0
+  const subtotalDisplayAmount = qty ? subtotal.toFixed(2) : '—'
   const displayAmount = qty ? total.toFixed(2) : '—'
 
   const optionLabels: Record<string, string> = {
@@ -169,8 +176,12 @@ export default function ProductPage() {
       return
     }
     if (step === 'address') {
-      if (!address.firstName || !address.lastName || !address.email || !address.street || !address.city || !address.zip) {
+      if (!address.firstName || !address.lastName || !address.email || !address.phone || !address.street || !address.city || !address.zip) {
         setError('Veuillez remplir tous les champs obligatoires.')
+        return
+      }
+      if (!selectedShipping) {
+        setError('Veuillez choisir un mode de livraison pour continuer.')
         return
       }
       setError('')
@@ -370,7 +381,7 @@ export default function ProductPage() {
             )}
 
             <p style={{ fontFamily: fonts.body, fontSize: 12, letterSpacing: '0.06em', color: theme.textMid, marginBottom: 20 }}>
-              Total ({qty ?? '—'} × {unitPrice.toFixed(2)} €) : <strong style={{ color: theme.textDark }}>{qty ? `${displayAmount} €` : '—'}</strong>
+              Sous-total produits ({qty ?? '—'} × {unitPrice.toFixed(2)} €) : <strong style={{ color: theme.textDark }}>{qty ? `${subtotalDisplayAmount} €` : '—'}</strong>
             </p>
             <div style={{ ...dividerStyle(120), margin: '0 0 24px' }} />
             <p style={{ fontSize: 14, lineHeight: 1.9, fontFamily: fonts.body, letterSpacing: '0.04em', marginBottom: 32, color: theme.textMid }}>
@@ -623,6 +634,12 @@ export default function ProductPage() {
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 12, letterSpacing: '0.20em', textTransform: 'uppercase', marginBottom: 8, fontFamily: fonts.body, color: theme.textMid }}>
+                    Telephone *
+                  </label>
+                  <input className="mm-input" type="tel" style={inputLuxuryStyle} value={address.phone} onChange={e => handleAddressChange('phone', e.target.value)} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 12, letterSpacing: '0.20em', textTransform: 'uppercase', marginBottom: 8, fontFamily: fonts.body, color: theme.textMid }}>
                     Adresse *
                   </label>
                   <input className="mm-input" type="text" style={inputLuxuryStyle} value={address.street} onChange={e => handleAddressChange('street', e.target.value)} />
@@ -646,6 +663,66 @@ export default function ProductPage() {
                     Pays
                   </label>
                   <input className="mm-input" type="text" style={inputLuxuryStyle} value={address.country} onChange={e => handleAddressChange('country', e.target.value)} />
+                </div>
+
+                <div
+                  style={{
+                    marginTop: 8,
+                    background: 'white',
+                    border: `1px solid ${theme.creamDark}`,
+                    padding: 16,
+                  }}
+                >
+                  <p
+                    style={{
+                      margin: 0,
+                      marginBottom: 12,
+                      fontFamily: fonts.display,
+                      color: theme.textDark,
+                      fontSize: 22,
+                      fontWeight: 300,
+                    }}
+                  >
+                    Choisissez votre mode de livraison
+                  </p>
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    {SHIPPING_METHODS.map((method) => {
+                      const checked = selectedShippingId === method.id
+                      return (
+                        <label
+                          key={method.id}
+                          style={{
+                            border: `1px solid ${checked ? theme.gold : theme.creamDark}`,
+                            background: checked ? '#fffaf0' : 'white',
+                            padding: '12px 14px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: 10,
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="shipping-method"
+                            checked={checked}
+                            onChange={() => {
+                              setSelectedShippingId(method.id)
+                              setError('')
+                            }}
+                            style={{ marginTop: 3 }}
+                          />
+                          <div style={{ display: 'grid', gap: 4 }}>
+                            <span style={{ fontFamily: fonts.body, fontSize: 13, color: theme.textDark, letterSpacing: '0.04em' }}>
+                              {method.shortLabel} - {method.price.toFixed(2)} €
+                            </span>
+                            <span style={{ fontFamily: fonts.body, fontSize: 11, color: theme.textMid, letterSpacing: '0.04em' }}>
+                              Delai estime: {method.estimatedDelay}
+                            </span>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
                 </div>
                 {error && <p style={{ color: '#ef4444', fontSize: 12, fontFamily: fonts.body }}>{error}</p>}
                 <div style={{ display: 'flex', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
@@ -760,7 +837,7 @@ export default function ProductPage() {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                          {displayAmount} €
+                          {subtotalDisplayAmount} €
                     </span>
                   </div>
 
@@ -895,11 +972,75 @@ export default function ProductPage() {
                       style={{
                         fontFamily: "'Jost',sans-serif",
                         fontSize: '12px',
-                        color: '#6a9a6a',
+                        color: selectedShipping ? 'var(--text)' : '#b94e4e',
                         letterSpacing: '0.05em',
                       }}
                     >
-                      ✓ Incluse
+                      {selectedShipping ? `${selectedShipping.shortLabel} - ${selectedShipping.price.toFixed(2)} €` : 'Mode non selectionne'}
+                    </span>
+                  </div>
+
+                  {/* Shipping delay */}
+                  <div
+                    style={{
+                      padding: '12px 22px',
+                      borderBottom: '1px solid #f5edd8',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "'Jost',sans-serif",
+                        fontSize: '11px',
+                        color: '#a08060',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
+                      Delai de livraison estime
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "'Jost',sans-serif",
+                        fontSize: '12px',
+                        color: 'var(--mid)',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      {selectedShipping?.estimatedDelay || 'A choisir'}
+                    </span>
+                  </div>
+
+                  {/* Subtotal */}
+                  <div
+                    style={{
+                      padding: '12px 22px',
+                      borderBottom: '1px solid #f5edd8',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: "'Jost',sans-serif",
+                        fontSize: '11px',
+                        color: '#a08060',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
+                      Sous-total produits
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "'Jost',sans-serif",
+                        fontSize: '12px',
+                        color: 'var(--text)',
+                        letterSpacing: '0.05em',
+                      }}
+                    >
+                      {subtotalDisplayAmount} €
                     </span>
                   </div>
 
@@ -1090,6 +1231,14 @@ export default function ProductPage() {
                             ]
                           : [],
                         customer: address,
+                        shipping: {
+                          id: selectedShipping?.id || '',
+                          label: selectedShipping?.label || '',
+                          shortLabel: selectedShipping?.shortLabel || '',
+                          carrier: selectedShipping?.carrier || '',
+                          price: selectedShipping?.price || 0,
+                          estimatedDelay: selectedShipping?.estimatedDelay || '',
+                        },
                       }}
                     />
                   )}

@@ -88,10 +88,11 @@ Chaque changement declenche l'email client associe.
 1. Crée un compte sur https://resend.com
 2. Génère une **API Key**
 3. Colle dans `RESEND_API_KEY`
-4. Vérifie ton domaine d'envoi (ou utilise onboarding@resend.dev en test)
+4. Renseigne `EMAIL_FROM` avec une adresse d'envoi vérifiée sur ton domaine
+5. Renseigne `EMAIL_ADMIN` avec l'adresse de la vendeuse / admin
 
 ### Email propriétaire
-- Modifie `OWNER_EMAIL` avec ton adresse professionnelle
+- `OWNER_EMAIL` sert de fallback si `EMAIL_FROM` ou `EMAIL_ADMIN` sont absents
 
 ## 🖼️ Ajouter des produits
 

@@ -140,11 +140,20 @@ export default function CartCheckoutButton({
                 }
               } else {
                 const apiData = (await res.json().catch(() => null)) as
-                  | { orderId?: string; total?: string; paymentMethod?: string; subtotal?: string; shipping?: string; shippingMethod?: string; shippingDelay?: string }
+                    | { orderId?: string; total?: string; paymentMethod?: string; subtotal?: string; shipping?: string; shippingMethod?: string; shippingDelay?: string; emailWarnings?: string[] }
                   | null
 
                 const orderId = apiData?.orderId || ''
                 if (!orderId) throw new Error('Missing orderId from API')
+
+                  if (Array.isArray(apiData?.emailWarnings) && apiData.emailWarnings.length > 0) {
+                    const warningMessage = apiData.emailWarnings.join(' | ')
+                    try {
+                      if (typeof window !== 'undefined') sessionStorage.setItem('mm:orderEmailError', warningMessage)
+                    } catch {
+                      // ignore
+                    }
+                  }
 
                 try {
                   if (typeof window !== 'undefined') sessionStorage.setItem(sentKey, '1')

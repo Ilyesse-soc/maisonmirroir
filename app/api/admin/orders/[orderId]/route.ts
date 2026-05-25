@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Resend } from 'resend'
 import { readOrders, updateOrder } from '@/lib/orderStore'
 import type { OrderStatus } from '@/lib/orderTypes'
+import { getAdminEmail, getEmailFrom, sendEmailOrThrow, normalizeEmailError } from '@/lib/email'
 
 const STATUS_VALUES: OrderStatus[] = ['En attente', 'Payee', 'En preparation', 'Expediee', 'Livree', 'Annulee']
 
@@ -33,6 +33,22 @@ function buildSection(title: string, rows: Array<[string, string]>) {
   `
 }
 
+function logAdminOrderEvent(message: string, meta?: Record<string, unknown>) {
+  if (meta) {
+    console.log(`[admin/orders] ${message}`, meta)
+    return
+  }
+  console.log(`[admin/orders] ${message}`)
+}
+
+function getTrackingLink(carrier: string, fallbackUrl: string) {
+  const normalized = carrier.toLowerCase()
+  if (normalized.includes('colissimo')) return 'https://www.laposte.fr/outils/suivre-vos-envois'
+  if (normalized.includes('mondial relay')) return 'https://www.mondialrelay.fr/suivi-de-colis/'
+  if (normalized.includes('chronopost')) return 'https://www.chronopost.fr/tracking-no-cms/suivi-page'
+  return fallbackUrl
+}
+
 export async function PATCH(req: NextRequest, context: { params: { orderId: string } }) {
   try {
     const { orderId } = context.params
@@ -55,7 +71,7 @@ export async function PATCH(req: NextRequest, context: { params: { orderId: stri
     if (nextStatus) patch.status = nextStatus
     if (nextTracking) {
       patch.trackingNumber = nextTracking
-      patch.trackingUrl = `${existing.shipping.trackingBaseUrl}`
+      patch.trackingUrl = getTrackingLink(existing.shipping.carrier, existing.shipping.trackingBaseUrl)
     }
 
     const updated = await updateOrder(orderId, patch)
@@ -63,14 +79,17 @@ export async function PATCH(req: NextRequest, context: { params: { orderId: stri
       return NextResponse.json({ error: 'Mise a jour impossible' }, { status: 500 })
     }
 
-    const resendApiKey = process.env.RESEND_API_KEY
-    if (resendApiKey) {
-      try {
-        const resend = new Resend(resendApiKey)
-        const fromEmail = 'contact@maison-miroir.fr'
-        const sellerEmail = 'maison.miroirs@gmail.com'
+    logAdminOrderEvent('commande mise à jour', { orderId, status: nextStatus || updated.status, trackingNumber: nextTracking || updated.trackingNumber || '' })
 
+    const fromEmail = getEmailFrom()
+    const adminEmail = getAdminEmail()
+    if (fromEmail && adminEmail) {
+      try {
         const baseStyle = 'font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;max-width:640px;margin:0 auto;background:#ffffff;'
+        const trackingUrl = updated.trackingNumber
+          ? getTrackingLink(updated.shipping.carrier, updated.trackingUrl || updated.shipping.trackingBaseUrl)
+          : updated.trackingUrl || updated.shipping.trackingBaseUrl
+
         const customerHtml = `
           <div style=\"${baseStyle}padding:0\">
             <div style=\"background:linear-gradient(135deg,#1a1408,#2c2010);padding:24px\">
@@ -85,7 +104,7 @@ export async function PATCH(req: NextRequest, context: { params: { orderId: stri
                 ['Transporteur', updated.shipping.carrier],
                 ['Mode de livraison', updated.shipping.label],
                 ['Numero de suivi', updated.trackingNumber || ''],
-                ['Lien de suivi', updated.trackingUrl || ''],
+                ['Lien de suivi', trackingUrl],
                 ['Delai estime restant', updated.shipping.estimatedDelay],
               ])}
               ${buildSection('Resume', [
@@ -98,15 +117,17 @@ export async function PATCH(req: NextRequest, context: { params: { orderId: stri
           </div>
         `
 
-        await resend.emails.send({
+        await sendEmailOrThrow({
           from: fromEmail,
-          to: [updated.customer.email],
-          replyTo: sellerEmail,
+          to: updated.customer.email,
+          replyTo: adminEmail,
           subject: `Mise a jour commande - #${updated.orderId}`,
-          html: customerHtml,
-        } as any)
+          html: customerHtml.replace('[' + 'updated.trackingUrl || updated.shipping.trackingBaseUrl' + ']', trackingUrl),
+        })
+        logAdminOrderEvent('email suivi envoyé', { orderId, to: updated.customer.email })
       } catch (emailError) {
-        console.error('[admin/orders] email update failed', emailError)
+        const message = normalizeEmailError(emailError)
+        console.error('[admin/orders] email update failed', { orderId, error: message })
       }
     }
 

@@ -19,13 +19,13 @@ export default function CartPage() {
   const total = getCartTotal(items, selectedShipping.id)
 
   return (
-    <div style={{ paddingTop: 88, minHeight: '100vh', background: theme.marble }}>
+    <div className="mm-cart-shell" style={{ paddingTop: 88, minHeight: '100vh', background: theme.marble }}>
       <div style={{ maxWidth: pageMaxWidth, margin: '0 auto', padding: '48px 24px 80px' }}>
         <div style={{ marginBottom: 24 }}>
           <p style={{ fontFamily: fonts.body, fontSize: 11, letterSpacing: '0.24em', textTransform: 'uppercase', color: theme.gold, marginBottom: 8 }}>
             Panier
           </p>
-          <h1 style={{ fontFamily: fonts.display, fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 300, color: theme.textDark, margin: 0 }}>
+          <h1 className="mm-cart-title" style={{ fontFamily: fonts.display, fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 300, color: theme.textDark, margin: 0 }}>
             Votre panier ({itemCount})
           </h1>
         </div>
@@ -40,12 +40,12 @@ export default function CartPage() {
             </Link>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(320px, 0.9fr)', gap: 28 }}>
-            <div style={{ display: 'grid', gap: 16 }}>
+          <div className="mm-cart-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.5fr) minmax(320px, 0.9fr)', gap: 28 }}>
+            <div className="mm-cart-stack" style={{ display: 'grid', gap: 16 }}>
               {items.map((item) => {
                 const lineSubtotal = getCartItemSubtotal(item)
                 return (
-                  <article key={item.key} style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 18, display: 'grid', gridTemplateColumns: '96px 1fr', gap: 16 }}>
+                  <article key={item.key} className="mm-cart-card" style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 18, display: 'grid', gridTemplateColumns: '96px 1fr', gap: 16 }}>
                     <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', border: `1px solid ${theme.creamDark}` }}>
                       {item.image ? (
                         <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -54,7 +54,7 @@ export default function CartPage() {
                       )}
                     </div>
                     <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
+                      <div className="mm-cart-summary-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start' }}>
                         <div>
                           <h2 style={{ fontFamily: fonts.display, fontSize: 20, fontWeight: 300, color: theme.textDark, margin: 0 }}>
                             {item.name}
@@ -109,7 +109,7 @@ export default function CartPage() {
               })}
             </div>
 
-            <aside style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 20, height: 'fit-content', position: 'sticky', top: 108 }}>
+            <aside className="mm-cart-aside" style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 20, height: 'fit-content', position: 'sticky', top: 108 }}>
               <p style={{ fontFamily: fonts.body, fontSize: 11, letterSpacing: '0.24em', textTransform: 'uppercase', color: theme.gold, marginBottom: 10 }}>
                 Récapitulatif
               </p>
@@ -130,7 +130,7 @@ export default function CartPage() {
 
               <div style={{ ...dividerStyle(100), margin: '18px 0' }} />
 
-              <div style={{ display: 'grid', gap: 10 }}>
+              <div className="mm-cart-actions" style={{ display: 'grid', gap: 10 }}>
                 <p style={{ margin: 0, fontFamily: fonts.body, fontSize: 12, letterSpacing: '0.14em', textTransform: 'uppercase', color: theme.textMid }}>
                   Choisissez votre mode de livraison
                 </p>

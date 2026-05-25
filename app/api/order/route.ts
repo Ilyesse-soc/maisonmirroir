@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Resend } from 'resend'
 import { randomUUID } from 'crypto'
 import { saveOrder } from '@/lib/orderStore'
 import type { CustomerInfo, OrderPayload, OrderRecord, PaymentMethod, ProductInfo } from '@/lib/orderTypes'
 import { formatEuro, getShippingMethodById } from '@/lib/shipping'
+import { getAdminEmail, getEmailFrom, getResendClient, normalizeEmailError, sendEmailOrThrow } from '@/lib/email'
 
 type IncomingBody = {
   paymentMethod?: PaymentMethod
@@ -80,6 +80,14 @@ function buildSection(title: string, rows: Array<[string, string]>): string {
       <table style="width:100%;border-collapse:collapse">${rowsHtml || '<tr><td style="font-size:13px;color:#999">—</td></tr>'}</table>
     </div>
   `
+}
+
+function logOrderEvent(message: string, meta?: Record<string, unknown>) {
+  if (meta) {
+    console.log(`[order] ${message}`, meta)
+    return
+  }
+  console.log(`[order] ${message}`)
 }
 
 export async function POST(req: NextRequest) {
@@ -183,14 +191,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid input', details: validationErrors }, { status: 400 })
     }
 
-    const resendApiKey = process.env.RESEND_API_KEY
-    if (!resendApiKey) {
-      return NextResponse.json({ error: 'RESEND_API_KEY is not configured' }, { status: 500 })
-    }
+    const resend = getResendClient()
+    const fromEmail = getEmailFrom()
+    const adminEmail = getAdminEmail()
 
-    const resend = new Resend(resendApiKey)
-    const sellerEmail = 'maison.miroirs@gmail.com'
-    const fromEmail = 'contact@maison-miroir.fr'
+    if (!resend || !fromEmail || !adminEmail) {
+      console.error('[order] email configuration missing', {
+        hasResendApiKey: Boolean(process.env.RESEND_API_KEY),
+        hasEmailFrom: Boolean(fromEmail),
+        hasEmailAdmin: Boolean(adminEmail),
+      })
+      return NextResponse.json({ error: 'Email configuration is missing', details: ['RESEND_API_KEY, EMAIL_FROM ou EMAIL_ADMIN manquant'] }, { status: 500 })
+    }
 
     const subtotal = normalizedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
     const shippingPrice = shippingMethod?.price ?? 0
@@ -328,24 +340,6 @@ export async function POST(req: NextRequest) {
       </div>
     `
 
-    const sellerSend = await resend.emails.send({
-      from: fromEmail,
-      to: [sellerEmail],
-      replyTo: customer.email,
-      subject,
-      html: sellerHtml,
-      attachments: safeAttachments.map((a) => ({
-        filename: a.filename,
-        content: a.base64.replace(/\s/g, ''),
-        contentType: a.contentType,
-      })),
-    } as any)
-
-    if ((sellerSend as any)?.error) {
-      console.error('[order] seller email failed', (sellerSend as any).error)
-      return NextResponse.json({ error: 'Seller email failed' }, { status: 500 })
-    }
-
     const orderRecord: OrderRecord = {
       orderId,
       orderDate: new Date().toISOString(),
@@ -378,22 +372,43 @@ export async function POST(req: NextRequest) {
     }
 
     await saveOrder(orderRecord)
+    logOrderEvent('commande créée', { orderId, paymentMethod, total: total.toFixed(2) })
 
-    // Bonus: customer confirmation (best effort)
+    const emailWarnings: string[] = []
+
     try {
-      const customerSend = await resend.emails.send({
+      await sendEmailOrThrow({
         from: fromEmail,
-        to: [customer.email],
-        replyTo: sellerEmail,
+        to: adminEmail,
+        replyTo: customer.email,
+        subject,
+        html: sellerHtml,
+        attachments: safeAttachments.map((a) => ({
+          filename: a.filename,
+          content: a.base64.replace(/\s/g, ''),
+          contentType: a.contentType,
+        })),
+      })
+      logOrderEvent('email vendeur envoyé', { orderId, to: adminEmail })
+    } catch (error) {
+      const message = normalizeEmailError(error)
+      emailWarnings.push(`seller: ${message}`)
+      console.error('[order] email vendeur failed', { orderId, error: message })
+    }
+
+    try {
+      await sendEmailOrThrow({
+        from: fromEmail,
+        to: customer.email,
+        replyTo: adminEmail,
         subject: `Confirmation de votre commande - #${orderId}`,
         html: customerHtml,
-      } as any)
-
-      if ((customerSend as any)?.error) {
-        console.error('[order] customer email failed', (customerSend as any).error)
-      }
+      })
+      logOrderEvent('email client envoyé', { orderId, to: customer.email })
     } catch (e) {
-      console.error(e)
+      const message = normalizeEmailError(e)
+      emailWarnings.push(`customer: ${message}`)
+      console.error('[order] email client failed', { orderId, error: message })
     }
 
     return NextResponse.json({
@@ -405,6 +420,7 @@ export async function POST(req: NextRequest) {
       total: total.toFixed(2),
       shippingMethod: shippingMethod?.label || '',
       shippingDelay: shippingMethod?.estimatedDelay || '',
+      emailWarnings,
     })
   } catch (err) {
     return NextResponse.json({ error: 'Order failed' }, { status: 500 })

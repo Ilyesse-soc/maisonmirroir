@@ -185,6 +185,16 @@ export default function PayPalButton({
                   const shippingTotal = (apiData as any)?.shipping || order.shipping.price.toFixed(2);
                   const paymentMethod = apiData?.paymentMethod || "PAYPAL";
 
+                  if (apiData && Array.isArray((apiData as any).emailWarnings) && (apiData as any).emailWarnings.length > 0) {
+                    try {
+                      if (typeof window !== "undefined") {
+                        sessionStorage.setItem("mm:orderEmailError", (apiData as any).emailWarnings.join(" | "));
+                      }
+                    } catch {
+                      // ignore
+                    }
+                  }
+
                   if (!orderId) throw new Error("Missing orderId from API");
 
                   try {

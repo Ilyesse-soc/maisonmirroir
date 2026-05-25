@@ -41,20 +41,20 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div style={{ paddingTop: 88, minHeight: '100vh', background: theme.marble }}>
+    <div className="mm-checkout-shell" style={{ paddingTop: 88, minHeight: '100vh', background: theme.marble }}>
       <div style={{ maxWidth: pageMaxWidth, margin: '0 auto', padding: '48px 24px 80px' }}>
         <div style={{ marginBottom: 24 }}>
           <p style={{ fontFamily: fonts.body, fontSize: 11, letterSpacing: '0.24em', textTransform: 'uppercase', color: theme.gold, marginBottom: 8 }}>
             Checkout
           </p>
-          <h1 style={{ fontFamily: fonts.display, fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 300, color: theme.textDark, margin: 0 }}>
+          <h1 className="mm-checkout-title" style={{ fontFamily: fonts.display, fontSize: 'clamp(2rem, 4vw, 2.8rem)', fontWeight: 300, color: theme.textDark, margin: 0 }}>
             Finaliser votre commande
           </h1>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 0.8fr)', gap: 28 }}>
-          <section style={{ display: 'grid', gap: 18 }}>
-            <div style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 20 }}>
+        <div className="mm-checkout-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(320px, 0.8fr)', gap: 28 }}>
+          <section className="mm-checkout-stack" style={{ display: 'grid', gap: 18 }}>
+            <div className="mm-checkout-card" style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 20 }}>
               <h2 style={{ fontFamily: fonts.display, fontSize: 22, fontWeight: 300, margin: 0, color: theme.textDark }}>
                 Informations client
               </h2>
@@ -73,7 +73,7 @@ export default function CheckoutPage() {
               </div>
             </div>
 
-            <div style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 20 }}>
+            <div className="mm-checkout-card" style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 20 }}>
               <h2 style={{ fontFamily: fonts.display, fontSize: 22, fontWeight: 300, margin: 0, color: theme.textDark }}>
                 Livraison
               </h2>
@@ -109,15 +109,15 @@ export default function CheckoutPage() {
             </div>
           </section>
 
-          <aside style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 20, height: 'fit-content', position: 'sticky', top: 108 }}>
+          <aside className="mm-checkout-aside" style={{ background: 'white', border: `1px solid ${theme.creamDark}`, padding: 20, height: 'fit-content', position: 'sticky', top: 108 }}>
             <h2 style={{ fontFamily: fonts.display, fontSize: 22, fontWeight: 300, margin: 0, color: theme.textDark }}>
               Récapitulatif
             </h2>
             <div style={{ ...dividerStyle(80), margin: '16px 0 18px' }} />
 
-            <div style={{ display: 'grid', gap: 12, marginBottom: 18 }}>
+            <div className="mm-checkout-stack" style={{ display: 'grid', gap: 12, marginBottom: 18 }}>
               {items.map((item) => (
-                <div key={item.key} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontFamily: fonts.body, fontSize: 13, color: theme.textMid }}>
+                <div key={item.key} className="mm-checkout-summary-row" style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontFamily: fonts.body, fontSize: 13, color: theme.textMid }}>
                   <div>
                     <div style={{ color: theme.textDark }}>{item.name}</div>
                     {item.variantLabel && <div style={{ fontSize: 11, marginTop: 3 }}>{item.variantLabel}</div>}
@@ -145,9 +145,11 @@ export default function CheckoutPage() {
 
             <div style={{ ...dividerStyle(100), margin: '18px 0' }} />
 
-            <CartCheckoutButton items={items} customer={address} shippingMethod={selectedShipping} />
+            <div className="mm-checkout-actions">
+              <CartCheckoutButton items={items} customer={address} shippingMethod={selectedShipping} />
+            </div>
 
-            <div style={{ marginTop: 16 }}>
+            <div className="mm-checkout-actions" style={{ marginTop: 16 }}>
               <Link href="/panier" style={{ ...buttonOutlineGoldStyle({ fullWidth: true }), textAlign: 'center', textDecoration: 'none', display: 'block' }}>
                 Retour au panier
               </Link>

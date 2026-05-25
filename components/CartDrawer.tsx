@@ -50,6 +50,7 @@ export default function CartDrawer() {
       />
 
       <aside
+        className="mm-drawer-panel"
         style={{
           position: 'absolute',
           top: 0,
@@ -104,7 +105,7 @@ export default function CartDrawer() {
               {items.map((item) => {
                 const subtotalLine = getCartItemSubtotal(item)
                 return (
-                  <div key={item.key} style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: 12, paddingBottom: 14, borderBottom: `1px solid ${theme.creamDark}` }}>
+                  <div key={item.key} className="mm-drawer-item" style={{ display: 'grid', gridTemplateColumns: '72px 1fr', gap: 12, paddingBottom: 14, borderBottom: `1px solid ${theme.creamDark}` }}>
                     <div style={{ position: 'relative', width: 72, height: 72, overflow: 'hidden', background: 'white', border: `1px solid ${theme.creamDark}` }}>
                       {item.image ? (
                         <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -180,7 +181,7 @@ export default function CartDrawer() {
             <div style={{ fontSize: 11, letterSpacing: '0.08em' }}>Mode: {shippingLabel}</div>
           </div>
 
-          <div style={{ display: 'grid', gap: 10 }}>
+          <div className="mm-drawer-footer-actions" style={{ display: 'grid', gap: 10 }}>
             <Link href="/panier" onClick={closeDrawer} style={{ display: 'block', textAlign: 'center', textDecoration: 'none', border: `1px solid ${theme.gold}`, padding: '12px 14px', color: theme.goldDark, fontFamily: fonts.body, letterSpacing: '0.12em', textTransform: 'uppercase', fontSize: 12 }}>
               Voir le panier
             </Link>

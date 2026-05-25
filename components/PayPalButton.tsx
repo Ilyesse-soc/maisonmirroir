@@ -166,14 +166,7 @@ export default function PayPalButton({
                 });
 
                 if (!res.ok) {
-                  const msg = "Paiement confirmé, mais l'envoi d'email a échoué.";
-                  setStatus("error");
-                  setErrorMessage(msg);
-                  try {
-                    if (typeof window !== "undefined") sessionStorage.setItem("mm:orderEmailError", msg);
-                  } catch {
-                    // ignore
-                  }
+                  console.error("[checkout] order api returned non-ok after payment", { status: res.status, paypalOrderId: data.orderID });
                 } else {
                   const apiData = (await res.json().catch(() => null)) as
                     | { orderId?: string; total?: string; paymentMethod?: string }
@@ -184,16 +177,6 @@ export default function PayPalButton({
                   const subtotal = (apiData as any)?.subtotal || (order.product.unitPrice * order.product.quantity).toFixed(2);
                   const shippingTotal = (apiData as any)?.shipping || order.shipping.price.toFixed(2);
                   const paymentMethod = apiData?.paymentMethod || "PAYPAL";
-
-                  if (apiData && Array.isArray((apiData as any).emailWarnings) && (apiData as any).emailWarnings.length > 0) {
-                    try {
-                      if (typeof window !== "undefined") {
-                        sessionStorage.setItem("mm:orderEmailError", (apiData as any).emailWarnings.join(" | "));
-                      }
-                    } catch {
-                      // ignore
-                    }
-                  }
 
                   if (!orderId) throw new Error("Missing orderId from API");
 
@@ -232,14 +215,7 @@ export default function PayPalButton({
                   }
                 }
               } catch (e) {
-                const msg = "Paiement confirmé, mais l'envoi d'email a échoué.";
-                setStatus("error");
-                setErrorMessage(msg);
-                try {
-                  if (typeof window !== "undefined") sessionStorage.setItem("mm:orderEmailError", msg);
-                } catch {
-                  // ignore
-                }
+                console.error("[checkout] order post-payment processing warning", { paypalOrderId: data.orderID, error: e });
               }
             }
 

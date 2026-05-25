@@ -34,17 +34,9 @@ type LastOrder = {
 
 export default function SuccessPage() {
   const [lastOrder, setLastOrder] = useState<LastOrder | null>(null)
-  const [processingError, setProcessingError] = useState<string>('')
-  const [orderEmailError, setOrderEmailError] = useState<string>('')
 
   useEffect(() => {
     try {
-      const emailErr = sessionStorage.getItem('mm:orderEmailError')
-      if (emailErr) {
-        setOrderEmailError(emailErr)
-        sessionStorage.removeItem('mm:orderEmailError')
-      }
-
       const raw = sessionStorage.getItem('mm:lastOrder')
       if (!raw) return
       const parsed = JSON.parse(raw) as LastOrder
@@ -96,20 +88,8 @@ export default function SuccessPage() {
         <div style={{ ...dividerStyle(60), margin: '24px auto' }} />
 
         <p style={{ fontSize: 14, lineHeight: 1.8, fontFamily: fonts.body, letterSpacing: '0.04em', marginBottom: 16, color: theme.textMid }}>
-          Votre commande a bien été reçue et confirmée. Vous allez recevoir un email de confirmation avec le récapitulatif de votre commande.
+          Votre commande a bien été enregistrée. Un email de confirmation vous sera envoyé sous quelques instants.
         </p>
-
-        {processingError && (
-          <p style={{ color: '#ef4444', fontSize: 12, fontFamily: fonts.body, margin: '10px 0 0', lineHeight: 1.7 }}>
-            {processingError}
-          </p>
-        )}
-
-        {orderEmailError && (
-          <p style={{ color: '#ef4444', fontSize: 12, fontFamily: fonts.body, margin: '10px 0 0', lineHeight: 1.7 }}>
-            {orderEmailError}
-          </p>
-        )}
 
         {lastOrder && (
           <div

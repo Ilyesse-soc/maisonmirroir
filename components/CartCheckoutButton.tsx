@@ -130,14 +130,7 @@ export default function CartCheckoutButton({
               })
 
               if (!res.ok) {
-                const msg = "Paiement confirmé, mais l'envoi d'email a échoué."
-                setStatus('error')
-                setErrorMessage(msg)
-                try {
-                  if (typeof window !== 'undefined') sessionStorage.setItem('mm:orderEmailError', msg)
-                } catch {
-                  // ignore
-                }
+                console.error('[checkout] order api returned non-ok after payment', { status: res.status, paypalOrderId: data.orderID })
               } else {
                 const apiData = (await res.json().catch(() => null)) as
                     | { orderId?: string; total?: string; paymentMethod?: string; subtotal?: string; shipping?: string; shippingMethod?: string; shippingDelay?: string; emailWarnings?: string[] }
@@ -145,15 +138,6 @@ export default function CartCheckoutButton({
 
                 const orderId = apiData?.orderId || ''
                 if (!orderId) throw new Error('Missing orderId from API')
-
-                  if (Array.isArray(apiData?.emailWarnings) && apiData.emailWarnings.length > 0) {
-                    const warningMessage = apiData.emailWarnings.join(' | ')
-                    try {
-                      if (typeof window !== 'undefined') sessionStorage.setItem('mm:orderEmailError', warningMessage)
-                    } catch {
-                      // ignore
-                    }
-                  }
 
                 try {
                   if (typeof window !== 'undefined') sessionStorage.setItem(sentKey, '1')
@@ -203,15 +187,8 @@ export default function CartCheckoutButton({
                   // ignore
                 }
               }
-            } catch {
-              const msg = "Paiement confirmé, mais l'envoi d'email a échoué."
-              setStatus('error')
-              setErrorMessage(msg)
-              try {
-                if (typeof window !== 'undefined') sessionStorage.setItem('mm:orderEmailError', msg)
-              } catch {
-                // ignore
-              }
+            } catch (error) {
+              console.error('[checkout] order post-payment processing warning', { paypalOrderId: data.orderID, error })
             }
 
             onSuccess?.(data.orderID)

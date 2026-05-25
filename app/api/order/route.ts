@@ -97,6 +97,7 @@ export async function POST(req: NextRequest) {
     // 1) current app payload: { order: { product, customValues, customer } }
     // 2) direct form payload: { name, email, phone, product, quantity, price, address, city, postalCode, message }
     let product: ProductInfo | null = null
+    let items: ProductInfo[] = []
     let customer: CustomerInfo | null = null
     let customValues: Record<string, string> = {}
     let attachments: Array<{ filename: string; contentType: string; base64: string }> = []
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest) {
     if (rawBody.order && typeof rawBody.order === 'object') {
       const op = rawBody.order as OrderPayload
       product = op.product
+      items = Array.isArray((op as any).items) && (op as any).items.length > 0 ? (op as any).items : [op.product]
       customer = op.customer
       customValues = (op.customValues && typeof op.customValues === 'object' ? op.customValues : {}) as Record<string, string>
       shippingMethodId = isNonEmptyString(op.shippingMethodId) ? op.shippingMethodId : ''
@@ -137,6 +139,7 @@ export async function POST(req: NextRequest) {
         quantity: rawBody.quantity,
         message: isNonEmptyString(rawBody.message) ? rawBody.message.trim() : undefined,
       }
+      items = [product]
       customer = {
         firstName: firstName || '',
         lastName: lastName || '',
@@ -157,6 +160,12 @@ export async function POST(req: NextRequest) {
     if (!product || !isNonEmptyString(product.name)) validationErrors.push('product is required')
     if (!product || !isPositiveNumber(product.unitPrice)) validationErrors.push('unitPrice must be a positive number')
     if (!product || !isPositiveNumber(product.quantity)) validationErrors.push('quantity must be a positive number')
+    if (!Array.isArray(items) || items.length === 0) validationErrors.push('items are required')
+
+    const normalizedItems = (Array.isArray(items) ? items : [])
+      .filter((item): item is ProductInfo => Boolean(item && isNonEmptyString(item.name) && isPositiveNumber(item.unitPrice) && isPositiveNumber(item.quantity)))
+
+    if (normalizedItems.length === 0) validationErrors.push('items are invalid')
 
     if (!customer || !isNonEmptyString(customer.firstName)) validationErrors.push('firstName is required')
     if (!customer || !isValidEmail(customer.email)) validationErrors.push('email is invalid')
@@ -183,7 +192,7 @@ export async function POST(req: NextRequest) {
     const sellerEmail = 'maison.miroirs@gmail.com'
     const fromEmail = 'contact@maison-miroir.fr'
 
-    const subtotal = product.unitPrice * product.quantity
+    const subtotal = normalizedItems.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
     const shippingPrice = shippingMethod?.price ?? 0
     const total = subtotal + shippingPrice
 
@@ -215,6 +224,19 @@ export async function POST(req: NextRequest) {
 
     const safeMessage = isNonEmptyString(product.message) ? product.message : ''
 
+    const itemsHtml = normalizedItems
+      .map(
+        (item) => `
+          <tr>
+            <td style="padding:8px 0;color:#1f1a12;font-size:13px;font-weight:600">${escapeHtml(item.name)}</td>
+            <td style="padding:8px 0;color:#7c6b54;font-size:13px">${item.quantity}</td>
+            <td style="padding:8px 0;color:#7c6b54;font-size:13px">${formatEuro(item.unitPrice)} EUR</td>
+            <td style="padding:8px 0;color:#1f1a12;font-size:13px;font-weight:600;text-align:right">${formatEuro(item.unitPrice * item.quantity)} EUR</td>
+          </tr>
+        `,
+      )
+      .join('')
+
     const sellerHtml = `
       <div style="${baseStyle}padding:0">
         ${header}
@@ -241,11 +263,20 @@ export async function POST(req: NextRequest) {
             ['Delai estime', shippingMethod?.estimatedDelay || ''],
             ['Numero de suivi', 'Non disponible'],
           ])}
-          ${buildSection('Produits commandes', [
-            ['Produit', product.name],
-            ['Quantite', String(product.quantity)],
-            ['Prix unitaire', `${formatEuro(product.unitPrice)}`],
-          ])}
+          <div style="border:1px solid #f3e4b8;padding:18px 18px 10px;margin:0 0 14px;background:#fff">
+            <div style="font-size:11px;letter-spacing:0.28em;text-transform:uppercase;color:#c9a227;margin:0 0 10px">Produits commandes</div>
+            <table style="width:100%;border-collapse:collapse">
+              <thead>
+                <tr>
+                  <th style="text-align:left;padding:0 0 8px;color:#7c6b54;font-size:11px;letter-spacing:0.18em;text-transform:uppercase">Produit</th>
+                  <th style="text-align:left;padding:0 0 8px;color:#7c6b54;font-size:11px;letter-spacing:0.18em;text-transform:uppercase">Qté</th>
+                  <th style="text-align:left;padding:0 0 8px;color:#7c6b54;font-size:11px;letter-spacing:0.18em;text-transform:uppercase">PU</th>
+                  <th style="text-align:right;padding:0 0 8px;color:#7c6b54;font-size:11px;letter-spacing:0.18em;text-transform:uppercase">Sous-total</th>
+                </tr>
+              </thead>
+              <tbody>${itemsHtml}</tbody>
+            </table>
+          </div>
           ${buildSection('Totaux', [
             ['Sous-total', `${formatEuro(subtotal)}`],
             ['Livraison', `${formatEuro(shippingPrice)}`],
@@ -276,9 +307,7 @@ export async function POST(req: NextRequest) {
             Vous recevrez un email avec votre numero de suivi des l'expedition.
           </div>
           ${buildSection('Récapitulatif', [
-            ['Produit', product.name],
-            ['Quantité', String(product.quantity)],
-            ['Prix unitaire', `${formatEuro(product.unitPrice)}`],
+            ['Nombre d\'articles', String(normalizedItems.length)],
             ['Sous-total', `${formatEuro(subtotal)}`],
             ['Livraison', `${formatEuro(shippingPrice)}`],
             ['Total paye', `${formatEuro(total)}`],
@@ -332,7 +361,7 @@ export async function POST(req: NextRequest) {
         zip: customer.zip,
         country: customer.country || 'France',
       },
-      items: [product],
+      items: normalizedItems,
       customValues: safeCustomValues,
       shipping: {
         id: shippingMethod?.id || shippingMethodId,

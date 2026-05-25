@@ -2,11 +2,13 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { buttonGoldStyle, fonts, theme } from '@/lib/uiStyles'
+import { useCart } from '@/components/CartProvider'
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [isDesktop, setIsDesktop] = useState(false)
+  const { itemCount, openDrawer } = useCart()
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50)
@@ -109,9 +111,18 @@ export default function Navbar() {
                 {label}
               </Link>
             ))}
-            <Link href="/catalogue" className="btn-gold" style={buttonGoldStyle({ fontSize: 12 })}>
-              Commander
-            </Link>
+            <button
+              onClick={openDrawer}
+              className="btn-gold"
+              style={{
+                ...buttonGoldStyle({ fontSize: 12 }),
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+              }}
+            >
+              <span>Panier ({itemCount})</span>
+            </button>
           </div>
         )}
 
@@ -197,14 +208,22 @@ export default function Navbar() {
               {label}
             </Link>
           ))}
-          <Link
-            href="/catalogue"
+          <button
+            onClick={() => {
+              setMenuOpen(false)
+              openDrawer()
+            }}
             className="btn-gold"
-            style={buttonGoldStyle({ fullWidth: true, fontSize: 12 })}
-            onClick={() => setMenuOpen(false)}
+            style={{
+              ...buttonGoldStyle({ fullWidth: true, fontSize: 12 }),
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 10,
+            }}
           >
-            Commander
-          </Link>
+            Panier ({itemCount})
+          </button>
         </div>
       )}
     </nav>

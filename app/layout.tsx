@@ -1,7 +1,6 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import Navbar from '@/components/Navbar'
-import Footer from '@/components/Footer'
+import SiteShell from '@/components/SiteShell'
 import { fonts, theme } from '@/lib/uiStyles'
 
 export const metadata: Metadata = {
@@ -50,9 +49,7 @@ export default function RootLayout({
           letterSpacing: '0.02em',
         }}
       >
-        <Navbar />
-        <main style={{ minHeight: '100vh' }}>{children}</main>
-        <Footer />
+        <SiteShell>{children}</SiteShell>
         <script
           dangerouslySetInnerHTML={{
             __html: `

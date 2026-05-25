@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { getProductById, type OptionChoice } from '@/lib/products'
 import PayPalButton from '@/components/PayPalButton'
+import { useCart } from '@/components/CartProvider'
 import { SHIPPING_METHODS, getShippingMethodById } from '@/lib/shipping'
 import {
   buttonGoldStyle,
@@ -19,6 +20,7 @@ import {
 export default function ProductPage() {
   const params = useParams()
   const product = getProductById(params.id as string)
+  const { addItem } = useCart()
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0)
   const [customValues, setCustomValues] = useState<Record<string, string>>({})
@@ -158,6 +160,43 @@ export default function ProductPage() {
   const mergedCustomValues: Record<string, string> = {
     ...formattedOptions,
     ...customValues,
+  }
+
+  const handleAddToCart = () => {
+    const q = parseQuantity(quantity)
+    if (optionEntries.length > 0 && !optionsComplete) {
+      setError('Veuillez sélectionner toutes les options de personnalisation.')
+      return
+    }
+    if (!q) {
+      setError('Veuillez indiquer une quantité valide (minimum 1).')
+      return
+    }
+
+    const variantLabel = Object.values(formattedOptions).filter(Boolean).join(' • ')
+    const currentImage = product.images[Math.min(Math.max(selectedImageIndex, 0), product.images.length - 1)]
+
+    addItem({
+      productId: product.id,
+      name: product.name,
+      category: product.category,
+      categoryLabel: product.categoryLabel,
+      image: currentImage,
+      variantLabel: variantLabel || undefined,
+      unitPrice,
+      quantity: q,
+      customValues: mergedCustomValues,
+      attachments: artworkFile
+        ? [
+            {
+              filename: artworkFile.filename,
+              contentType: artworkFile.contentType,
+              base64: artworkFile.base64,
+            },
+          ]
+        : [],
+    })
+    setError('')
   }
 
   const validateStep = () => {
@@ -602,6 +641,16 @@ export default function ProductPage() {
                 {error && <p style={{ color: '#ef4444', fontSize: 12, fontFamily: fonts.body }}>{error}</p>}
                 <button className="btn-gold" onClick={validateStep} style={{ ...buttonGoldStyle({ fullWidth: true }), marginTop: 16 }}>
                   Continuer →
+                </button>
+                <button
+                  onClick={handleAddToCart}
+                  style={{
+                    ...buttonOutlineGoldStyle({ fullWidth: true }),
+                    marginTop: 4,
+                    display: 'block',
+                  }}
+                >
+                  Ajouter au panier
                 </button>
               </div>
             )}

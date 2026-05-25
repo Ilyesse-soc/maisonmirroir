@@ -29,6 +29,7 @@ export type ShippingSelection = Pick<ShippingMethod, 'id' | 'label' | 'shortLabe
 
 export type OrderPayload = {
   product: ProductInfo
+  items?: ProductInfo[]
   customValues?: Record<string, string>
   attachments?: Array<{
     filename: string

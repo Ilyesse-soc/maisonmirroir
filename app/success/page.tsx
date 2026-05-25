@@ -10,6 +10,7 @@ type LastOrder = {
   paymentMethod: 'PAYPAL' | 'CARD'
   paypalOrderId?: string
   product: { id: string; name: string; categoryLabel?: string; unitPrice: string; quantity: number; subtotal: string; shipping: string; total: string }
+  items?: Array<{ id: string; name: string; categoryLabel?: string; unitPrice: string; quantity: number; subtotal: string }>
   shipping: {
     id: string
     label: string
@@ -138,6 +139,21 @@ export default function SuccessPage() {
               <div>
                 <span style={{ color: theme.textDark }}>Produit :</span> {lastOrder.product.name}
               </div>
+              {lastOrder.items && lastOrder.items.length > 1 && (
+                <div>
+                  <div style={{ color: theme.textDark, marginBottom: 6 }}>Articles :</div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    {lastOrder.items.map((item) => (
+                      <div key={item.id + item.name} style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+                        <span style={{ color: theme.textMid }}>
+                          {item.name} x{item.quantity}
+                        </span>
+                        <span style={{ color: theme.textDark }}>{item.subtotal} €</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div>
                 <span style={{ color: theme.textDark }}>Sous-total produits :</span> {lastOrder.product.subtotal} €
               </div>

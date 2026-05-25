@@ -144,7 +144,8 @@ export async function POST(req: NextRequest) {
       items = Array.isArray((op as any).items) && (op as any).items.length > 0 ? (op as any).items : [op.product]
       customer = op.customer
       customValues = (op.customValues && typeof op.customValues === 'object' ? op.customValues : {}) as Record<string, string>
-      shippingMethodId = isNonEmptyString(op.shippingMethodId) ? op.shippingMethodId : ''
+      const legacyShippingId = isNonEmptyString((op as any)?.shipping?.id) ? String((op as any).shipping.id) : ''
+      shippingMethodId = isNonEmptyString(op.shippingMethodId) ? op.shippingMethodId : legacyShippingId
       const atts = Array.isArray(op.attachments) ? op.attachments : []
       attachments = atts
         .filter((a) => a && typeof a === 'object')
@@ -215,6 +216,11 @@ export async function POST(req: NextRequest) {
     if (!shippingMethod) validationErrors.push('shipping method is invalid')
 
     if (validationErrors.length > 0) {
+      console.error('[order] validation failed', {
+        paypalOrderId: isNonEmptyString(rawBody.paypalOrderId) ? rawBody.paypalOrderId : null,
+        shippingMethodId,
+        details: validationErrors,
+      })
       return NextResponse.json({ error: 'Invalid input', details: validationErrors }, { status: 400 })
     }
 

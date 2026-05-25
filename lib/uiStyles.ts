@@ -32,6 +32,7 @@ export function buttonGoldStyle(options?: { fontSize?: number; fullWidth?: boole
   return {
     display: options?.fullWidth ? 'block' : 'inline-block',
     width: options?.fullWidth ? '100%' : undefined,
+    maxWidth: '100%',
     textAlign: 'center',
     color: 'white',
     fontFamily: fonts.body,
@@ -39,10 +40,11 @@ export function buttonGoldStyle(options?: { fontSize?: number; fullWidth?: boole
     letterSpacing: '0.15em',
     textTransform: 'uppercase',
     fontSize: options?.fontSize ?? 12,
-    padding: '14px 36px',
+    padding: '14px 26px',
     border: 'none',
     cursor: 'pointer',
     textDecoration: 'none',
+    wordBreak: 'break-word',
   }
 }
 
@@ -50,6 +52,7 @@ export function buttonOutlineGoldStyle(options?: { fontSize?: number; fullWidth?
   return {
     display: options?.fullWidth ? 'block' : 'inline-block',
     width: options?.fullWidth ? '100%' : undefined,
+    maxWidth: '100%',
     textAlign: 'center',
     background: 'transparent',
     color: theme.gold,
@@ -58,10 +61,11 @@ export function buttonOutlineGoldStyle(options?: { fontSize?: number; fullWidth?
     letterSpacing: '0.15em',
     textTransform: 'uppercase',
     fontSize: options?.fontSize ?? 12,
-    padding: '13px 36px',
+    padding: '13px 24px',
     border: `1px solid ${theme.gold}`,
     cursor: 'pointer',
     textDecoration: 'none',
+    wordBreak: 'break-word',
   }
 }
 

@@ -124,7 +124,7 @@ services:
       start_period: 45s
   proxy:
     <<: *hardened
-    image: nginx:stable-alpine@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a
+    image: nginx:stable-alpine-slim@sha256:e2355aa95529a7999dad94ddcb45a8768abf6fb0b204c93b1a3ffce477d7b893
     user: "101:101"
     read_only: true
     cap_drop: [ALL]

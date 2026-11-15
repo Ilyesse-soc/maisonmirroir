@@ -51,7 +51,7 @@ jobs:
         run: |
           set -eu
           failed=0
-          for target in "$IMAGE:$GITHUB_SHA" "$IMAGE-backup:$GITHUB_SHA" "$IMAGE-postgres:$GITHUB_SHA" 'nginx@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a'; do
+          for target in "$IMAGE:$GITHUB_SHA" "$IMAGE-backup:$GITHUB_SHA" "$IMAGE-postgres:$GITHUB_SHA" 'nginx@sha256:e2355aa95529a7999dad94ddcb45a8768abf6fb0b204c93b1a3ffce477d7b893'; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image --exit-code 1 --severity HIGH,CRITICAL "$target" || failed=1
           done
           exit "$failed"

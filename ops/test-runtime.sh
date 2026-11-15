@@ -35,6 +35,12 @@ trap cleanup EXIT
 "${compose[@]}" up -d --no-build --wait --wait-timeout 150 app worker proxy
 "${compose[@]}" exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 "${compose[@]}" exec -T worker node -e "if(process.env.NEWSLETTER_SEND_ENABLED!=='false'||process.env.RESEND_API_KEY)process.exit(1)"
+before="$("${compose[@]}" exec -T --user postgres postgres psql -U postgres -d maison_miroir -Atqc 'SELECT count(*) FROM mm_live.mm_admin_setup')"
+[[ "$before" = 1 ]]
+"${compose[@]}" restart postgres app worker
+"${compose[@]}" up -d --no-build --wait --wait-timeout 150 app worker proxy
+after="$("${compose[@]}" exec -T --user postgres postgres psql -U postgres -d maison_miroir -Atqc 'SELECT count(*) FROM mm_live.mm_admin_setup')"
+[[ "$before" = "$after" ]]
 for id in $("${compose[@]}" ps -q);do
   [[ $(sudo docker inspect --format '{{.State.OOMKilled}}' "$id") = false ]]
 done

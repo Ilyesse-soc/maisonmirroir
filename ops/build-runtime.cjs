@@ -14,7 +14,7 @@ async function main() {
       format: "esm",
       conditions: ["react-server"],
       packages: "bundle",
-      external: ["pg", "resend"],
+      external: ["pg"],
       banner: {
         js: "import {createRequire} from 'node:module';const require=createRequire(import.meta.url);",
       },

@@ -1,6 +1,10 @@
 {
   admin off
 }
+www.{$DOMAIN} {
+  tls internal
+  redir https://{$DOMAIN}{uri} permanent
+}
 {$DOMAIN} {
   tls internal
   encode zstd gzip

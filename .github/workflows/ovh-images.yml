@@ -2,6 +2,7 @@ name: Build and scan OVH production images
 on:
   push:
     branches: [main, security-launch]
+    paths-ignore: ["**/*.md"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -42,15 +43,18 @@ jobs:
           set -eu
           docker build -t "$IMAGE:$GITHUB_SHA" .
           docker build -t "$IMAGE-backup:$GITHUB_SHA" -f ops/backup/Dockerfile .
+          docker build -t "$IMAGE-postgres:$GITHUB_SHA" -f ops/postgres/Dockerfile .
       - name: Reject high and critical image vulnerabilities
         env:
           IMAGE: ghcr.io/ilyesse-soc/maisonmirroir
           TRIVY: aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
         run: |
           set -eu
-          for target in "$IMAGE:$GITHUB_SHA" "$IMAGE-backup:$GITHUB_SHA" 'postgres@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015' 'caddy@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0'; do
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image --exit-code 1 --severity HIGH,CRITICAL "$target"
+          failed=0
+          for target in "$IMAGE:$GITHUB_SHA" "$IMAGE-backup:$GITHUB_SHA" "$IMAGE-postgres:$GITHUB_SHA" 'caddy@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0'; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image --exit-code 1 --severity HIGH,CRITICAL "$target" || failed=1
           done
+          exit "$failed"
       - name: Start the capped stack with synthetic data and sending disabled
         env:
           IMAGE: ghcr.io/ilyesse-soc/maisonmirroir
@@ -62,6 +66,9 @@ jobs:
           set -eu
           docker push "$IMAGE:$GITHUB_SHA"
           docker push "$IMAGE-backup:$GITHUB_SHA"
+          docker push "$IMAGE-postgres:$GITHUB_SHA"
           docker image inspect "$IMAGE:$GITHUB_SHA" --format '{{index .RepoDigests 0}}' > app-image.txt
           docker image inspect "$IMAGE-backup:$GITHUB_SHA" --format '{{index .RepoDigests 0}}' > backup-image.txt
+          docker image inspect "$IMAGE-postgres:$GITHUB_SHA" --format '{{index .RepoDigests 0}}' > postgres-image.txt
           printf 'App image: `%s`\n\nBackup image: `%s`\n' "$(cat app-image.txt)" "$(cat backup-image.txt)" >> "$GITHUB_STEP_SUMMARY"
+          printf '\nPostgreSQL image: `%s`\n' "$(cat postgres-image.txt)" >> "$GITHUB_STEP_SUMMARY"

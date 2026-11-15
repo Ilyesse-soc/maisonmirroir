@@ -2,7 +2,11 @@
 
 ## Résultat et périmètre
 
-L'application et l'infrastructure sont préparées pour OVH VPS-1. L'ancien site public n'a pas été remplacé. Aucun changement DNS, import définitif, paiement ou envoi d'e-mail réel n'a été réalisé. Ce rapport décrit les contrôles locaux ; il ne constitue pas une certification de sécurité ni une validation de charge du VPS.
+L'application et l'infrastructure sont préparées pour OVH VPS-2 2027. L'ancien site public n'a pas été remplacé. Aucun changement DNS, import définitif, paiement ou envoi d'e-mail réel n'a été réalisé. Ce rapport décrit les contrôles locaux ; il ne constitue pas une certification de sécurité ni une validation de charge du VPS.
+
+Le VPS fourni est `vps-5485bc25.vps.ovh.ca`, IPv4 `15.235.62.124`, IPv6 `2607:5300:205:200::8c95`, 4 vCPU / 8 Go / 75 Go, Ubuntu 26.04 déclaré par OVH, région Beauharnois au Canada. La résolution IPv4 est confirmée. L'utilisateur et l'autorisation de clé SSH restent attendus : système installé, versions Docker, conteneurs et base sur ce serveur ne sont pas encore vérifiés. Aucun commit n'y a été déployé.
+
+Les enregistrements publics web observés sont `maison-miroir.fr A 76.76.21.21` et `www CNAME cname.vercel-dns.com`. Cette observation ne remplace pas la sauvegarde complète de la zone OVH, obligatoire avant bascule. Aucun enregistrement de messagerie n'a été modifié.
 
 Next.js a été migré de 14 vers 16.4.6 avec React/React DOM 19.3.1 et mise à jour des dépendances exposées. L'audit npm final recense zéro vulnérabilité, toutes sévérités confondues. Le contrôle npm et les scans Trivy des images sont obligatoires dans GitHub Actions avant livraison. Les dépendances d'outils isolées sous `.qa` ne sont pas embarquées dans l'image.
 
@@ -30,6 +34,8 @@ Next.js a été migré de 14 vers 16.4.6 avec React/React DOM 19.3.1 et mise à 
 | Affichage 320/390/1024/1440 px | Pas de débordement horizontal dans la recette |
 
 Dernière mesure de laboratoire locale : LCP 272 ms, CLS 0,029. Ce ne sont pas des mesures OVH ou des indicateurs terrain ; INP et comportement sous charge restent à mesurer. Le Docker daemon local n'est pas disponible : les images sont construites sur GitHub. Le premier scan a détecté six vulnérabilités HIGH dans les outils npm embarqués par l'image Node de base ; ces outils inutiles à l'exécution ont été retirés de l'image finale. Le nouveau scan et le démarrage isolé de la stack doivent réussir avant publication. Les éléments de recette et secrets restent dans `.qa`, ignoré par Git et Docker.
+
+Le scan suivant confirme l'image applicative sans HIGH/CRITICAL, mais a bloqué sur le binaire `gosu` de l'image PostgreSQL de base (26 avis, dont un critique, bibliothèque Go ancienne). Il est supprimé du conteneur de sauvegarde qui fonctionne déjà sans root, et remplacé dans une image PostgreSQL dérivée par `su-exec` maintenu par Alpine. Les images corrigées et Caddy doivent encore passer l'analyse complète et le démarrage CI : aucune exception de scanner n'a été ajoutée et aucune image bloquée n'est déployée.
 
 ## Données et conditions restantes
 

@@ -13,7 +13,7 @@ disk = os.statvfs('/opt/maison-miroir')
 if disk.f_bavail / disk.f_blocks < 0.20: problems.append('Moins de 20 % de disque disponible')
 if os.getloadavg()[1] > 3: problems.append('Charge CPU soutenue élevée')
 command = ['docker', 'compose', '--env-file', str(ROOT / '.env'), '-f', str(ROOT / 'compose.yml')]
-ids = subprocess.check_output(command + ['ps', '-q'], text=True).split()
+ids = subprocess.check_output(command + ['ps', '--all', '-q'], text=True).split()
 if not ids: problems.append('Aucun conteneur applicatif actif')
 for identifier in ids:
     raw = subprocess.check_output(['docker', 'inspect', '--format', '{{json .State}}', identifier], text=True)

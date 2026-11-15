@@ -12,6 +12,7 @@ sudo install -d -o 1000 -g 1000 -m 0700 "$root/bootstrap"
 sudo tee "$root/.env" >/dev/null <<EOF
 APP_IMAGE=$IMAGE:$GITHUB_SHA
 BACKUP_IMAGE=$IMAGE-backup:$GITHUB_SHA
+POSTGRES_IMAGE=$IMAGE-postgres:$GITHUB_SHA
 DOMAIN=maison-miroir.test
 ACME_EMAIL=qa-owner@example.test
 CADDY_CONFIG=Caddyfile.staging

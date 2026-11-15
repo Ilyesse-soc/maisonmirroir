@@ -15,6 +15,8 @@ previous="$(sed -n 's/^APP_IMAGE=//p' .env)"
 [[ "$previous" =~ ^ghcr.io/ilyesse-soc/maisonmirroir@sha256:[a-f0-9]{64}$ ]] || exit 1
 backup_image="$(sed -n 's/^BACKUP_IMAGE=//p' .env)"
 [[ "$backup_image" =~ ^ghcr.io/ilyesse-soc/maisonmirroir-backup@sha256:[a-f0-9]{64}$ ]] || exit 1
+postgres_image="$(sed -n 's/^POSTGRES_IMAGE=//p' .env)"
+[[ "$postgres_image" =~ ^ghcr.io/ilyesse-soc/maisonmirroir-postgres@sha256:[a-f0-9]{64}$ ]] || exit 1
 # The CI job passes its short-lived read-only registry token through encrypted SSH stdin.
 IFS= read -r registry_user
 IFS= read -r registry_token
@@ -29,6 +31,7 @@ printf '%s\n' "$previous" > last-good-image
 docker image inspect "$previous" >/dev/null && docker tag "$previous" maison-miroir:rollback
 docker --config "$registry_dir" pull "$image"
 docker --config "$registry_dir" pull "$backup_image"
+docker --config "$registry_dir" pull "$postgres_image"
 APP_IMAGE="$image" docker compose --env-file .env -f compose.yml run --rm --no-deps migrate
 sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$image|" .env
 if ! docker compose --env-file .env -f compose.yml up -d --no-build --wait --wait-timeout 150 app worker caddy;then

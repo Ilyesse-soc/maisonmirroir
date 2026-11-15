@@ -3,6 +3,25 @@
 set -euo pipefail
 umask 077
 [[ $EUID -eq 0 ]] || { echo 'Run as root on the dedicated VPS'; exit 1; }
+if [[ "${1:-}" = --finalize-ssh ]];then
+  [[ "${SUDO_USER:-}" = mmadmin && -n "${SSH_CONNECTION:-}" ]] || { echo 'Run from the verified mmadmin SSH session using sudo --preserve-env=SSH_CONNECTION';exit 1; }
+  cat > /etc/ssh/sshd_config.d/00-maison-miroir.conf <<'SSH'
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin prohibit-password
+X11Forwarding no
+MaxAuthTries 3
+ClientAliveInterval 300
+ClientAliveCountMax 2
+SSH
+  sshd -t
+  sshd -T | grep -q '^passwordauthentication no$'
+  sshd -T | grep -q '^kbdinteractiveauthentication no$'
+  systemctl reload ssh || systemctl reload sshd
+  echo KEY_ONLY_SSH_CONFIRMED_FROM_NEW_ADMIN_SESSION
+  exit
+fi
 [[ -f /etc/os-release ]] || exit 1
 source /etc/os-release
 [[ "$ID" = ubuntu || "$ID" = debian ]] || { echo 'Unsupported OS';exit 1; }
@@ -11,9 +30,27 @@ source /etc/os-release
 grep -Eq '^(ssh-ed25519|sk-ssh-ed25519@openssh.com) ' "$MM_ADMIN_PUBLIC_KEY_FILE"
 grep -Eq '^(ssh-ed25519|sk-ssh-ed25519@openssh.com) ' "$MM_DEPLOY_PUBLIC_KEY_FILE"
 apt-get update
-apt-get install -y ca-certificates curl openssl ufw unattended-upgrades fail2ban python3
-# Use the distribution's maintained Docker/Compose packages; do not pipe a remote installer into a shell.
-apt-get install -y docker.io docker-compose-v2 || { echo 'Install the official Docker apt repository for this OS, then rerun.';exit 1; }
+apt-get install -y ca-certificates curl openssl gnupg ufw unattended-upgrades fail2ban python3 sudo
+apt-get upgrade -y
+# Official signed Docker repository; never remove an existing installation or its data implicitly.
+if dpkg-query -W -f='${Status}' docker.io 2>/dev/null | grep -q 'install ok installed';then
+  echo 'Existing distribution Docker detected; review it before switching repositories';exit 1
+fi
+install -d -m 0755 /etc/apt/keyrings
+curl -fsSL "https://download.docker.com/linux/$ID/gpg" -o /etc/apt/keyrings/docker.asc
+fingerprint="$(gpg --show-keys --with-colons /etc/apt/keyrings/docker.asc | awk -F: '$1=="fpr"{print $10;exit}')"
+[[ "$fingerprint" = 9DC858229FC7DD38854AE2D88D81803C0EBFCD88 ]] || { echo DOCKER_SIGNING_KEY_MISMATCH;exit 1; }
+chmod 0644 /etc/apt/keyrings/docker.asc
+cat > /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/$ID
+Suites: ${UBUNTU_CODENAME:-$VERSION_CODENAME}
+Components: stable
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+apt-get update
+apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 systemctl enable --now docker fail2ban
 install -d -m 0750 /opt/maison-miroir /opt/maison-miroir/ops
 install -d -m 0700 /opt/maison-miroir/ops/secrets
@@ -35,25 +72,15 @@ install -m 0755 /opt/maison-miroir/ops/release.sh /usr/local/sbin/mm-release
 printf 'mmdeploy ALL=(root) NOPASSWD: /usr/local/sbin/mm-release\n' > /etc/sudoers.d/maison-miroir-deploy
 chmod 0440 /etc/sudoers.d/maison-miroir-deploy
 visudo -c
-cat > /etc/ssh/sshd_config.d/70-maison-miroir.conf <<'SSH'
-PubkeyAuthentication yes
-PasswordAuthentication no
-KbdInteractiveAuthentication no
-PermitRootLogin prohibit-password
-X11Forwarding no
-MaxAuthTries 3
-ClientAliveInterval 300
-ClientAliveCountMax 2
-SSH
 sshd -t
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow "${MM_SSH_PORT:-22}/tcp"
+while read -r ssh_port;do ufw allow "$ssh_port/tcp";done < <(sshd -T | awk '$1=="port"{print $2}')
 ufw allow 80/tcp
 ufw allow 443/tcp
 ufw allow 443/udp
 ufw --force enable
-systemctl reload ssh || systemctl reload sshd
+timedatectl set-ntp true
 install -d -m 0700 /var/lib/maison-miroir
 install -m 0644 /opt/maison-miroir/ops/systemd/maison-miroir-monitor.service /etc/systemd/system/maison-miroir-monitor.service
 install -m 0644 /opt/maison-miroir/ops/systemd/maison-miroir-monitor.timer /etc/systemd/system/maison-miroir-monitor.timer
@@ -67,4 +94,4 @@ APT::Periodic::Update-Package-Lists "1";
 APT::Periodic::Unattended-Upgrade "1";
 Unattended-Upgrade::Automatic-Reboot "false";
 APT
-echo 'Host prepared. Verify a second key-only operator connection before closing the original SSH session.'
+echo 'Host prepared; existing SSH authentication retained. Connect separately as mmadmin, then run sudo --preserve-env=SSH_CONNECTION bash /opt/maison-miroir/ops/bootstrap-vps.sh --finalize-ssh. Keep the original session open until completion.'

@@ -95,7 +95,10 @@ if (commit) {
     await fs.readFile(process.env.IMPORT_STAGE_REPORT || "", "utf8"),
   );
   if (
-    !stage.passed ||
+    stage.passed !== true ||
+    stage.stage !== "isolated" ||
+    stage.errors !== 0 ||
+    stage.differences !== 0 ||
     stage.sourceSha256 !== checksum ||
     stage.orders !== records.length ||
     stage.totalCents !== totalCents

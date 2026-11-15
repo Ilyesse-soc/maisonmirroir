@@ -15,7 +15,7 @@ export default function HomePage() {
         <p className="tagline">MODESTY – IDENTITY – LIFESTYLE</p>
       </header>
       <section className="launch-hero" aria-label="La nouvelle Maison Miroir">
-        <p className="coming">Something beautiful is coming...</p>
+        <p className="coming sr-only">Something beautiful is coming...</p>
         <div className="illustration">
           <Image
             width={1024}

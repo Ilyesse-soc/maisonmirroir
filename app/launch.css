@@ -433,18 +433,23 @@
   font-style: italic;
 }
 
-/* One fluid composition: soften the source crop without moving its focal point. */
+/* Keep the original arch, caption and illustration in one continuous crop. */
 .launch-hero::before {
-  inset: 0;
-  border-radius: 50% 50% 0 0;
-  background: radial-gradient(ellipse at 50% 38%, #d9bc9c99, transparent 73%);
+  content: none;
+}
+.launch-hero .coming {
+  padding: 0;
+  margin: 0;
+}
+.illustration {
+  aspect-ratio: 1024 / 532;
 }
 .illustration img {
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: 50% 19.07%;
+  object-position: 50% 11.95%;
 }
 .illustration {
   -webkit-mask-image:
@@ -503,6 +508,10 @@
   outline-offset: 4px;
 }
 @media (max-width: 700px) {
+  .launch-header .brand-line > span,
+  .brand-message .chapter > span {
+    display: none;
+  }
   .social-links > a {
     flex: none;
   }

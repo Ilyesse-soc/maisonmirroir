@@ -4,7 +4,7 @@ Branche : `fix/responsive-legal`, créée depuis `625a8fc`. Cette intervention c
 
 ## Corrections
 
-- L'image composite existante est conservée sans modification du fichier. Le recadrage absolu est remplacé par `object-fit: cover` et un point focal explicite. Les raccords sur les bords sont adoucis par des masques CSS, et le fond dur de l'arche est remplacé par un dégradé continu.
+- L'image composite existante est conservée sans modification du fichier. Après réception des deux captures annotées, le cadrage inclut désormais l'arche originale, sa phrase et les personnages dans un seul bloc : l'arche CSS superposée et la jonction horizontale sont supprimées. Le texte équivalent reste accessible aux lecteurs d'écran. Les raccords périphériques sont adoucis par des masques CSS. Les traits latéraux du titre et du chapitre sont retirés sur mobile et conservés sur ordinateur.
 - Le footer s'adapte aux petites largeurs et aux tailles intermédiaires : retour à la ligne des liens, tailles fluides, absence de texte forcé sur une seule ligne, zones tactiles de 44/48 px et focus clavier visible.
 - Instagram et TikTok utilisent les chemins officiels fournis, sans paramètres de suivi, dans des liens externes sécurisés et annoncés comme nouvel onglet. Leur disponibilité réelle n'a pas pu être confirmée par l'outil web (accès bloqué par les plateformes).
 - Footer partagé : contact, copyright, mentions légales, confidentialité et cookies. Les nouvelles pages ne montent pas le panier, PayPal ou la navigation de boutique.
@@ -40,7 +40,7 @@ Fichiers locaux dans `.qa/responsive-legal/` (ignorés par Git, sans donnée cli
 
 ## Informations manquantes et limites
 
-Le dépôt de préouverture utilise uniquement `public/launch/reference.jpg`, une illustration composite. Les deux photographies et les deux captures annoncées ne figurent pas dans les nouvelles pièces jointes, qui contiennent seulement du texte. Les anciennes images du catalogue ont été préservées et aucune n'a été substituée arbitrairement à une photographie demandée. La comparaison avant/après concerne le rendu du code local, pas les deux captures absentes.
+Le dépôt de préouverture utilise `public/launch/reference.jpg`, une illustration composite. Les deux images ensuite fournies par la cliente sont des captures annotées du site : elles identifient les raccords et les traits à corriger, et ne sont pas des photographies à intégrer dans la page. Elles ont guidé le second ajustement. Aucun remplacement arbitraire ni changement des fichiers image du catalogue n'a été effectué. La comparaison avant/après montre le rendu réel du code local.
 
 Informations légales à confirmer : nom/prénom de l'entrepreneuse, responsable de publication et du traitement, téléphone professionnel, mentions d'immatriculation applicables, régime/numéro de TVA si applicable, entité juridique contractuelle de l'hébergeur avec adresse et téléphone. Le SIRET fourni `103 982 576 000 13` échoue au contrôle local de sa clé Luhn : il est repris comme numéro communiqué à confirmer, sans correction inventée. La question correspondant à « Je ne le suis pas » reste inconnue ; aucune exonération ou absence d'immatriculation n'en est déduite.
 

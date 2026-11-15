@@ -22,12 +22,6 @@ export default function LegalNotice() {
           <a href={`mailto:${brandInfo.email}`}>{brandInfo.email}</a>
         </dd>
       </dl>
-      <p className="legal-note">
-        Les nom et prénom de l’entrepreneuse et l’identité de la responsable de
-        publication restent à compléter. Le numéro SIRET transmis nécessite une
-        vérification. Ces informations doivent être confirmées avant publication
-        définitive de cette page.
-      </p>
       <h2>Hébergement</h2>
       <p>
         La configuration du projet prévoit un VPS OVHcloud à Beauharnois, au
@@ -41,12 +35,6 @@ export default function LegalNotice() {
         Cette page présente Maison Miroir et sa liste privée. La boutique et les
         parcours d’achat restent fermés. Aucun achat n’est proposé depuis cette
         page.
-      </p>
-      <h2>Informations complémentaires</h2>
-      <p>
-        Le téléphone professionnel, les mentions d’immatriculation applicables
-        et les informations relatives à la TVA, si elle est applicable, restent
-        à confirmer.
       </p>
     </LegalPage>
   );

@@ -14,11 +14,6 @@ export default function PrivacyPolicy() {
         sur vos données :{" "}
         <a href={`mailto:${brandInfo.email}`}>{brandInfo.email}</a>.
       </p>
-      <p className="legal-note">
-        L’identité civile de la responsable du traitement, les durées
-        définitives de conservation et les garanties contractuelles des
-        prestataires restent à confirmer avant publication définitive.
-      </p>
       <h2>Inscription à la liste privée</h2>
       <p>
         Le formulaire recueille votre adresse e-mail et votre accord pour

@@ -1,73 +1,73 @@
-'use client'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
-import { buttonGoldStyle, fonts, theme } from '@/lib/uiStyles'
-import { useCart } from '@/components/CartProvider'
+"use client";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { buttonGoldStyle, fonts, theme } from "@/lib/uiStyles";
+import { useCart } from "@/components/CartProvider";
 
 export default function Navbar() {
-  const [scrolled, setScrolled] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [isDesktop, setIsDesktop] = useState(false)
-  const { itemCount, openDrawer } = useCart()
+  const [scrolled, setScrolled] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+  const { itemCount, openDrawer } = useCart();
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50)
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
+    const handleScroll = () => setScrolled(window.scrollY > 50);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   useEffect(() => {
-    const update = () => setIsDesktop(window.innerWidth >= 768)
-    update()
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
-
-  useEffect(() => {
-    if (isDesktop) setMenuOpen(false)
-  }, [isDesktop])
+    const update = () => {
+      const desktop = window.innerWidth >= 768;
+      setIsDesktop(desktop);
+      if (desktop) setMenuOpen(false);
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, []);
 
   return (
     <nav
       id="mm-navbar"
       style={{
-        position: 'fixed',
+        position: "fixed",
         top: 0,
         left: 0,
         right: 0,
         zIndex: 50,
-        padding: scrolled ? '12px 0' : '20px 0',
-        backgroundColor: scrolled ? 'rgba(255,255,255,0.95)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(12px)' : undefined,
-        boxShadow: scrolled ? '0 2px 12px rgba(0,0,0,0.06)' : undefined,
+        padding: scrolled ? "12px 0" : "20px 0",
+        backgroundColor: scrolled ? "rgba(255,255,255,0.95)" : "transparent",
+        backdropFilter: scrolled ? "blur(12px)" : undefined,
+        boxShadow: scrolled ? "0 2px 12px rgba(0,0,0,0.06)" : undefined,
       }}
     >
       <div
         style={{
           maxWidth: 1152,
-          margin: '0 auto',
-          padding: '0 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          margin: "0 auto",
+          padding: "0 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
         }}
       >
         {/* Logo */}
         <Link
           href="/"
           style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            textDecoration: 'none',
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            textDecoration: "none",
           }}
         >
           <span
             style={{
               fontFamily: fonts.display,
               fontSize: 20,
-              textTransform: 'uppercase',
-              letterSpacing: '0.3em',
+              textTransform: "uppercase",
+              letterSpacing: "0.3em",
               color: theme.gold,
               lineHeight: 1.1,
             }}
@@ -89,12 +89,15 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         {isDesktop && (
-          <div className="mm-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 40 }}>
+          <div
+            className="mm-nav-links"
+            style={{ display: "flex", alignItems: "center", gap: 40 }}
+          >
             {[
-              { href: '/', label: 'Accueil' },
-              { href: '/catalogue', label: 'Catalogue' },
-              { href: '/category/sacs', label: 'Sacs' },
-              { href: '/category/gourmandises', label: 'Gourmandises' },
+              { href: "/", label: "Accueil" },
+              { href: "/catalogue", label: "Catalogue" },
+              { href: "/category/sacs", label: "Sacs" },
+              { href: "/category/gourmandises", label: "Gourmandises" },
             ].map(({ href, label }) => (
               <Link
                 key={href}
@@ -102,10 +105,10 @@ export default function Navbar() {
                 style={{
                   fontFamily: fonts.body,
                   fontSize: 12,
-                  letterSpacing: '0.20em',
-                  textTransform: 'uppercase',
+                  letterSpacing: "0.20em",
+                  textTransform: "uppercase",
                   color: theme.textMid,
-                  textDecoration: 'none',
+                  textDecoration: "none",
                 }}
               >
                 {label}
@@ -116,8 +119,8 @@ export default function Navbar() {
               className="btn-gold"
               style={{
                 ...buttonGoldStyle({ fontSize: 12 }),
-                display: 'inline-flex',
-                alignItems: 'center',
+                display: "inline-flex",
+                alignItems: "center",
                 gap: 10,
               }}
             >
@@ -132,12 +135,12 @@ export default function Navbar() {
             onClick={() => setMenuOpen(!menuOpen)}
             aria-label="Menu"
             style={{
-              background: 'transparent',
-              border: 'none',
+              background: "transparent",
+              border: "none",
               padding: 8,
-              cursor: 'pointer',
-              display: 'flex',
-              flexDirection: 'column',
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
               gap: 6,
             }}
           >
@@ -146,8 +149,10 @@ export default function Navbar() {
                 width: 24,
                 height: 1,
                 background: theme.goldDark,
-                transform: menuOpen ? 'rotate(45deg) translateY(6px)' : undefined,
-                transition: 'transform 180ms ease',
+                transform: menuOpen
+                  ? "rotate(45deg) translateY(6px)"
+                  : undefined,
+                transition: "transform 180ms ease",
               }}
             />
             <span
@@ -156,7 +161,7 @@ export default function Navbar() {
                 height: 1,
                 background: theme.goldDark,
                 opacity: menuOpen ? 0 : 1,
-                transition: 'opacity 180ms ease',
+                transition: "opacity 180ms ease",
               }}
             />
             <span
@@ -164,8 +169,10 @@ export default function Navbar() {
                 width: 24,
                 height: 1,
                 background: theme.goldDark,
-                transform: menuOpen ? 'rotate(-45deg) translateY(-6px)' : undefined,
-                transition: 'transform 180ms ease',
+                transform: menuOpen
+                  ? "rotate(-45deg) translateY(-6px)"
+                  : undefined,
+                transition: "transform 180ms ease",
               }}
             />
           </button>
@@ -177,20 +184,20 @@ export default function Navbar() {
         <div
           className="mm-nav-links"
           style={{
-            backgroundColor: 'rgba(255,255,255,0.98)',
-            backdropFilter: 'blur(12px)',
+            backgroundColor: "rgba(255,255,255,0.98)",
+            backdropFilter: "blur(12px)",
             borderTop: `1px solid ${theme.creamDark}`,
-            padding: '24px 24px',
-            display: 'flex',
-            flexDirection: 'column',
+            padding: "24px 24px",
+            display: "flex",
+            flexDirection: "column",
             gap: 18,
           }}
         >
           {[
-            { href: '/', label: 'Accueil' },
-            { href: '/catalogue', label: 'Catalogue' },
-            { href: '/category/sacs', label: 'Sacs personnalisés' },
-            { href: '/category/gourmandises', label: 'Gourmandises' },
+            { href: "/", label: "Accueil" },
+            { href: "/catalogue", label: "Catalogue" },
+            { href: "/category/sacs", label: "Sacs personnalisés" },
+            { href: "/category/gourmandises", label: "Gourmandises" },
           ].map(({ href, label }) => (
             <Link
               key={href}
@@ -198,10 +205,10 @@ export default function Navbar() {
               style={{
                 fontFamily: fonts.body,
                 fontSize: 14,
-                letterSpacing: '0.20em',
-                textTransform: 'uppercase',
+                letterSpacing: "0.20em",
+                textTransform: "uppercase",
                 color: theme.textMid,
-                textDecoration: 'none',
+                textDecoration: "none",
               }}
               onClick={() => setMenuOpen(false)}
             >
@@ -210,15 +217,15 @@ export default function Navbar() {
           ))}
           <button
             onClick={() => {
-              setMenuOpen(false)
-              openDrawer()
+              setMenuOpen(false);
+              openDrawer();
             }}
             className="btn-gold"
             style={{
               ...buttonGoldStyle({ fullWidth: true, fontSize: 12 }),
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
               gap: 10,
             }}
           >
@@ -227,5 +234,5 @@ export default function Navbar() {
         </div>
       )}
     </nav>
-  )
+  );
 }

@@ -1,81 +1,87 @@
-import type { CSSProperties } from 'react'
+import type { CSSProperties } from "react";
 
 export const theme = {
-  gold: '#c9a227',
-  goldLight: '#e8d08a',
-  goldDark: '#8c6d14',
-  cream: '#fdf9ef',
-  creamDark: '#f3e4b8',
-  marble: '#f8f5f0',
-  textDark: '#2c2416',
-  textMid: '#5a4a2e',
-} as const
+  gold: "#c9a227",
+  goldLight: "#e8d08a",
+  goldDark: "#8c6d14",
+  cream: "#fdf9ef",
+  creamDark: "#f3e4b8",
+  marble: "#f8f5f0",
+  textDark: "#2c2416",
+  textMid: "#5a4a2e",
+} as const;
 
 export const fonts = {
   display: "'Cormorant Garamond', Georgia, serif",
   script: "'Great Vibes', cursive",
   body: "'Jost', sans-serif",
-} as const
+} as const;
 
-export const pageMaxWidth = 1152 // ~max-w-6xl
+export const pageMaxWidth = 1152; // ~max-w-6xl
 
 export function dividerStyle(width: number): CSSProperties {
   return {
     width,
     height: 1,
     background: `linear-gradient(90deg, transparent, ${theme.gold}, transparent)`,
-    margin: '0 auto',
-  }
+    margin: "0 auto",
+  };
 }
 
-export function buttonGoldStyle(options?: { fontSize?: number; fullWidth?: boolean }): CSSProperties {
+export function buttonGoldStyle(options?: {
+  fontSize?: number;
+  fullWidth?: boolean;
+}): CSSProperties {
   return {
-    display: options?.fullWidth ? 'block' : 'inline-block',
-    width: options?.fullWidth ? '100%' : undefined,
-    maxWidth: '100%',
-    textAlign: 'center',
-    color: 'white',
+    display: options?.fullWidth ? "block" : "inline-block",
+    width: options?.fullWidth ? "100%" : undefined,
+    maxWidth: "100%",
+    textAlign: "center",
+    color: "white",
     fontFamily: fonts.body,
     fontWeight: 400,
-    letterSpacing: '0.15em',
-    textTransform: 'uppercase',
+    letterSpacing: "0.15em",
+    textTransform: "uppercase",
     fontSize: options?.fontSize ?? 12,
-    padding: '14px 26px',
-    border: 'none',
-    cursor: 'pointer',
-    textDecoration: 'none',
-    wordBreak: 'break-word',
-  }
+    padding: "14px 26px",
+    border: "none",
+    cursor: "pointer",
+    textDecoration: "none",
+    wordBreak: "break-word",
+  };
 }
 
-export function buttonOutlineGoldStyle(options?: { fontSize?: number; fullWidth?: boolean }): CSSProperties {
+export function buttonOutlineGoldStyle(options?: {
+  fontSize?: number;
+  fullWidth?: boolean;
+}): CSSProperties {
   return {
-    display: options?.fullWidth ? 'block' : 'inline-block',
-    width: options?.fullWidth ? '100%' : undefined,
-    maxWidth: '100%',
-    textAlign: 'center',
-    background: 'transparent',
+    display: options?.fullWidth ? "block" : "inline-block",
+    width: options?.fullWidth ? "100%" : undefined,
+    maxWidth: "100%",
+    textAlign: "center",
+    background: "transparent",
     color: theme.gold,
     fontFamily: fonts.body,
     fontWeight: 400,
-    letterSpacing: '0.15em',
-    textTransform: 'uppercase',
+    letterSpacing: "0.15em",
+    textTransform: "uppercase",
     fontSize: options?.fontSize ?? 12,
-    padding: '13px 24px',
+    padding: "13px 24px",
     border: `1px solid ${theme.gold}`,
-    cursor: 'pointer',
-    textDecoration: 'none',
-    wordBreak: 'break-word',
-  }
+    cursor: "pointer",
+    textDecoration: "none",
+    wordBreak: "break-word",
+  };
 }
 
 export const inputLuxuryStyle: CSSProperties = {
-  width: '100%',
-  background: 'white',
+  width: "100%",
+  background: "white",
   border: `1px solid ${theme.goldLight}`,
-  padding: '12px 16px',
+  padding: "12px 16px",
   fontFamily: fonts.body,
   fontSize: 14,
   color: theme.textDark,
-  outline: 'none',
-}
+  outline: "none",
+};

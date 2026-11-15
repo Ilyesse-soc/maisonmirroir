@@ -1,0 +1,39 @@
+name: Release a verified image on OVH
+on:
+  workflow_dispatch:
+    inputs:
+      app_digest:
+        description: Verified application sha256 digest from the image workflow
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Validate and deploy through the restricted SSH command
+        env:
+          APP_DIGEST: ${{ inputs.app_digest }}
+          OVH_HOST: ${{ vars.OVH_HOST }}
+          OVH_PORT: ${{ vars.OVH_SSH_PORT }}
+          OVH_KNOWN_HOSTS: ${{ vars.OVH_KNOWN_HOSTS }}
+          OVH_KEY: ${{ secrets.OVH_DEPLOY_KEY }}
+          GHCR_PULL_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          printf '%s' "$APP_DIGEST" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          test -n "$OVH_HOST"
+          test -n "$OVH_KNOWN_HOSTS"
+          test -n "$OVH_KEY"
+          umask 077
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$OVH_KEY" > "$HOME/.ssh/ovh_deploy"
+          printf '%s\n' "$OVH_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          printf '%s\n%s\n' "$GITHUB_ACTOR" "$GHCR_PULL_TOKEN" | ssh -T -i "$HOME/.ssh/ovh_deploy" -p "${OVH_PORT:-22}" -o BatchMode=yes -o StrictHostKeyChecking=yes -o IdentitiesOnly=yes -o ConnectTimeout=15 "mmdeploy@$OVH_HOST" "deploy $APP_DIGEST"

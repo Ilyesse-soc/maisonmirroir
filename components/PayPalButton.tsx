@@ -1,10 +1,8 @@
 "use client";
+import { useRouter } from "next/navigation";
 
 import { useMemo, useState } from "react";
-import {
-  PayPalButtons,
-  PayPalScriptProvider,
-} from "@paypal/react-paypal-js";
+import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 
 type CustomerInfo = {
   firstName: string;
@@ -52,10 +50,12 @@ export default function PayPalButton({
   amount?: number;
   order: OrderPayload;
 }) {
+  const router = useRouter();
   const clientId = (process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "").trim();
 
   const safeAmount = useMemo(() => {
-    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Invalid amount");
+    if (!Number.isFinite(amount) || amount <= 0)
+      throw new Error("Invalid amount");
     return amount;
   }, [amount]);
   const displayAmount = useMemo(() => safeAmount.toFixed(2), [safeAmount]);
@@ -65,8 +65,16 @@ export default function PayPalButton({
 
   if (!clientId) {
     return (
-      <div style={{ textAlign: "center", fontSize: 12, opacity: 0.8, lineHeight: 1.7 }}>
-        Configuration requise : définis NEXT_PUBLIC_PAYPAL_CLIENT_ID dans .env.local.
+      <div
+        style={{
+          textAlign: "center",
+          fontSize: 12,
+          opacity: 0.8,
+          lineHeight: 1.7,
+        }}
+      >
+        Configuration requise : définis NEXT_PUBLIC_PAYPAL_CLIENT_ID dans
+        .env.local.
       </div>
     );
   }
@@ -89,7 +97,9 @@ export default function PayPalButton({
             const unitAmount = order.product.unitPrice.toFixed(2);
             const qty = String(order.product.quantity);
             const shippingAmount = order.shipping.price.toFixed(2);
-            const itemTotal = (order.product.unitPrice * order.product.quantity).toFixed(2);
+            const itemTotal = (
+              order.product.unitPrice * order.product.quantity
+            ).toFixed(2);
             return actions.order.create({
               intent: "CAPTURE",
               purchase_units: [
@@ -128,22 +138,28 @@ export default function PayPalButton({
               } else {
                 throw new Error("PayPal capture unavailable");
               }
-            } catch (e) {
+            } catch {
               setStatus("error");
-              setErrorMessage("Le paiement n'a pas pu être capturé. Veuillez réessayer.");
+              setErrorMessage(
+                "Le paiement n'a pas pu être capturé. Veuillez réessayer.",
+              );
               return;
             }
 
             // Anti-duplicate submission (client-side)
             const sentKey = `mm:orderSent:${data.orderID}`;
-            const alreadySent = typeof window !== "undefined" && sessionStorage.getItem(sentKey) === "1";
+            const alreadySent =
+              typeof window !== "undefined" &&
+              sessionStorage.getItem(sentKey) === "1";
 
             if (!alreadySent) {
               try {
                 const unitPrice = order.product.unitPrice;
                 const quantity = order.product.quantity;
-                if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error("Invalid unitPrice");
-                if (!Number.isFinite(quantity) || quantity <= 0) throw new Error("Invalid quantity");
+                if (!Number.isFinite(unitPrice) || unitPrice <= 0)
+                  throw new Error("Invalid unitPrice");
+                if (!Number.isFinite(quantity) || quantity <= 0)
+                  throw new Error("Invalid quantity");
 
                 const payload = {
                   paymentMethod: "PAYPAL",
@@ -166,22 +182,35 @@ export default function PayPalButton({
                 });
 
                 if (!res.ok) {
-                  console.error("[checkout] order api returned non-ok after payment", { status: res.status, paypalOrderId: data.orderID });
+                  console.error(
+                    "[checkout] order api returned non-ok after payment",
+                    { status: res.status, paypalOrderId: data.orderID },
+                  );
                 } else {
-                  const apiData = (await res.json().catch(() => null)) as
-                    | { orderId?: string; total?: string; paymentMethod?: string }
-                    | null;
+                  const apiData = (await res.json().catch(() => null)) as {
+                    orderId?: string;
+                    total?: string;
+                    paymentMethod?: string;
+                    subtotal?: string;
+                    shipping?: string;
+                  } | null;
 
                   const orderId = apiData?.orderId || "";
                   const total = apiData?.total || displayAmount;
-                  const subtotal = (apiData as any)?.subtotal || (order.product.unitPrice * order.product.quantity).toFixed(2);
-                  const shippingTotal = (apiData as any)?.shipping || order.shipping.price.toFixed(2);
+                  const subtotal =
+                    apiData?.subtotal ||
+                    (order.product.unitPrice * order.product.quantity).toFixed(
+                      2,
+                    );
+                  const shippingTotal =
+                    apiData?.shipping || order.shipping.price.toFixed(2);
                   const paymentMethod = apiData?.paymentMethod || "PAYPAL";
 
                   if (!orderId) throw new Error("Missing orderId from API");
 
                   try {
-                    if (typeof window !== "undefined") sessionStorage.setItem(sentKey, "1");
+                    if (typeof window !== "undefined")
+                      sessionStorage.setItem(sentKey, "1");
                   } catch {
                     // ignore
                   }
@@ -207,7 +236,7 @@ export default function PayPalButton({
                           shipping: order.shipping,
                           customValues: order.customValues || {},
                           address: order.customer,
-                        })
+                        }),
                       );
                     }
                   } catch {
@@ -215,29 +244,48 @@ export default function PayPalButton({
                   }
                 }
               } catch (e) {
-                console.error("[checkout] order post-payment processing warning", { paypalOrderId: data.orderID, error: e });
+                console.error(
+                  "[checkout] order post-payment processing warning",
+                  { paypalOrderId: data.orderID, error: e },
+                );
               }
             }
 
-            window.location.href = "/success";
+            router.push("/success");
           }}
-          onError={(err) => {
+          onError={() => {
             setStatus("error");
             setErrorMessage("Erreur PayPal. Veuillez réessayer.");
           }}
-          onCancel={(data) => {
+          onCancel={() => {
             setStatus("idle");
           }}
         />
       </PayPalScriptProvider>
 
       {status === "processing" && (
-        <div style={{ marginTop: 10, textAlign: "center", fontSize: 12, opacity: 0.85, lineHeight: 1.7 }}>
+        <div
+          style={{
+            marginTop: 10,
+            textAlign: "center",
+            fontSize: 12,
+            opacity: 0.85,
+            lineHeight: 1.7,
+          }}
+        >
           Traitement du paiement…
         </div>
       )}
       {status === "error" && errorMessage && (
-        <div style={{ marginTop: 10, textAlign: "center", fontSize: 12, color: "#ef4444", lineHeight: 1.7 }}>
+        <div
+          style={{
+            marginTop: 10,
+            textAlign: "center",
+            fontSize: 12,
+            color: "#ef4444",
+            lineHeight: 1.7,
+          }}
+        >
           {errorMessage}
         </div>
       )}

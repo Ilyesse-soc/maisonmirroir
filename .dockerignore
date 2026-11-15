@@ -1,0 +1,14 @@
+node_modules
+.next
+.git
+.env*
+.qa
+.npm-cache
+.venv
+.vercel
+archive
+ops/secrets
+ops/bootstrap
+data
+*.pdf
+*.log

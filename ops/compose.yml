@@ -1,0 +1,222 @@
+name: maison-miroir
+x-logging: &logging
+  driver: local
+  options:
+    max-size: 10m
+    max-file: "3"
+x-hardened: &hardened
+  restart: unless-stopped
+  security_opt: [no-new-privileges:true]
+  logging: *logging
+services:
+  postgres:
+    <<: *hardened
+    image: postgres:18-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
+    mem_limit: 1024m
+    mem_reservation: 256m
+    cpus: 0.6
+    pids_limit: 120
+    shm_size: 160m
+    environment:
+      POSTGRES_DB: maison_miroir
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command:
+      - postgres
+      - -c
+      - config_file=/etc/postgresql/postgresql.conf
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./postgres/init.sh:/docker-entrypoint-initdb.d/010-maison-miroir.sh:ro
+      - ./secrets/postgres_password:/run/secrets/postgres_password:ro
+      - ./secrets/app_db_password:/run/secrets/app_db_password:ro
+      - ./secrets/migrate_db_password:/run/secrets/migrate_db_password:ro
+      - ./secrets/backup_db_password:/run/secrets/backup_db_password:ro
+      - ./secrets/db-server.crt:/run/secrets/db-server.crt:ro
+      - ./secrets/db-server.key:/run/secrets/db-server.key:ro
+      - ./secrets/db-ca.crt:/run/secrets/db-ca.crt:ro
+    tmpfs: [/tmp:size=32m, /var/run/postgresql:size=16m]
+    networks: [database]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d maison_miroir"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+  app:
+    <<: *hardened
+    image: ${APP_IMAGE:?Set an immutable image reference from CI}
+    user: "1000:1000"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 1024m
+    mem_reservation: 384m
+    cpus: 0.9
+    pids_limit: 160
+    env_file: [./secrets/app.env]
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      NODE_OPTIONS: --max-old-space-size=640
+      DATABASE_POOL_MAX: 3
+      DATABASE_CA_FILE: /run/secrets/db-ca.crt
+      NEWSLETTER_BATCH_SIZE: 5
+    volumes: [./secrets/db-ca.crt:/run/secrets/db-ca.crt:ro]
+    tmpfs: ["/tmp:size=64m,uid=1000,gid=1000", "/app/.next/cache:size=32m,uid=1000,gid=1000"]
+    networks: [edge, database]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 45s
+  worker:
+    <<: *hardened
+    image: ${APP_IMAGE:?Set an immutable image reference from CI}
+    user: "1000:1000"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 256m
+    mem_reservation: 64m
+    cpus: 0.15
+    pids_limit: 48
+    command: [node, worker.mjs]
+    env_file: [./secrets/app.env]
+    environment:
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=128
+      DATABASE_POOL_MAX: 2
+      DATABASE_CA_FILE: /run/secrets/db-ca.crt
+      NEWSLETTER_BATCH_SIZE: 5
+      WORKER_INTERVAL_MS: 60000
+    volumes: [./secrets/db-ca.crt:/run/secrets/db-ca.crt:ro]
+    tmpfs: ["/tmp:size=16m,uid=1000,gid=1000"]
+    networks: [database, egress]
+    depends_on:
+      postgres: { condition: service_healthy }
+    stop_grace_period: 60s
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "const fs=require('fs');const h=JSON.parse(fs.readFileSync('/tmp/worker-health.json'));process.exit(Date.now()-h.at<150000&&h.failures<3?0:1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+  caddy:
+    <<: *hardened
+    image: caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.1
+    pids_limit: 64
+    environment:
+      DOMAIN: ${DOMAIN:?Set the domain}
+      ACME_EMAIL: ${ACME_EMAIL:?Set the certificate contact}
+      GOMAXPROCS: 2
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./${CADDY_CONFIG:-Caddyfile.staging}:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    tmpfs: [/tmp:size=16m]
+    networks: [edge]
+    depends_on:
+      app: { condition: service_healthy }
+    healthcheck:
+      test: [CMD-SHELL, "pidof caddy >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  migrate:
+    image: ${APP_IMAGE:?Set an immutable image reference from CI}
+    profiles: [maintenance]
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 384m
+    cpus: 0.5
+    pids_limit: 64
+    command: [node, migrate.mjs]
+    env_file: [./secrets/app.env, ./secrets/migrate.env]
+    environment:
+      DATABASE_CA_FILE: /run/secrets/db-ca.crt
+    volumes:
+      - ./secrets/db-ca.crt:/run/secrets/db-ca.crt:ro
+      - ./bootstrap:/bootstrap
+    tmpfs: ["/tmp:size=32m,uid=1000,gid=1000"]
+    networks: [database]
+    depends_on:
+      postgres: { condition: service_healthy }
+    logging: *logging
+  backup:
+    <<: *hardened
+    image: ${BACKUP_IMAGE:?Set the CI-built backup image reference}
+    profiles: [backup]
+    user: "70:70"
+    read_only: true
+    cap_drop: [ALL]
+    mem_limit: 256m
+    mem_reservation: 64m
+    cpus: 0.15
+    pids_limit: 48
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: maison_miroir
+      PGUSER: mm_backup
+      PGSSLMODE: verify-full
+      PGSSLROOTCERT: /run/secrets/db-ca.crt
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:?Set an external encrypted backup repository}
+      RESTIC_PASSWORD_FILE: /run/secrets/restic_password
+      GOMEMLIMIT: 160MiB
+    volumes:
+      - ./secrets/db-ca.crt:/run/secrets/db-ca.crt:ro
+      - ./secrets/backup_db_password:/run/secrets/backup_db_password:ro
+      - ./secrets/restic_password:/run/secrets/restic_password:ro
+      - ./secrets/s3_access_key:/run/secrets/s3_access_key:ro
+      - ./secrets/s3_secret_key:/run/secrets/s3_secret_key:ro
+    tmpfs: ["/tmp:size=32m,uid=70,gid=70"]
+    networks: [database, egress]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          CMD-SHELL,
+          "test -f /tmp/backup-heartbeat && test $$(($$(date +%s)-$$(cat /tmp/backup-heartbeat))) -lt 150",
+        ]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+networks:
+  edge: {}
+  database: { internal: true }
+  egress: {}
+volumes:
+  postgres_data: {}
+  caddy_data: {}
+  caddy_config: {}

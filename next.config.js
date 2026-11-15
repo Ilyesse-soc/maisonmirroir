@@ -1,14 +1,18 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  images: {
-    unoptimized: true,
+module.exports = {
+  output: "standalone",
+  poweredByHeader: false,
+  images: { unoptimized: true },
+  turbopack: {},
+  outputFileTracingExcludes: {
+    "/**": [
+      "./.qa/**",
+      "./.npm-cache/**",
+      "./.venv/**",
+      "./archive/**",
+      "./.env*",
+      "./data/**",
+    ],
   },
-  webpack: (config, { dev }) => {
-    if (dev) {
-      config.cache = false
-    }
-    return config
-  },
-}
-
-module.exports = nextConfig
+  experimental: { serverActions: { bodySizeLimit: "64kb" } },
+};

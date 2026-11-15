@@ -1,89 +1,86 @@
-import { promises as fs } from 'fs'
-import path from 'path'
-import type { OrderRecord } from '@/lib/orderTypes'
-
-const LOCAL_ORDERS_FILE = path.join(process.cwd(), 'data', 'orders.json')
-const TMP_ORDERS_FILE = path.join('/tmp', 'maison-miroir', 'orders.json')
-
-let cachedOrdersFilePath: string | null = null
-
-function resolvePreferredOrdersFilePath() {
-  const explicitPath = (process.env.ORDERS_FILE_PATH || '').trim()
-  if (explicitPath) return explicitPath
-  if (process.env.VERCEL) return TMP_ORDERS_FILE
-  return LOCAL_ORDERS_FILE
-}
-
-async function tryEnsureOrdersFile(filePath: string) {
-  const dir = path.dirname(filePath)
-  await fs.mkdir(dir, { recursive: true })
-  try {
-    await fs.access(filePath)
-  } catch {
-    await fs.writeFile(filePath, '[]', 'utf-8')
-  }
-}
-
-async function getOrdersFilePath() {
-  if (cachedOrdersFilePath) return cachedOrdersFilePath
-
-  const preferred = resolvePreferredOrdersFilePath()
-  try {
-    await tryEnsureOrdersFile(preferred)
-    cachedOrdersFilePath = preferred
-    if (preferred === TMP_ORDERS_FILE) {
-      console.warn('[orderStore] using ephemeral /tmp storage on Vercel')
-    }
-    return cachedOrdersFilePath
-  } catch (error) {
-    if (preferred !== TMP_ORDERS_FILE) {
-      await tryEnsureOrdersFile(TMP_ORDERS_FILE)
-      cachedOrdersFilePath = TMP_ORDERS_FILE
-      console.warn('[orderStore] fallback to /tmp storage due to preferred path failure', {
-        preferred,
-      })
-      return cachedOrdersFilePath
-    }
-    throw error
-  }
-}
-
-async function ensureOrdersFile() {
-  await getOrdersFilePath()
-}
-
+import "server-only";
+import { promises as fs } from "fs";
+import path from "path";
+import type { OrderRecord } from "./orderTypes";
+import { database, transaction } from "./newsletterDb";
+const file = () =>
+  process.env.ORDERS_FILE_PATH ||
+  path.join(process.cwd(), "data", "orders.json");
+const durable = () =>
+  Boolean(
+    process.env.NEWSLETTER_DATABASE_URL ||
+    process.env.DATABASE_URL ||
+    process.env.NODE_ENV === "production",
+  );
 export async function readOrders(): Promise<OrderRecord[]> {
-  await ensureOrdersFile()
-  const filePath = await getOrdersFilePath()
-  const raw = await fs.readFile(filePath, 'utf-8')
-  try {
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    return parsed as OrderRecord[]
-  } catch {
-    return []
-  }
+  if (durable())
+    return (
+      await database().query(
+        "SELECT record FROM mm_orders ORDER BY updated_at DESC",
+      )
+    ).rows.map((r) => r.record);
+  // Local-only path; never trace arbitrary developer directories into a production function.
+  const raw = await fs.readFile(/* turbopackIgnore: true */ file(), "utf8");
+  const records = JSON.parse(raw);
+  if (!Array.isArray(records)) throw Error("ORDERS_INVALID_DATA");
+  return records;
 }
-
 export async function writeOrders(orders: OrderRecord[]) {
-  await ensureOrdersFile()
-  const filePath = await getOrdersFilePath()
-  await fs.writeFile(filePath, JSON.stringify(orders, null, 2), 'utf-8')
+  if (durable()) {
+    await transaction(async (db) => {
+      for (const order of orders)
+        await db.query(
+          "INSERT INTO mm_orders(order_id,paypal_order_id,record) VALUES($1,$2,$3) ON CONFLICT(order_id) DO UPDATE SET record=$3,updated_at=now()",
+          [order.orderId, order.paypalOrderId || null, JSON.stringify(order)],
+        );
+    });
+    return;
+  }
+  const temporary = file() + "." + crypto.randomUUID() + ".tmp";
+  await fs.writeFile(temporary, JSON.stringify(orders, null, 2), {
+    mode: 0o600,
+  });
+  await fs.rename(temporary, file());
 }
-
 export async function saveOrder(order: OrderRecord) {
-  const orders = await readOrders()
-  orders.unshift(order)
-  await writeOrders(orders)
-  return order
+  if (durable()) {
+    const inserted = await database().query(
+      "INSERT INTO mm_orders(order_id,paypal_order_id,record) VALUES($1,$2,$3) ON CONFLICT(paypal_order_id) DO NOTHING RETURNING record",
+      [order.orderId, order.paypalOrderId || null, JSON.stringify(order)],
+    );
+    if (!inserted.rowCount) throw Error("DUPLICATE_PAYMENT");
+    return order;
+  }
+  const orders = await readOrders();
+  if (
+    order.paypalOrderId &&
+    orders.some((o) => o.paypalOrderId === order.paypalOrderId)
+  )
+    throw Error("DUPLICATE_PAYMENT");
+  await writeOrders([order, ...orders]);
+  return order;
 }
-
-export async function updateOrder(orderId: string, patch: Partial<OrderRecord>) {
-  const orders = await readOrders()
-  const index = orders.findIndex((o) => o.orderId === orderId)
-  if (index < 0) return null
-  const updated = { ...orders[index], ...patch }
-  orders[index] = updated
-  await writeOrders(orders)
-  return updated
+export async function updateOrder(id: string, patch: Partial<OrderRecord>) {
+  if (durable())
+    return transaction(async (db) => {
+      const row = (
+        await db.query(
+          "SELECT record FROM mm_orders WHERE order_id=$1 FOR UPDATE",
+          [id],
+        )
+      ).rows[0];
+      if (!row) return null;
+      const updated = { ...row.record, ...patch };
+      await db.query(
+        "UPDATE mm_orders SET record=$2,updated_at=now() WHERE order_id=$1",
+        [id, JSON.stringify(updated)],
+      );
+      return updated as OrderRecord;
+    });
+  const orders = await readOrders(),
+    index = orders.findIndex((o) => o.orderId === id);
+  if (index < 0) return null;
+  orders[index] = { ...orders[index], ...patch };
+  await writeOrders(orders);
+  return orders[index];
 }

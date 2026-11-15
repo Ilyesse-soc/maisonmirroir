@@ -9,9 +9,17 @@ out/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.preview
+.env.development
+.vercel/
+.venv/
 
 # misc
 .DS_Store
+.npm-cache/
+.qa/
+*.tsbuildinfo
 *.log
 
 # local working files (do not commit)
@@ -19,3 +27,11 @@ tmp_pdf_extract.txt
 Sacs en jute logo personnalisé.pdf
 Sacs en jute logo personnalisé-ruban.pdf
 Sacs en jute logo personnalisé*.pdf
+.vercel
+.env*
+!ops/.env.example
+!ops/secrets/app.env.example
+ops/secrets/*
+!ops/secrets/app.env.example
+ops/bootstrap/
+dist/

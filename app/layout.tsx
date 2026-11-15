@@ -1,44 +1,61 @@
-import './globals.css'
-import type { Metadata } from 'next'
-import SiteShell from '@/components/SiteShell'
-import { fonts, theme } from '@/lib/uiStyles'
+import "./globals.css";
+import "./launch-fonts.css";
+import SiteEffects from "@/components/SiteEffects";
+import { headers } from "next/headers";
+import type { Metadata } from "next";
+import type { CSSProperties } from "react";
+import SiteShell from "@/components/SiteShell";
+import { fonts, theme } from "@/lib/uiStyles";
 
 export const metadata: Metadata = {
-  title: 'Maison Miroir — Décoration de Mariage Luxe',
-  description: 'Créations personnalisées pour votre mariage : sacs, panneaux, gourmandises et cadeaux invités. Sur mesure, gravure laser, finitions dorées.',
-  keywords: 'mariage, décoration, personnalisé, panneau acrylique, gravure, or, luxe',
-}
+  metadataBase: new URL(
+    process.env.NEWSLETTER_SITE_URL || "http://localhost:3000",
+  ),
+  title: "Maison Miroir — Modesty, Identity, Lifestyle",
+  description:
+    "For the girls with haya and big dreams. Rejoignez la liste privée Maison Miroir et découvrez notre première collection en avant-première.",
+  openGraph: {
+    title: "Maison Miroir — A new chapter begins",
+    description: "Une nouvelle vision de la mode, avec élégance et pudeur.",
+    locale: "fr_FR",
+    type: "website",
+    images: [
+      {
+        url: "/launch/reference.jpg",
+        width: 1024,
+        height: 1536,
+        alt: "Maison Miroir — nouvelle collection",
+      },
+    ],
+  },
+  robots: { index: true, follow: true },
+};
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
+  await headers();
   return (
     <html
       lang="fr"
-      style={{
-        scrollBehavior: 'smooth',
-        ['--gold' as any]: theme.gold,
-        ['--gold-light' as any]: theme.goldLight,
-        ['--gold-dark' as any]: theme.goldDark,
-        ['--cream' as any]: theme.cream,
-        ['--cream-dark' as any]: theme.creamDark,
-        ['--marble' as any]: theme.marble,
-        ['--text-dark' as any]: theme.textDark,
-        ['--text-mid' as any]: theme.textMid,
-        ['--text' as any]: theme.textDark,
-        ['--mid' as any]: theme.textMid,
-      }}
+      style={
+        {
+          scrollBehavior: "smooth",
+          ["--gold"]: theme.gold,
+          ["--gold-light"]: theme.goldLight,
+          ["--gold-dark"]: theme.goldDark,
+          ["--cream"]: theme.cream,
+          ["--cream-dark"]: theme.creamDark,
+          ["--marble"]: theme.marble,
+          ["--text-dark"]: theme.textDark,
+          ["--text-mid"]: theme.textMid,
+          ["--text"]: theme.textDark,
+          ["--mid"]: theme.textMid,
+        } as CSSProperties
+      }
     >
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Great+Vibes&family=Jost:wght@300;400;500&display=swap"
-        />
-      </head>
       <body
         style={{
           margin: 0,
@@ -46,40 +63,12 @@ export default function RootLayout({
           color: theme.textDark,
           fontFamily: fonts.body,
           fontWeight: 300,
-          letterSpacing: '0.02em',
+          letterSpacing: "0.02em",
         }}
       >
         <SiteShell>{children}</SiteShell>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-  document.addEventListener('DOMContentLoaded', function() {
-    // Scroll reveal
-    const observer = new IntersectionObserver(function(entries) {
-      entries.forEach(function(entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('visible');
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.12 });
-
-    document.querySelectorAll('.mm-reveal').forEach(function(el) {
-      observer.observe(el);
-    });
-
-    // Navbar scroll
-    const nav = document.getElementById('mm-navbar');
-    if (nav) {
-      window.addEventListener('scroll', function() {
-        nav.classList.toggle('scrolled', window.scrollY > 50);
-      });
-    }
-  });
-`,
-          }}
-        />
+        <SiteEffects />
       </body>
     </html>
-  )
+  );
 }

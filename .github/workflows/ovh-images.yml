@@ -1,0 +1,63 @@
+name: Build and scan OVH production images
+on:
+  push:
+    branches: [main, security-launch]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ovh-images-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: 24, cache: npm}
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm run lint && npm test && npm run test:security
+      - run: node scripts/test-ops.cjs
+  images:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - name: Authenticate to registry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Build on GitHub, never on the VPS
+        env:
+          IMAGE: ghcr.io/ilyesse-soc/maisonmirroir
+        run: |
+          set -eu
+          docker build -t "$IMAGE:$GITHUB_SHA" .
+          docker build -t "$IMAGE-backup:$GITHUB_SHA" -f ops/backup/Dockerfile .
+      - name: Reject high and critical image vulnerabilities
+        env:
+          IMAGE: ghcr.io/ilyesse-soc/maisonmirroir
+          TRIVY: aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+        run: |
+          set -eu
+          for target in "$IMAGE:$GITHUB_SHA" "$IMAGE-backup:$GITHUB_SHA" 'postgres@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015' 'caddy@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0'; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image --exit-code 1 --severity HIGH,CRITICAL "$target"
+          done
+      - name: Publish checked images and immutable references
+        env:
+          IMAGE: ghcr.io/ilyesse-soc/maisonmirroir
+        run: |
+          set -eu
+          docker push "$IMAGE:$GITHUB_SHA"
+          docker push "$IMAGE-backup:$GITHUB_SHA"
+          docker image inspect "$IMAGE:$GITHUB_SHA" --format '{{index .RepoDigests 0}}' > app-image.txt
+          docker image inspect "$IMAGE-backup:$GITHUB_SHA" --format '{{index .RepoDigests 0}}' > backup-image.txt
+          printf 'App image: `%s`\n\nBackup image: `%s`\n' "$(cat app-image.txt)" "$(cat backup-image.txt)" >> "$GITHUB_STEP_SUMMARY"

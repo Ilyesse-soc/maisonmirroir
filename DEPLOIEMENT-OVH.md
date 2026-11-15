@@ -9,13 +9,13 @@ Préparation du 15 novembre 2026. Cible désormais fournie : VPS-2 2027, 4 vCPU,
 | Next.js standalone, heap 640 Mio, pool SQL 3 | 1 024 Mio | 0,90 |
 | PostgreSQL, 30 connexions maximum | 1 024 Mio | 0,60 |
 | Worker séquentiel, lot de 5, pool SQL 2 | 256 Mio | 0,15 |
-| Caddy HTTPS | 128 Mio | 0,10 |
+| Nginx HTTPS, non root | 128 Mio | 0,10 |
 | Sauvegarde externe | 256 Mio | 0,15 |
 | **Total permanent** | **2 688 Mio** | **1,90** |
 
 Le budget initial compatible avec 4 Gio est conservé : environ 5 504 Mio restent disponibles sur une machine de 8 Gio pour Linux, le cache et les opérations ponctuelles. Le conteneur de migration est limité à 384 Mio et doit être lancé hors des sauvegardes. Ces plafonds constituent un budget vérifié dans Compose, pas une mesure de charge réelle. Ne pas compiler sur le VPS. Aucun Redis n'est nécessaire.
 
-Seul Caddy publie TCP 80/443 et UDP 443. PostgreSQL est sur un réseau Docker interne, sans port publié, avec TLS vérifié, rôles séparés et authentification SCRAM. L'application et le worker sont non root, en lecture seule, sans capabilities. Les secrets restent dans `/opt/maison-miroir/ops/secrets`, jamais dans GitHub, les images ou les journaux. Les variables de conteneur sont accessibles à root : limiter strictement les accès root et Docker.
+Seul Nginx publie TCP 80/443. PostgreSQL est sur un réseau Docker interne, sans port publié, avec TLS vérifié, rôles séparés et authentification SCRAM. L'application, le proxy et le worker sont non root, en lecture seule, sans capabilities. Les secrets restent dans `/opt/maison-miroir/ops/secrets`, jamais dans GitHub, les images ou les journaux. Les variables de conteneur sont accessibles à root : limiter strictement les accès root et Docker.
 
 ## Construction et accès
 
@@ -23,7 +23,7 @@ Seul Caddy publie TCP 80/443 et UDP 443. PostgreSQL est sur un réseau Docker in
 2. Lorsque le VPS sera fourni, vérifier son identité et son empreinte SSH via la console OVH. Prévoir une clé Ed25519 opérateur et une seconde clé dédiée CI. Ne jamais publier leurs clés privées.
 3. Copier les fichiers `ops` revus dans `/opt/maison-miroir/ops`. Depuis une session de secours conservée ouverte, lancer `bootstrap-vps.sh` avec sudo et `MM_ADMIN_PUBLIC_KEY_FILE` / `MM_DEPLOY_PUBLIC_KEY_FILE` pointant vers les clés **publiques**. Le script prépare le compte et conserve l'authentification SSH existante. Ouvrir ensuite une **nouvelle connexion SSH par clé comme mmadmin**, y exécuter `sudo --preserve-env=SSH_CONNECTION bash /opt/maison-miroir/ops/bootstrap-vps.sh --finalize-ssh`, vérifier une autre connexion, puis seulement fermer la session initiale. La finalisation refuse les sessions hors du nouveau compte. Les ports SSH configurés restent autorisés dans UFW. Docker Engine et Compose viennent du [dépôt APT officiel Docker](https://docs.docker.com/engine/install/ubuntu/), avec clé de signature vérifiée. Le script configure aussi fail2ban, NTP et mises à jour de sécurité. Vérifier le pare-feu réseau OVH et les options SSH effectives.
 4. Exécuter `generate-secrets.sh` une seule fois. Il refuse de remplacer un jeu de secrets même partiel. Une reprise partielle exige une vérification manuelle, jamais une régénération des mots de passe d'une base existante.
-5. Copier `.env.example` vers `.env` et renseigner les trois images par digest, le domaine et le contact ACME. Conserver `CADDY_CONFIG=Caddyfile.staging`. Compléter `secrets/app.env` avec `ADMIN_EMAIL`, l'expéditeur Resend vérifié, sa clé et le secret du webhook. Laisser `SHOP_OPEN=false` et `NEWSLETTER_SEND_ENABLED=false` pendant toute la recette. Aucun e-mail de test ne doit être envoyé.
+5. Copier `.env.example` vers `.env` et renseigner les trois images par digest, le domaine et le contact ACME. Conserver `PROXY_TLS_MODE=staging`. Compléter `secrets/app.env` avec `ADMIN_EMAIL`, l'expéditeur Resend vérifié, sa clé et le secret du webhook. Laisser `SHOP_OPEN=false` et `NEWSLETTER_SEND_ENABLED=false` pendant toute la recette. Tout destinataire d'e-mail réel doit être explicitement autorisé avant recette ; aucune adresse de test n'a encore été autorisée.
 6. Ajouter dans l'environnement GitHub `production` la clé privée CI `OVH_DEPLOY_KEY` et les variables `OVH_HOST`, `OVH_SSH_PORT`, `OVH_KNOWN_HOSTS` après vérification indépendante de l'empreinte. Configurer une validation humaine des releases. Le compte `mmdeploy` ne peut exécuter qu'une commande de déploiement par digest ; il n'a pas de shell libre ni d'accès au groupe Docker. L'authentification GHCR utilise le jeton éphémère du job, transmis via SSH, sans PAT permanent.
 
 ## Premier démarrage avant DNS
@@ -33,10 +33,14 @@ Depuis `ops`, en opérateur autorisé, télécharger les images vérifiées, pui
 ```sh
 docker compose --env-file .env up -d --wait postgres
 docker compose --env-file .env run --rm migrate node migrate.mjs --init-admin
-docker compose --env-file .env up -d --no-build --wait app worker caddy
+docker compose --env-file .env up -d --no-build --wait app worker proxy
 ```
 
-Le premier téléchargement GHCR peut demander une connexion éphémère au registre si les packages sont privés. Ne pas utiliser de token en argument de commande. Caddy staging utilise un certificat interne : aucune émission ACME publique n'est revendiquée avant la bascule. Tester le domaine avec une résolution locale vers l'IP du VPS, sans modifier les DNS publics ; faire confiance uniquement à la CA de staging récupérée par canal sûr.
+Le premier téléchargement GHCR peut demander une connexion éphémère au registre si les packages sont privés. Ne pas utiliser de token en argument de commande. La recette initiale utilise un certificat auto-signé court, généré uniquement sur la machine ; tester avec une résolution locale vers l'IP du VPS et une confiance limitée à ce certificat récupéré par canal sûr. Aucune émission ACME publique n'est encore revendiquée.
+
+Avant bascule, obtenir le certificat public pour l'apex et `www` avec Certbot et le [plugin DNS-01 OVH](https://certbot-dns-ovh.readthedocs.io/en/stable/). Cette méthode permet de tester HTTPS public sur le VPS avant de modifier les A/AAAA. Les identifiants API OVH doivent être fournis via un fichier root 0600, limités à la zone concernée et aux opérations nécessaires sur les enregistrements de challenge. Ne jamais toucher MX/SPF/DKIM/DMARC. L'émission écrit uniquement les TXT `_acme-challenge` puis les retire ; elle nécessite une autorisation préalable pour ces écritures DNS.
+
+Après configuration privée des accès DNS et du contact ACME, utiliser `certbot certonly --dns-ovh --dns-ovh-credentials /root/.secrets/ovh.ini --cert-name maison-miroir.fr -d maison-miroir.fr -d www.maison-miroir.fr` avec les options de contact/acceptation adaptées. Le hook `install-certificate.sh` vérifie les deux noms, la validité et la correspondance clé/certificat, installe les fichiers lisibles uniquement par le proxy et recharge Nginx. Vérifier le timer Certbot et `certbot renew --dry-run` avant mise en service. Les certificats et identifiants de renouvellement doivent aussi être sauvegardés chiffrés hors VPS. Les anciens fichiers Caddy sont conservés comme référence et ne sont plus utilisés par Compose.
 
 Le lien privé d'initialisation est écrit en mode 0600 dans `ops/bootstrap/admin-initialisation.url`, valable sept jours, et ne doit pas être copié dans les logs ou un ticket. L'ouvrir en privé pour définir le mot de passe propriétaire une seule fois. L'entrée habituelle est ensuite `/77774555474447777554555`. Le secret d'initialisation ne constitue pas le mot de passe. Après initialisation, le compte et les sessions restent dans PostgreSQL ; un redémarrage ou un rafraîchissement ne réinitialise rien.
 
@@ -74,7 +78,7 @@ Vérifier sur le VPS : santé de chaque service, certificat de staging, connexio
 
 La propriétaire finalise ses mentions légales et sa politique de confidentialité avant ouverture. La réouverture de l'ancien tunnel de paiement nécessite en plus les identifiants serveur PayPal et la vérification marchande ; maintenir la boutique fermée jusque-là. Conserver la source et l'ancien hébergement, sans purge. En cas d'activité d'écriture sur l'ancien site après la sauvegarde, prévoir une fenêtre de gel ou un export différentiel vérifié avant bascule.
 
-Après validation de toutes les preuves, configurer Caddy production et le DNS vers OVH, vérifier A/AAAA, HTTPS public, renouvellement et redirections. L'envoi newsletter ne sera activé explicitement qu'à cette étape (`NEWSLETTER_SEND_ENABLED=true`), avec configuration fournisseur vérifiée et sans campagne de test. Le préflight bloque la configuration production si les preuves d'import/restauration manquent. Conserver un plan de retour DNS et les deux bases ; ne jamais écraser l'une avec l'autre.
+Après validation de toutes les preuves et du certificat public préémis, passer `PROXY_TLS_MODE=production`, puis basculer uniquement les A/AAAA/CNAME web nécessaires vers OVH. Vérifier apex et www, HTTPS public, renouvellement et redirections. Ne publier l'IPv6 qu'après test du service et du pare-feu IPv6. L'envoi newsletter ne sera activé explicitement qu'à cette étape (`NEWSLETTER_SEND_ENABLED=true`), avec configuration fournisseur vérifiée et sans campagne réelle non validée. Le préflight bloque la configuration production si les preuves d'import/restauration manquent. Conserver Vercel pour un retour DNS et les deux bases ; ne jamais écraser l'une avec l'autre.
 
 Les releases ultérieures passent par le workflow manuel depuis `main`, avec digest préalablement vérifié. Le script conserve l'image précédente et tente un retour applicatif si les healthchecks échouent. Ce retour ne restaure pas la base : les migrations doivent rester compatibles avec l'image précédente. Un premier déploiement n'a pas encore d'image fonctionnelle de repli. Aucune commande `down -v` ou suppression des volumes ne fait partie des releases.
 

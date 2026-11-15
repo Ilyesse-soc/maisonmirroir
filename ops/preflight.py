@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Deployment gates; never print a secret value or modify a source database."""
-import json, pathlib, re, stat
+import json, pathlib, re, stat, subprocess
 ROOT = pathlib.Path('/opt/maison-miroir/ops')
 def env(path):
     result = {}
@@ -22,6 +22,10 @@ for file in ['app.env','migrate.env','postgres_password','app_db_password','migr
     if not path.is_file() or path.stat().st_mode & stat.S_IRWXO: raise RuntimeError('SECRET_FILE_PERMISSIONS_UNSAFE')
 if config.get('PROXY_TLS_MODE') not in ('staging', 'production'): raise RuntimeError('PROXY_TLS_MODE_REQUIRED')
 if config.get('PROXY_TLS_MODE') == 'production':
+    certificate = str(ROOT/'secrets'/'tls'/'server.crt')
+    for hostname in ['maison-miroir.fr', 'www.maison-miroir.fr']:
+        subprocess.run(['openssl','verify','-CApath','/etc/ssl/certs','-untrusted',certificate,'-verify_hostname',hostname,certificate], check=True, stdout=subprocess.DEVNULL)
+    subprocess.run(['openssl','x509','-in',certificate,'-noout','-checkend','86400'], check=True, stdout=subprocess.DEVNULL)
     for key in ['RESEND_API_KEY','EMAIL_FROM','RESEND_NEWSLETTER_WEBHOOK_SECRET']:
         if not app.get(key): raise RuntimeError('EMAIL_CONFIGURATION_REQUIRED_' + key)
     if app.get('NEWSLETTER_SEND_ENABLED') != 'true': raise RuntimeError('NEWSLETTER_STILL_PAUSED')

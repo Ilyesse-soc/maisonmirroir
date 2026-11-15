@@ -19,6 +19,11 @@ openssl x509 -req -days 825 -sha256 -in secrets/db-server.csr -CA secrets/db-ca.
 chown 70:70 secrets/db-server.key
 chmod 0400 secrets/db-server.key
 chmod 0444 secrets/db-server.crt secrets/db-ca.crt
+install -d -o 101 -g 101 -m 0750 secrets/tls
+openssl req -x509 -newkey rsa:2048 -nodes -days 14 -keyout secrets/tls/server.key -out secrets/tls/server.crt -subj '/CN=maison-miroir.fr staging' -addext 'subjectAltName=DNS:maison-miroir.fr,DNS:www.maison-miroir.fr'
+chown 101:101 secrets/tls/server.key secrets/tls/server.crt
+chmod 0400 secrets/tls/server.key
+chmod 0440 secrets/tls/server.crt
 app_password="$(cat secrets/app_db_password)"
 migration_password="$(cat secrets/migrate_db_password)"
 cat > secrets/app.env <<EOF

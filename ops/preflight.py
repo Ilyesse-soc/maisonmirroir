@@ -20,7 +20,8 @@ if not app['NEWSLETTER_SITE_URL'].startswith('https://') or app['BETTER_AUTH_URL
 for file in ['app.env','migrate.env','postgres_password','app_db_password','migrate_db_password','backup_db_password','db-server.key']:
     path = ROOT / 'secrets' / file
     if not path.is_file() or path.stat().st_mode & stat.S_IRWXO: raise RuntimeError('SECRET_FILE_PERMISSIONS_UNSAFE')
-if config.get('CADDY_CONFIG') == 'Caddyfile.production':
+if config.get('PROXY_TLS_MODE') not in ('staging', 'production'): raise RuntimeError('PROXY_TLS_MODE_REQUIRED')
+if config.get('PROXY_TLS_MODE') == 'production':
     for key in ['RESEND_API_KEY','EMAIL_FROM','RESEND_NEWSLETTER_WEBHOOK_SECRET']:
         if not app.get(key): raise RuntimeError('EMAIL_CONFIGURATION_REQUIRED_' + key)
     if app.get('NEWSLETTER_SEND_ENABLED') != 'true': raise RuntimeError('NEWSLETTER_STILL_PAUSED')

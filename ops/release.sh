@@ -34,9 +34,9 @@ docker --config "$registry_dir" pull "$backup_image"
 docker --config "$registry_dir" pull "$postgres_image"
 APP_IMAGE="$image" docker compose --env-file .env -f compose.yml run --rm --no-deps migrate
 sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$image|" .env
-if ! docker compose --env-file .env -f compose.yml up -d --no-build --wait --wait-timeout 150 app worker caddy;then
+if ! docker compose --env-file .env -f compose.yml up -d --no-build --wait --wait-timeout 150 app worker proxy;then
   cp .env.previous .env
-  docker compose --env-file .env -f compose.yml up -d --no-build --wait --wait-timeout 150 app worker caddy
+  docker compose --env-file .env -f compose.yml up -d --no-build --wait --wait-timeout 150 app worker proxy
   echo RELEASE_FAILED_CODE_ROLLED_BACK >&2
   exit 1
 fi

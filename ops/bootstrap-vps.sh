@@ -30,7 +30,7 @@ source /etc/os-release
 grep -Eq '^(ssh-ed25519|sk-ssh-ed25519@openssh.com) ' "$MM_ADMIN_PUBLIC_KEY_FILE"
 grep -Eq '^(ssh-ed25519|sk-ssh-ed25519@openssh.com) ' "$MM_DEPLOY_PUBLIC_KEY_FILE"
 apt-get update
-apt-get install -y ca-certificates curl openssl gnupg ufw unattended-upgrades fail2ban python3 sudo
+apt-get install -y ca-certificates curl openssl gnupg ufw unattended-upgrades fail2ban python3 sudo certbot python3-certbot-dns-ovh
 apt-get upgrade -y
 # Official signed Docker repository; never remove an existing installation or its data implicitly.
 if dpkg-query -W -f='${Status}' docker.io 2>/dev/null | grep -q 'install ok installed';then
@@ -78,9 +78,10 @@ ufw default allow outgoing
 while read -r ssh_port;do ufw allow "$ssh_port/tcp";done < <(sshd -T | awk '$1=="port"{print $2}')
 ufw allow 80/tcp
 ufw allow 443/tcp
-ufw allow 443/udp
 ufw --force enable
 timedatectl set-ntp true
+install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy
+install -m 0755 /opt/maison-miroir/ops/install-certificate.sh /etc/letsencrypt/renewal-hooks/deploy/maison-miroir
 install -d -m 0700 /var/lib/maison-miroir
 install -m 0644 /opt/maison-miroir/ops/systemd/maison-miroir-monitor.service /etc/systemd/system/maison-miroir-monitor.service
 install -m 0644 /opt/maison-miroir/ops/systemd/maison-miroir-monitor.timer /etc/systemd/system/maison-miroir-monitor.timer

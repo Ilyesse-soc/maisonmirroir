@@ -122,31 +122,27 @@ services:
       timeout: 5s
       retries: 3
       start_period: 45s
-  caddy:
+  proxy:
     <<: *hardened
-    image: caddy:2-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+    image: nginx:stable-alpine@sha256:901e593c95dc85f5a729f5765516321366ef4ac401821431d408897e95287d0a
+    user: "101:101"
     read_only: true
     cap_drop: [ALL]
-    cap_add: [NET_BIND_SERVICE]
+    entrypoint: [nginx, -g, "daemon off;"]
     mem_limit: 128m
     mem_reservation: 32m
     cpus: 0.1
     pids_limit: 64
-    environment:
-      DOMAIN: ${DOMAIN:?Set the domain}
-      ACME_EMAIL: ${ACME_EMAIL:?Set the certificate contact}
-      GOMAXPROCS: 2
-    ports: ["80:80", "443:443", "443:443/udp"]
+    ports: ["80:8080", "443:8443"]
     volumes:
-      - ./${CADDY_CONFIG:-Caddyfile.staging}:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    tmpfs: [/tmp:size=16m]
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./secrets/tls:/etc/nginx/tls:ro
+    tmpfs: ["/tmp:size=16m,uid=101,gid=101"]
     networks: [edge]
     depends_on:
       app: { condition: service_healthy }
     healthcheck:
-      test: [CMD-SHELL, "pidof caddy >/dev/null"]
+      test: [CMD, wget, -q, -O, /dev/null, http://127.0.0.1:8080/proxy-health]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -218,5 +214,3 @@ networks:
   egress: {}
 volumes:
   postgres_data: {}
-  caddy_data: {}
-  caddy_config: {}

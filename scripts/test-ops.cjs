@@ -35,14 +35,14 @@ for (const name of ["app", "worker", "migrate", "backup"])
 for (const name of ["postgres", "app", "worker", "migrate", "backup"])
   assert(!s[name].ports?.length, name + " must not publish an Internet port");
 assert.equal(config.networks.database.internal, true);
-for (const name of ["app", "worker", "postgres", "caddy", "backup"]) {
+for (const name of ["app", "worker", "postgres", "proxy", "backup"]) {
   assert(s[name].healthcheck);
   assert(s[name].mem_limit > 0);
   assert(s[name].cpus > 0);
   assert(s[name].logging.options["max-size"]);
   assert.equal(s[name].restart, "unless-stopped");
 }
-const permanent = ["postgres", "app", "worker", "caddy", "backup"].reduce(
+const permanent = ["postgres", "app", "worker", "proxy", "backup"].reduce(
   (sum, name) => sum + Number(s[name].mem_limit),
   0,
 );

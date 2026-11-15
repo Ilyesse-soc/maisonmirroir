@@ -1,12 +1,9 @@
 import Image from "next/image";
 import NewsletterForm from "@/components/NewsletterForm";
+import LaunchFooter from "@/components/LaunchFooter";
 import "./launch.css";
 import "./launch-fonts.css";
 export default function HomePage() {
-  const social = [
-    { label: "Notre Instagram", icon: "◎", url: process.env.INSTAGRAM_URL },
-    { label: "Notre TikTok", icon: "♪", url: process.env.TIKTOK_URL },
-  ];
   return (
     <main className="launch">
       <header className="launch-header">
@@ -58,43 +55,7 @@ export default function HomePage() {
           lancement.
         </p>
       </section>
-      <footer className="launch-footer">
-        <div className="brand-line">
-          <span />
-          <p>MAISON MIROIR</p>
-          <span />
-        </div>
-        <p className="signature">Une marque, une identité, une vision</p>
-        <div className="social-links">
-          {social.map((s) =>
-            s.url ? (
-              <a
-                href={s.url}
-                key={s.label}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <b aria-hidden="true">{s.icon}</b>
-                {s.label}
-                <span aria-hidden="true">→</span>
-              </a>
-            ) : (
-              <span className="social-pending" key={s.label}>
-                <b aria-hidden="true">{s.icon}</b>
-                {s.label} · bientôt
-              </span>
-            ),
-          )}
-          <a href="mailto:maison.miroirs@gmail.com">
-            <b aria-hidden="true">✉</b>maison.miroirs@gmail.com
-            <span aria-hidden="true">→</span>
-          </a>
-        </div>
-        <nav aria-label="Informations légales">
-          <a href="/confidentialite">Confidentialité</a>
-          <a href="/mentions-legales">Mentions légales</a>
-        </nav>
-      </footer>
+      <LaunchFooter />
     </main>
   );
 }

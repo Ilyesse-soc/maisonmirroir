@@ -432,3 +432,84 @@
 .brand-message h1 {
   font-style: italic;
 }
+
+/* One fluid composition: soften the source crop without moving its focal point. */
+.launch-hero::before {
+  inset: 0;
+  border-radius: 50% 50% 0 0;
+  background: radial-gradient(ellipse at 50% 38%, #d9bc9c99, transparent 73%);
+}
+.illustration img {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 19.07%;
+}
+.illustration {
+  -webkit-mask-image:
+    linear-gradient(to bottom, transparent, #000 3%, #000 96%, transparent),
+    linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
+  mask-image:
+    linear-gradient(to bottom, transparent, #000 3%, #000 96%, transparent),
+    linear-gradient(to right, transparent, #000 3%, #000 97%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+}
+.brand-line {
+  min-width: 0;
+  gap: clamp(0.5rem, 2vw, 1.5rem);
+}
+.brand-line > span {
+  min-width: 0;
+}
+.launch-footer .brand-line p {
+  font-size: clamp(1.375rem, 3.4vw, 2.3125rem);
+  letter-spacing: clamp(0.06em, 0.2vw, 0.16em);
+}
+.social-links {
+  flex-wrap: wrap;
+  gap: clamp(0.75rem, 2vw, 1.5625rem);
+}
+.social-links > a {
+  min-height: 48px;
+  flex: 1 1 15rem;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.social-links a > span.sr-only {
+  margin: 0;
+}
+.launch-footer nav {
+  flex-wrap: wrap;
+  gap: 0.25rem 1.125rem;
+}
+.launch-footer nav a {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.launch-copyright {
+  margin: 0.5rem 0 0;
+  font:
+    0.6875rem/1.5 Jost,
+    sans-serif;
+  opacity: 0.8;
+}
+.launch a:focus-visible,
+.launch button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+@media (max-width: 700px) {
+  .social-links > a {
+    flex: none;
+  }
+  .launch-footer {
+    padding-inline: clamp(1rem, 5vw, 1.5rem);
+  }
+  .chapter {
+    letter-spacing: 0.1em;
+  }
+}

@@ -1,22 +1,53 @@
-import Link from "next/link";
-import "../newsletter/newsletter.css";
-export default function LegalPage() {
+import LegalPage from "@/components/LegalPage";
+import { brandInfo } from "@/lib/brandInfo";
+export const metadata = {
+  title: "Mentions légales — Maison Miroir",
+  robots: { index: false, follow: true },
+};
+export default function LegalNotice() {
   return (
-    <main className="newsletter-page">
-      <Link href="/">← Maison Miroir</Link>
-      <h1>Mentions légales</h1>
-      <p>Maison Miroir — Modesty, Identity, Lifestyle.</p>
-      <p>
-        Contact :{" "}
-        <a href="mailto:maison.miroirs@gmail.com">maison.miroirs@gmail.com</a>
+    <LegalPage title="Mentions légales">
+      <h2>Édition du site</h2>
+      <dl>
+        <dt>Nom commercial</dt>
+        <dd>{brandInfo.name}</dd>
+        <dt>Statut communiqué</dt>
+        <dd>{brandInfo.status}</dd>
+        <dt>Adresse professionnelle communiquée</dt>
+        <dd>{brandInfo.address}</dd>
+        <dt>SIRET communiqué, à confirmer</dt>
+        <dd>{brandInfo.siret}</dd>
+        <dt>Contact</dt>
+        <dd>
+          <a href={`mailto:${brandInfo.email}`}>{brandInfo.email}</a>
+        </dd>
+      </dl>
+      <p className="legal-note">
+        Les nom et prénom de l’entrepreneuse et l’identité de la responsable de
+        publication restent à compléter. Le numéro SIRET transmis nécessite une
+        vérification. Ces informations doivent être confirmées avant publication
+        définitive de cette page.
       </p>
-      <p>Cette page de lancement ne propose actuellement aucun achat.</p>
+      <h2>Hébergement</h2>
       <p>
-        À compléter avant publication : raison sociale ou identité de
-        l’éditrice, forme juridique, adresse, immatriculation, numéro de TVA si
-        applicable, responsable de publication et coordonnées de l’hébergeur.
-        Ces informations ne sont pas encore fournies.
+        La configuration du projet prévoit un VPS OVHcloud à Beauharnois, au
+        Canada. L’entité juridique contractuelle de l’hébergeur, son adresse et
+        son téléphone doivent être confirmés à partir du contrat d’hébergement.
+        La configuration préparée ne prouve pas à elle seule le lieu
+        d’hébergement effectif du site public.
       </p>
-    </main>
+      <h2>Préouverture</h2>
+      <p>
+        Cette page présente Maison Miroir et sa liste privée. La boutique et les
+        parcours d’achat restent fermés. Aucun achat n’est proposé depuis cette
+        page.
+      </p>
+      <h2>Informations complémentaires</h2>
+      <p>
+        Le téléphone professionnel, les mentions d’immatriculation applicables
+        et les informations relatives à la TVA, si elle est applicable, restent
+        à confirmer.
+      </p>
+    </LegalPage>
   );
 }

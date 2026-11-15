@@ -15,6 +15,8 @@ export default function SiteShell({ children }: { children: React.ReactNode }) {
     pathname.startsWith("/newsletter") ||
     pathname === "/confidentialite" ||
     pathname === "/mentions-legales" ||
+    pathname === "/politique-de-confidentialite" ||
+    pathname === "/politique-de-cookies" ||
     pathname.startsWith("/admin")
   )
     return <>{children}</>;

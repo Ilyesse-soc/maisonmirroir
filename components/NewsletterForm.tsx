@@ -78,7 +78,7 @@ export default function NewsletterForm() {
         <span>
           J’accepte de recevoir les nouveautés, offres exclusives et annonces de
           Maison Miroir. Désinscription à tout moment.{" "}
-          <a href="/confidentialite">Confidentialité</a>
+          <a href="/politique-de-confidentialite">Confidentialité</a>
         </span>
       </label>
       <p

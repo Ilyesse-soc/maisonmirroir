@@ -29,7 +29,7 @@ Next.js a été migré de 14 vers 16.4.6 avec React/React DOM 19.3.1 et mise à 
 | Navigateur HTTPS local, base de recette isolée | Initialisation unique, login, session après rafraîchissement, logout, refus non autorisés/CSRF, limitation des tentatives vérifiés |
 | Affichage 320/390/1024/1440 px | Pas de débordement horizontal dans la recette |
 
-Mesure de laboratoire locale antérieure : LCP 296 ms, CLS 0,029. Ce ne sont pas des mesures OVH ou des indicateurs terrain ; INP et comportement sous charge restent à mesurer. Le Docker daemon local n'est pas disponible : construction/exécution des conteneurs et analyse de leurs images doivent encore être confirmées par CI puis sur VPS. Les éléments de recette et secrets restent dans `.qa`, ignoré par Git et Docker.
+Dernière mesure de laboratoire locale : LCP 272 ms, CLS 0,029. Ce ne sont pas des mesures OVH ou des indicateurs terrain ; INP et comportement sous charge restent à mesurer. Le Docker daemon local n'est pas disponible : les images sont construites sur GitHub. Le premier scan a détecté six vulnérabilités HIGH dans les outils npm embarqués par l'image Node de base ; ces outils inutiles à l'exécution ont été retirés de l'image finale. Le nouveau scan et le démarrage isolé de la stack doivent réussir avant publication. Les éléments de recette et secrets restent dans `.qa`, ignoré par Git et Docker.
 
 ## Données et conditions restantes
 

@@ -48,7 +48,7 @@ export default function PasswordLogin() {
         />
       </label>
       <button disabled={busy}>
-        {busy ? "Connexion?" : "Entrer dans mon espace"}
+        {busy ? "Connexion en cours..." : "Entrer dans mon espace"}
       </button>
       <p role="status">{message}</p>
     </form>

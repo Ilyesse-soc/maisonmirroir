@@ -1,5 +1,5 @@
 import Link from "next/link";
-import AdminLogin from "@/components/AdminLogin";
+import PasswordLogin from "@/components/PasswordLogin";
 import "../newsletter/newsletter.css";
 export const metadata = {
   title: "Administration — Maison Miroir",
@@ -10,7 +10,7 @@ export default function LoginPage() {
     <main className="newsletter-page">
       <Link href="/">? Maison Miroir</Link>
       <h1>Votre espace privé</h1>
-      <AdminLogin />
+      <PasswordLogin />
     </main>
   );
 }

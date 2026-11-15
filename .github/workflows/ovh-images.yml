@@ -51,6 +51,10 @@ jobs:
           for target in "$IMAGE:$GITHUB_SHA" "$IMAGE-backup:$GITHUB_SHA" 'postgres@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015' 'caddy@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0'; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image --exit-code 1 --severity HIGH,CRITICAL "$target"
           done
+      - name: Start the capped stack with synthetic data and sending disabled
+        env:
+          IMAGE: ghcr.io/ilyesse-soc/maisonmirroir
+        run: bash ops/test-runtime.sh
       - name: Publish checked images and immutable references
         env:
           IMAGE: ghcr.io/ilyesse-soc/maisonmirroir

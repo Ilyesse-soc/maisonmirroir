@@ -32,6 +32,9 @@ cleanup() {
 trap cleanup EXIT
 "${compose[@]}" up -d --wait --wait-timeout 120 postgres
 "${compose[@]}" run --rm migrate node migrate.mjs --init-admin
+sudo mv "$root/bootstrap/admin-initialisation.url" "$root/bootstrap/admin-initialisation.previous.url"
+"${compose[@]}" run --rm migrate node migrate.mjs --recover-admin-missing
+sudo test -s "$root/bootstrap/admin-initialisation.url"
 "${compose[@]}" up -d --no-build --wait --wait-timeout 150 app worker proxy
 "${compose[@]}" exec -T app node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
 "${compose[@]}" exec -T worker node -e "if(process.env.NEWSLETTER_SEND_ENABLED!=='false'||process.env.RESEND_API_KEY)process.exit(1)"

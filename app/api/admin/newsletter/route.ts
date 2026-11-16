@@ -6,6 +6,7 @@ import {
   campaignHtml,
   safeUrl,
   siteUrl,
+  launchAnnouncementTemplate,
 } from "@/lib/newsletter";
 import { products } from "@/lib/products";
 import { adminDenied } from "@/lib/adminAuth";
@@ -35,6 +36,8 @@ export async function GET() {
         campaigns: campaigns.rows,
         subscribers: subscribers.rows,
         products: products.map((p) => ({ id: p.id, name: p.name })),
+        launchTemplate: launchAnnouncementTemplate(),
+        shopOpen: process.env.SHOP_OPEN === "true",
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -127,7 +130,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error:
-            "La boutique doit être ouverte pour envoyer des liens produits.",
+            "Les campagnes ne peuvent être envoyées qu’après l’ouverture de la boutique.",
         },
         { status: 409 },
       );

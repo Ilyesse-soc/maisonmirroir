@@ -9,6 +9,7 @@ async function main() {
   const db = new PGlite();
   await db.exec(fs.readFileSync("migrations/001_newsletter.sql", "utf8"));
   await db.exec(fs.readFileSync("migrations/002_security.sql", "utf8"));
+  await db.exec(fs.readFileSync("migrations/004_welcome.sql", "utf8"));
   // Advisory locks are unnecessary for this single-connection test database.
   const query = async (text, params) => {
     if (
@@ -35,11 +36,12 @@ async function main() {
   };
   let calls = [],
     fail = false;
+  let providerSequence = 0;
   const send = async (payload, options) => {
     calls.push({ payload, options });
     return fail
       ? { error: { message: "temporary" } }
-      : { data: { id: `fake-${calls.length}` } };
+      : { data: { id: `fake-${++providerSequence}` } };
   };
   const email = {
     getEmailFrom: () => "test@example.test",
@@ -101,17 +103,51 @@ async function main() {
     (await query("SELECT * FROM mm_subscribers")).rows[0].status,
     "active",
   );
+  process.env.SHOP_OPEN = "false";
+  await n.processQueue();
+  assert.equal(calls.length, 1);
+  assert.equal(
+    calls[0].payload.subject,
+    "Bienvenue dans l'univers Maison Miroir",
+  );
+  assert(calls[0].payload.html.includes("L'équipe Maison Miroir"));
+  assert(calls[0].payload.html.includes("Me désinscrire"));
+  await n.subscribe("girl@example.test", "another-ip");
+  await n.processQueue();
+  assert.equal(calls.length, 1);
+  assert.equal(
+    (await query("SELECT count(*)::int AS n FROM mm_jobs WHERE kind='welcome'"))
+      .rows[0].n,
+    1,
+  );
+  calls = [];
   const campaignId = require("node:crypto").randomUUID();
   await query(
     "INSERT INTO mm_campaigns(id,title,subject,body) VALUES($1,$2,$3,$4)",
     [campaignId, "New chapter", "Bienvenue", "Bonjour <script>bad()</script>"],
   );
+  await assert.rejects(() => n.approveCampaign(campaignId), /SHOP_CLOSED/);
+  assert.equal(
+    (await query("SELECT status FROM mm_campaigns WHERE id=$1", [campaignId]))
+      .rows[0].status,
+    "draft",
+  );
+  process.env.SHOP_OPEN = "true";
   assert.equal(await n.approveCampaign(campaignId), 1);
   await assert.rejects(() => n.approveCampaign(campaignId));
   assert.equal(
     (await query(`SELECT * FROM mm_jobs WHERE kind='campaign'`)).rows.length,
     1,
   );
+  process.env.SHOP_OPEN = "false";
+  await n.processQueue();
+  assert.equal(calls.length, 0, "Pre-launch campaign must remain unsent");
+  assert.equal(
+    (await query("SELECT status FROM mm_jobs WHERE kind='campaign'")).rows[0]
+      .status,
+    "pending",
+  );
+  process.env.SHOP_OPEN = "true";
   await n.processQueue();
   assert.equal(calls.length, 1);
   assert(
@@ -221,7 +257,7 @@ async function main() {
     "PASS: publication drafts, edit/import filtering, event deduplication, persistent rate limiting.",
   );
   console.log(
-    "PASS: consent, pending subscription, duplicate suppression, token hashing/expiry/single use, confirmation, campaign approval, HTML escaping, unsubscribe, provider acceptance, retry idempotency. No real emails sent.",
+    "PASS: consent, double opt-in, unique welcome after confirmation, no duplicate welcome, pre-launch campaign block, unsubscribe, retries and provider idempotency. No real emails sent.",
   );
   await db.close();
 }

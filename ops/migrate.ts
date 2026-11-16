@@ -39,7 +39,36 @@ try {
   if (migration.unsafeChanges.length || migration.schemaProblems.length)
     throw Error("AUTH_MIGRATION_UNSAFE");
   await migration.runMigrations();
-  if (process.argv.includes("--init-admin")) {
+  if (process.argv.includes("--recover-admin-missing")) {
+    await client.query("BEGIN");
+    const setup = (
+      await client.query(
+        "SELECT claimed_at FROM mm_admin_setup WHERE singleton=true FOR UPDATE",
+      )
+    ).rows[0];
+    const users = await client.query(
+      "SELECT count(*)::int AS count FROM mm_auth_user",
+    );
+    if (!setup || setup.claimed_at || users.rows[0].count !== 0)
+      throw Error("ADMIN_RECOVERY_NOT_UNCLAIMED");
+    const token = randomBytes(32).toString("hex");
+    // Exclusive creation refuses to overwrite a still-available private link.
+    await fs.writeFile(
+      "/bootstrap/admin-initialisation.url",
+      (process.env.NEWSLETTER_SITE_URL || "") +
+        "/77774555474447777554555/initialiser#key=" +
+        token,
+      { mode: 0o600, flag: "wx" },
+    );
+    await client.query(
+      "UPDATE mm_admin_setup SET token_hash=$1,expires_at=now()+interval '24 hours' WHERE singleton=true AND claimed_at IS NULL",
+      [createHash("sha256").update(token).digest("hex")],
+    );
+    await client.query("COMMIT");
+    console.info(
+      "Unclaimed initialization recovered into the protected file. Existing accounts unchanged; no token printed.",
+    );
+  } else if (process.argv.includes("--init-admin")) {
     if (
       !(await client.query("SELECT 1 FROM mm_admin_setup WHERE singleton=true"))
         .rowCount
@@ -66,6 +95,7 @@ try {
   }
   console.info("Migrations completed without altering existing orders.");
 } catch {
+  await client.query("ROLLBACK").catch(() => {});
   console.error("MIGRATION_FAILED");
   process.exitCode = 1;
 } finally {

@@ -27,6 +27,13 @@ export default function NewsletterAdmin() {
     [schedule, setSchedule] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const [editing, setEditing] = useState("");
+  const [shopOpen, setShopOpen] = useState(false);
+  const [launchTemplate, setLaunchTemplate] = useState<{
+    title: string;
+    subject: string;
+    body: string;
+    linkUrl: string;
+  } | null>(null);
   function edit(c: Campaign) {
     const form = formRef.current;
     if (!form) return;
@@ -55,6 +62,8 @@ export default function NewsletterAdmin() {
       if (!r.ok) throw Error(d.error);
       setCampaigns(d.campaigns);
       setProducts(d.products);
+      setShopOpen(d.shopOpen === true);
+      setLaunchTemplate(d.launchTemplate);
     } catch (e) {
       setMessage(e instanceof Error ? e.message : "Chargement impossible");
     }
@@ -71,6 +80,8 @@ export default function NewsletterAdmin() {
         if (active) {
           setCampaigns(d.campaigns);
           setProducts(d.products);
+          setShopOpen(d.shopOpen === true);
+          setLaunchTemplate(d.launchTemplate);
         }
       })
       .catch((e) => {
@@ -133,6 +144,32 @@ export default function NewsletterAdmin() {
         Aucun suivi d’ouverture ou de clic n’est affiché.
       </p>
       <p role="status">{message}</p>
+      {!shopOpen && (
+        <p>
+          La boutique est fermée : seules les confirmations d’inscription et les
+          bienvenues sont envoyées. Les campagnes restent bloquées.
+        </p>
+      )}
+      <button
+        type="button"
+        disabled={busy || !launchTemplate}
+        onClick={() => {
+          if (!launchTemplate || !formRef.current) return;
+          formRef.current.reset();
+          setEditing("");
+          for (const [name, value] of Object.entries(launchTemplate)) {
+            const field = formRef.current.elements.namedItem(
+              name,
+            ) as HTMLInputElement | null;
+            if (field) field.value = value;
+          }
+          setMessage(
+            "Modèle de lancement préparé. Aucun envoi ni programmation effectué.",
+          );
+        }}
+      >
+        Préparer l’annonce du lancement
+      </button>
       <form ref={formRef} onSubmit={save}>
         <h2>{editing ? "Modifier le brouillon" : "Nouvelle campagne"}</h2>
         <label>
@@ -238,7 +275,7 @@ export default function NewsletterAdmin() {
                     </button>
                     {c.status === "draft" ? (
                       <button
-                        disabled={busy}
+                        disabled={busy || !shopOpen}
                         onClick={() => {
                           if (
                             window.confirm(

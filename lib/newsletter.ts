@@ -1,4 +1,6 @@
 import "server-only";
+import { renderNewsletterEmail, launchBody } from "./newsletterTemplates.mjs";
+import { securityEvent } from "./observability";
 import { processCartReminders } from "./abandonedCarts";
 import { reconcileDelivery } from "./deliveryEvents";
 import { createHash, randomBytes, randomUUID } from "crypto";
@@ -105,10 +107,12 @@ export async function subscribe(email: string, ip: string) {
         randomUUID(),
         id,
         `confirm:${hash(token)}`,
-        JSON.stringify({
-          subject: "Confirmez votre inscription — Maison Miroir",
-          html: `<h1>Bienvenue dans notre univers.</h1><p>Confirmez votre souhait de recevoir les nouvelles de Maison Miroir.</p><p><a href="${link}">Confirmer mon inscription</a></p><p>Ce lien expire dans 48 heures. Si vous n’avez pas demandé cette inscription, ignorez cet e-mail.</p>`,
-        }),
+        JSON.stringify(
+          renderNewsletterEmail("confirmation", {
+            siteUrl: base,
+            actionUrl: link,
+          }),
+        ),
       ],
     );
   });
@@ -130,8 +134,11 @@ export async function confirm(token: string) {
         subscriber.id,
         `welcome:${subscriber.id}`,
         JSON.stringify({
-          subject: "Bienvenue dans l'univers Maison Miroir",
-          html: welcomeHtml(unsubscribeUrl.replace("?token=", "#token=")),
+          ...renderNewsletterEmail("welcome", {
+            siteUrl: siteUrl(),
+            actionUrl: siteUrl(),
+            unsubscribeUrl: unsubscribeUrl.replace("?token=", "#token="),
+          }),
           unsubscribe: unsubscribeUrl,
         }),
       ],
@@ -140,19 +147,31 @@ export async function confirm(token: string) {
   });
 }
 export function welcomeHtml(unsubscribeUrl: string) {
-  return `<html lang="fr"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;background:#f3ece1;color:#4f3012;font-family:Georgia,serif"><table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr><td style="padding:28px 16px"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;margin:auto;background:#fff9f0;border:1px solid #dcc6ad;border-radius:20px"><tr><td style="padding:32px 24px;line-height:1.7;font-size:17px"><p style="letter-spacing:3px;text-align:center">MAISON MIROIR</p><h1 style="font-size:28px;line-height:1.25;font-weight:normal">Bienvenue dans l'univers Maison Miroir !</h1><p>Nous sommes ravies de vous compter parmi les premières à rejoindre notre communauté.</p><p>Une nouvelle vision de la mode arrive bientôt, pensée pour les femmes qui souhaitent exprimer leur identité avec élégance et pudeur.</p><p>Vous serez informée en avant-première du lancement de notre première collection.</p><p>Avec élégance,<br><strong>L'équipe Maison Miroir</strong></p><hr style="border:0;border-top:1px solid #dcc6ad"><p style="font-size:13px">Vous recevez ce message après confirmation de votre inscription. <a style="color:#4f3012" href="${escapeHtml(unsubscribeUrl)}">Me désinscrire</a> · <a style="color:#4f3012" href="${siteUrl()}/politique-de-confidentialite">Confidentialité</a></p></td></tr></table></td></tr></table></body></html>`;
+  return renderNewsletterEmail("welcome", {
+    siteUrl: siteUrl(),
+    actionUrl: siteUrl(),
+    unsubscribeUrl,
+  }).html;
 }
 export function launchAnnouncementTemplate() {
   return {
     title: "Ouverture de Maison Miroir",
     subject: "Maison Miroir ouvre enfin ses portes",
-    body: "Maison Miroir ouvre enfin ses portes !\n\nDécouvrez notre première collection, pensée pour exprimer votre identité avec élégance et pudeur.\n\nMerci de faire partie des premières à écrire ce nouveau chapitre avec nous.\n\nAvec élégance,\nL'équipe Maison Miroir",
+    body: launchBody,
     linkUrl: `${siteUrl()}/catalogue`,
   };
 }
 export async function unsubscribe(token: string) {
   if (!/^[a-f0-9]{64}$/.test(token)) return false;
   return transaction(async (db) => {
+    const previous = (
+      await db.query(
+        "SELECT id,status,confirmed_at FROM mm_subscribers WHERE unsubscribe_token=$1 FOR UPDATE",
+        [token],
+      )
+    ).rows[0];
+    if (!previous) return false;
+    if (previous.status === "unsubscribed") return true;
     const result = await db.query(
       `UPDATE mm_subscribers SET status='unsubscribed',unsubscribed_at=now(),confirmation_hash=NULL WHERE unsubscribe_token=$1 RETURNING id`,
       [token],
@@ -162,6 +181,30 @@ export async function unsubscribe(token: string) {
       `UPDATE mm_jobs SET status='cancelled',payload='{}' WHERE subscriber_id=$1 AND status IN ('pending','retry')`,
       [result.rows[0].id],
     );
+    // A receipt must never prevent the opt-out itself from being committed.
+    if (previous.status === "active" && emailReady()) {
+      await db.query("SAVEPOINT unsubscribe_receipt");
+      try {
+        const message = renderNewsletterEmail("unsubscribe", {
+          siteUrl: siteUrl(),
+          actionUrl: siteUrl(),
+        });
+        const cycle = new Date(previous.confirmed_at).toISOString();
+        await db.query(
+          "INSERT INTO mm_jobs(id,subscriber_id,kind,dedupe_key,payload) VALUES($1,$2,'unsubscribe_confirmation',$3,$4) ON CONFLICT(dedupe_key) DO NOTHING",
+          [
+            randomUUID(),
+            previous.id,
+            `unsubscribe:${previous.id}:${cycle}`,
+            JSON.stringify(message),
+          ],
+        );
+        await db.query("RELEASE SAVEPOINT unsubscribe_receipt");
+      } catch {
+        await db.query("ROLLBACK TO SAVEPOINT unsubscribe_receipt");
+        securityEvent("UNSUBSCRIBE_RECEIPT_QUEUE_FAILED");
+      }
+    }
     return true;
   });
 }
@@ -183,8 +226,69 @@ type CampaignContent = {
   products?: CampaignProduct[];
 };
 export function campaignHtml(c: CampaignContent, unsubscribeUrl: string) {
+  return campaignEmail(c, unsubscribeUrl).html;
+}
+function campaignEmail(c: CampaignContent, unsubscribeUrl: string) {
   const products = Array.isArray(c.products) ? c.products : [];
-  return `<div style="background:#f3ece1;color:#4f3012;padding:32px;font-family:Georgia,serif"><p>MAISON MIROIR</p><h1>${escapeHtml(c.title)}</h1>${c.image_url ? `<img width="480" style="max-width:100%" src="${escapeHtml(c.image_url)}" alt=""/>` : ""}<p style="white-space:pre-line">${escapeHtml(c.body)}</p>${products.map((p: CampaignProduct) => `<h2>${escapeHtml(p.name)}</h2><p>${escapeHtml(p.description || "")}</p><p>${escapeHtml(String(p.price))} €</p>${p.image ? `<img width="240" src="${escapeHtml(p.image)}" alt="${escapeHtml(p.name)}"/>` : ""}<p><a href="${escapeHtml(p.url)}">Découvrir</a></p>`).join("")}${c.promo_code ? `<p>Votre code : ${escapeHtml(c.promo_code)}</p>` : ""}${c.ends_at ? `<p>Offre valable jusqu’au ${escapeHtml(new Date(c.ends_at).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris" }))}</p>` : ""}${c.link_url ? `<p><a style="display:inline-block;background:#4f3012;color:#fff9f0;padding:14px 24px;border-radius:30px;text-decoration:none" href="${escapeHtml(c.link_url)}">Découvrir Maison Miroir</a></p>` : ""}<hr/><p><a href="${escapeHtml(unsubscribeUrl)}">Me désinscrire</a> · <a href="${siteUrl()}/confidentialite">Confidentialité</a></p></div>`;
+  const contentHtml =
+    (c.image_url
+      ? '<img width="540" style="max-width:100%;height:auto" alt="Visuel de la campagne Maison Miroir" src="' +
+        escapeHtml(safeUrl(c.image_url)) +
+        '">'
+      : "") +
+    '<p style="white-space:pre-line">' +
+    escapeHtml(c.body) +
+    "</p>" +
+    products
+      .map(
+        (p) =>
+          "<h2>" +
+          escapeHtml(p.name) +
+          "</h2><p>" +
+          escapeHtml(p.description || "") +
+          "</p><p>" +
+          escapeHtml(String(p.price)) +
+          " EUR</p>" +
+          (p.image
+            ? '<img width="240" style="max-width:100%;height:auto" alt="' +
+              escapeHtml(p.name) +
+              '" src="' +
+              escapeHtml(safeUrl(p.image)) +
+              '">'
+            : "") +
+          '<p><a href="' +
+          escapeHtml(safeUrl(p.url)) +
+          '">Découvrir</a></p>',
+      )
+      .join("") +
+    (c.promo_code
+      ? "<p>Votre code : " + escapeHtml(c.promo_code) + "</p>"
+      : "") +
+    (c.ends_at
+      ? "<p>Offre valable jusqu’au " +
+        escapeHtml(
+          new Date(c.ends_at).toLocaleDateString("fr-FR", {
+            timeZone: "Europe/Paris",
+          }),
+        ) +
+        "</p>"
+      : "");
+  return renderNewsletterEmail("launch", {
+    siteUrl: siteUrl(),
+    title: c.title === launchAnnouncementTemplate().title ? undefined : c.title,
+    body: c.body,
+    contentHtml:
+      c.image_url || c.products?.length || c.promo_code || c.ends_at
+        ? contentHtml
+        : undefined,
+    actionUrl: safeUrl(c.link_url || siteUrl()),
+    unsubscribeUrl,
+    text:
+      c.body +
+      products
+        .map((p) => "\n" + p.name + " - " + p.price + " EUR : " + p.url)
+        .join(""),
+  });
 }
 export async function approveCampaign(id: string, scheduledAt?: string) {
   if (process.env.SHOP_OPEN !== "true") throw new Error("SHOP_CLOSED");
@@ -215,6 +319,7 @@ export async function approveCampaign(id: string, scheduledAt?: string) {
           JSON.stringify({
             subject: c.subject,
             html: campaignHtml(c, url.replace("?token=", "#token=")),
+            text: campaignEmail(c, url.replace("?token=", "#token=")).text,
             unsubscribe: url,
           }),
           c.scheduled_at,
@@ -256,7 +361,7 @@ export async function processQueue() {
         );
         return (
           await db.query(
-            `UPDATE mm_jobs SET status='processing',lease_id=gen_random_uuid(),leased_at=now(),first_attempt_at=COALESCE(first_attempt_at,now()),attempts=attempts+1 WHERE id=(SELECT id FROM mm_jobs WHERE (kind IN ('confirmation','welcome') OR $1::boolean) AND ((status IN ('pending','retry') AND next_attempt<=now()) OR (status='processing' AND leased_at<now()-interval '5 minutes')) ORDER BY next_attempt FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`,
+            `UPDATE mm_jobs SET status='processing',lease_id=gen_random_uuid(),leased_at=now(),first_attempt_at=COALESCE(first_attempt_at,now()),attempts=attempts+1 WHERE id=(SELECT id FROM mm_jobs WHERE (kind IN ('confirmation','welcome','unsubscribe_confirmation') OR $1::boolean) AND ((status IN ('pending','retry') AND next_attempt<=now()) OR (status='processing' AND leased_at<now()-interval '5 minutes')) ORDER BY next_attempt FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`,
             [process.env.SHOP_OPEN === "true"],
           )
         ).rows[0];
@@ -269,10 +374,12 @@ export async function processQueue() {
       ).rows[0];
       if (
         !s ||
-        (job.kind !== "confirmation"
-          ? s.status !== "active"
-          : s.status !== "pending" ||
-            new Date(s.confirmation_expires).getTime() < Date.now())
+        (job.kind === "unsubscribe_confirmation"
+          ? s.status !== "unsubscribed"
+          : job.kind !== "confirmation"
+            ? s.status !== "active"
+            : s.status !== "pending" ||
+              new Date(s.confirmation_expires).getTime() < Date.now())
       ) {
         await database().query(
           `UPDATE mm_jobs SET status='cancelled',payload='{}' WHERE id=$1`,
@@ -287,6 +394,7 @@ export async function processQueue() {
             to: s.email,
             subject: job.payload.subject,
             html: job.payload.html,
+            ...(job.payload.text ? { text: job.payload.text } : {}),
             ...(job.payload.unsubscribe
               ? {
                   headers: {

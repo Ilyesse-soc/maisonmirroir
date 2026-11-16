@@ -10,8 +10,18 @@ async function main() {
   await db.exec(fs.readFileSync("migrations/001_newsletter.sql", "utf8"));
   await db.exec(fs.readFileSync("migrations/002_security.sql", "utf8"));
   await db.exec(fs.readFileSync("migrations/004_welcome.sql", "utf8"));
+  await db.exec(
+    fs.readFileSync("migrations/005_unsubscribe_receipt.sql", "utf8"),
+  );
   // Advisory locks are unnecessary for this single-connection test database.
+  let failReceiptInsert = false;
   const query = async (text, params) => {
+    if (
+      failReceiptInsert &&
+      text.startsWith("INSERT INTO mm_jobs") &&
+      text.includes("'unsubscribe_confirmation'")
+    )
+      return db.query("SELECT intentionally_missing_column FROM mm_jobs");
     if (
       text.includes("pg_advisory_xact_lock") ||
       text.includes("pg_advisory_unlock")
@@ -57,17 +67,21 @@ async function main() {
   mod.filename = filename;
   mod.paths = module.paths;
   mod.require = (id) =>
-    id === "./newsletterDb"
-      ? { database: () => pool, transaction }
-      : id === "./email"
-        ? email
-        : id === "server-only"
-          ? {}
-          : id === "./deliveryEvents"
-            ? { reconcileDelivery: async () => {} }
-            : id === "./abandonedCarts"
-              ? { processCartReminders: async () => 0 }
-              : require(id);
+    id === "./newsletterTemplates.mjs"
+      ? require("../lib/newsletterTemplates.mjs")
+      : id === "./observability"
+        ? { securityEvent: () => {} }
+        : id === "./newsletterDb"
+          ? { database: () => pool, transaction }
+          : id === "./email"
+            ? email
+            : id === "server-only"
+              ? {}
+              : id === "./deliveryEvents"
+                ? { reconcileDelivery: async () => {} }
+                : id === "./abandonedCarts"
+                  ? { processCartReminders: async () => 0 }
+                  : require(id);
   mod._compile(
     ts.transpileModule(fs.readFileSync(filename, "utf8"), {
       compilerOptions: {
@@ -110,8 +124,9 @@ async function main() {
     calls[0].payload.subject,
     "Bienvenue dans l'univers Maison Miroir",
   );
-  assert(calls[0].payload.html.includes("L'équipe Maison Miroir"));
-  assert(calls[0].payload.html.includes("Me désinscrire"));
+  assert(calls[0].payload.html.includes("L’équipe Maison Miroir"));
+  assert(calls[0].payload.text.includes("L’équipe Maison Miroir"));
+  assert(calls[0].payload.html.includes("Se désinscrire"));
   await n.subscribe("girl@example.test", "another-ip");
   await n.processQueue();
   assert.equal(calls.length, 1);
@@ -166,6 +181,26 @@ async function main() {
   assert.equal(calls.length, 1);
   assert.equal(await n.unsubscribe(subscriber.unsubscribe_token), true);
   assert.equal(await n.unsubscribe(subscriber.unsubscribe_token), true);
+  assert.equal(
+    (
+      await query(
+        "SELECT count(*)::int AS n FROM mm_jobs WHERE kind='unsubscribe_confirmation'",
+      )
+    ).rows[0].n,
+    1,
+  );
+  process.env.SHOP_OPEN = "false";
+  const beforeReceipt = calls.length;
+  await n.processQueue();
+  assert.equal(calls.length, beforeReceipt + 1);
+  assert.equal(
+    calls.at(-1).payload.subject,
+    "Votre désinscription — Maison Miroir",
+  );
+  assert(calls.at(-1).payload.text.includes("ne recevrez plus"));
+  await n.processQueue();
+  assert.equal(calls.length, beforeReceipt + 1);
+  process.env.SHOP_OPEN = "true";
   assert.equal(
     (await query("SELECT status FROM mm_subscribers")).rows[0].status,
     "unsubscribed",
@@ -247,6 +282,31 @@ async function main() {
       )
     ).rows[0].status,
     "draft",
+  );
+  await n.subscribe("receipt-failure@example.test", "separate-fixture-ip");
+  const receiptSubscriber = (
+    await query("SELECT * FROM mm_subscribers WHERE email=$1", [
+      "receipt-failure@example.test",
+    ])
+  ).rows[0];
+  const receiptJob = (
+    await query(
+      "SELECT payload FROM mm_jobs WHERE subscriber_id=$1 AND kind='confirmation'",
+      [receiptSubscriber.id],
+    )
+  ).rows[0];
+  await n.confirm(receiptJob.payload.html.match(/token=([a-f0-9]{64})/)[1]);
+  failReceiptInsert = true;
+  assert.equal(await n.unsubscribe(receiptSubscriber.unsubscribe_token), true);
+  failReceiptInsert = false;
+  assert.equal(
+    (
+      await query("SELECT status FROM mm_subscribers WHERE id=$1", [
+        receiptSubscriber.id,
+      ])
+    ).rows[0].status,
+    "unsubscribed",
+    "Receipt failure must not undo opt-out",
   );
   for (let i = 0; i < 6; i++) await n.subscribe("girl@example.test", "test-ip");
   await assert.rejects(

@@ -166,6 +166,36 @@ async function main() {
       new NextRequest("https://example.test/api", {
         method: "POST",
         headers: {
+          origin: "null",
+          "sec-fetch-site": "same-origin",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: "token=test",
+      }),
+      false,
+    ),
+    null,
+  );
+  assert.equal(
+    requestSecurity.mutationAllowed(
+      new NextRequest("https://example.test/api", {
+        method: "POST",
+        headers: {
+          origin: "null",
+          "sec-fetch-site": "cross-site",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+        body: "token=test",
+      }),
+      false,
+    ).status,
+    403,
+  );
+  assert.equal(
+    requestSecurity.mutationAllowed(
+      new NextRequest("https://example.test/api", {
+        method: "POST",
+        headers: {
           origin: "https://example.test",
           "content-type": "text/plain",
         },

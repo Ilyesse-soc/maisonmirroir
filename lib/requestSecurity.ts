@@ -7,15 +7,17 @@ export class InputError extends Error {
 }
 export function mutationAllowed(request: NextRequest, json = true) {
   const origin = request.headers.get("origin");
+  const fetchSite = request.headers.get("sec-fetch-site");
   const allowed = new Set([
     request.nextUrl.origin,
     ...(process.env.NEWSLETTER_SITE_URL
       ? [new URL(process.env.NEWSLETTER_SITE_URL).origin]
       : []),
   ]);
-  if (origin && !allowed.has(origin))
+  const opaqueSameOrigin = origin === "null" && fetchSite === "same-origin";
+  if (origin && !allowed.has(origin) && !opaqueSameOrigin)
     return new NextResponse(null, { status: 403 });
-  if (request.headers.get("sec-fetch-site") === "cross-site")
+  if (fetchSite === "cross-site")
     return new NextResponse(null, { status: 403 });
   if (
     json &&

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { confirm } from "@/lib/newsletter";
+import { confirm, siteUrl } from "@/lib/newsletter";
 import { mutationAllowed, readBoundedText } from "@/lib/requestSecurity";
 export async function POST(request: NextRequest) {
   const denied = mutationAllowed(request, false);
@@ -17,13 +17,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(
       new URL(
         "/newsletter/resultat?status=" + (ok ? "confirmed" : "invalid"),
-        request.url,
+        siteUrl(),
       ),
       303,
     );
   } catch {
     return NextResponse.redirect(
-      new URL("/newsletter/resultat?status=unavailable", request.url),
+      new URL("/newsletter/resultat?status=unavailable", siteUrl()),
       303,
     );
   }

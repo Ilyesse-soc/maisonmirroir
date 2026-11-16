@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { unsubscribe } from "@/lib/newsletter";
+import { siteUrl, unsubscribe } from "@/lib/newsletter";
 import { mutationAllowed, readBoundedText } from "@/lib/requestSecurity";
 export async function POST(request: NextRequest) {
   try {
@@ -25,13 +25,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(
       new URL(
         "/newsletter/resultat?status=" + (ok ? "unsubscribed" : "invalid"),
-        request.url,
+        siteUrl(),
       ),
       303,
     );
   } catch {
     return NextResponse.redirect(
-      new URL("/newsletter/resultat?status=unavailable", request.url),
+      new URL("/newsletter/resultat?status=unavailable", siteUrl()),
       303,
     );
   }

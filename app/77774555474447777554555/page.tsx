@@ -1,6 +1,8 @@
 import AdminSessionControls from "@/components/AdminSessionControls";
 import { adminSession } from "@/lib/adminAuth";
 import PasswordLogin from "@/components/PasswordLogin";
+import AdminSetup from "@/components/AdminSetup";
+import { database } from "@/lib/newsletterDb";
 import AdminNewsletterPage from "@/app/admin/newsletter/page";
 import "../newsletter/newsletter.css";
 export const dynamic = "force-dynamic";
@@ -20,11 +22,20 @@ export default async function AdminEntry() {
         <AdminNewsletterPage />
       </>
     );
+  let needsSetup = false;
+  try {
+    const result = await database().query(
+      "SELECT EXISTS(SELECT 1 FROM mm_admin_setup WHERE singleton=true AND claimed_at IS NULL) AND NOT EXISTS(SELECT 1 FROM mm_auth_user) AS needed",
+    );
+    needsSetup = result.rows[0]?.needed === true;
+  } catch {
+    // Remain protected if the initialization state is unavailable.
+  }
   return (
     <main className="newsletter-page">
       <p>MAISON MIROIR</p>
-      <h1>Votre espace privé</h1>
-      <PasswordLogin />
+      <h1>{needsSetup ? "Créer mon mot de passe" : "Votre espace privé"}</h1>
+      {needsSetup ? <AdminSetup /> : <PasswordLogin />}
     </main>
   );
 }

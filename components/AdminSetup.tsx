@@ -35,6 +35,12 @@ export default function AdminSetup() {
         throw Error(
           "Initialisation impossible. Le lien privé est invalide, expiré ou déjà utilisé.",
         );
+      // The password stays in memory only; the secure session cookie is set by login.
+      await fetch("/api/admin-access/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: data.get("password") }),
+      }).catch(() => null);
       history.replaceState(null, "", location.pathname);
       router.replace(ADMIN_PATH);
       router.refresh();
@@ -49,8 +55,9 @@ export default function AdminSetup() {
   if (!key)
     return (
       <p>
-        Ouvrez le lien privé d’initialisation réservé à la propriétaire de ce
-        site.
+        Vous n’avez pas encore défini votre mot de passe. Ouvrez votre lien
+        privé de première connexion pour le créer une seule fois. Vous
+        réutiliserez ensuite ce même mot de passe sur cette page.
       </p>
     );
   return (
@@ -82,7 +89,7 @@ export default function AdminSetup() {
         />
       </label>
       <button disabled={busy}>
-        {busy ? "Enregistrement?" : "Protéger mon espace"}
+        {busy ? "Enregistrement en cours…" : "Créer mon mot de passe"}
       </button>
       <p role="status">{message}</p>
     </form>

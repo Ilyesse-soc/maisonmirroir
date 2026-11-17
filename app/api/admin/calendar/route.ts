@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
   const originDenied = mutationAllowed(request);
   if (originDenied) return originDenied;
   try {
-    const data = await readJson(request, eventSchema, 5000);
+    const data = await readJson(request, eventSchema, 12000);
     if (data.action === "delete") {
       await adminAudit("MARKETING_EVENT_DELETE_REQUESTED", data.id);
       const result = await database().query(

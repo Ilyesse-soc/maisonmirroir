@@ -51,7 +51,7 @@ export async function PUT(request: NextRequest) {
   const originDenied = mutationAllowed(request);
   if (originDenied) return originDenied;
   try {
-    const settings = await readJson(request, settingsSchema, 18000);
+    const settings = await readJson(request, settingsSchema, 70000);
     await adminAudit("BRAND_SETTINGS_UPDATE_REQUESTED");
     const session = await adminSession();
     if (!session) return NextResponse.json({ error: "Authentification requise" }, { status: 401 });

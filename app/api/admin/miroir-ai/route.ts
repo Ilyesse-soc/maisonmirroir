@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
   const session = await adminSession();
   if (!session) return NextResponse.json({ error: "Authentification requise" }, { status: 401 });
   try {
-    const { message } = await readJson(request, requestSchema, 3000);
+    const { message } = await readJson(request, requestSchema, 10000);
     if (
       /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(message) ||
       /\+?\d[\d\s().-]{7,}\d/.test(message) ||

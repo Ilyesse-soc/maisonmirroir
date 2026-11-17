@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
   const originDenied = mutationAllowed(request);
   if (originDenied) return originDenied;
   try {
-    const data = await readJson(request, campaignSchema, 50000);
+    const data = await readJson(request, campaignSchema, 70000);
     if (data.action === "approve") {
       if (data.scheduledAt && Date.parse(data.scheduledAt) < Date.now())
         throw new InputError();

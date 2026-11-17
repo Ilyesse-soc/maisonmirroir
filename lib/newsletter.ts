@@ -156,7 +156,6 @@ export async function confirm(token: string) {
             contactEmail: brandSettings.contact_email,
             instagramUrl: brandSettings.instagram_url || undefined,
             tiktokUrl: brandSettings.tiktok_url || undefined,
-            footerText: brandSettings.campaign_footer,
           }),
           unsubscribe: unsubscribeUrl,
         }),

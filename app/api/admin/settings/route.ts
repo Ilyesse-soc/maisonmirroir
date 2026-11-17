@@ -36,7 +36,7 @@ export async function GET() {
       { settings: await getBrandSettings(), secretsConfigured: {
         resend: Boolean(process.env.RESEND_API_KEY),
         gemini: Boolean(process.env.GEMINI_API_KEY),
-        grok: Boolean(process.env.GROK_API_KEY),
+        groq: Boolean(process.env.GROQ_API_KEY),
       } },
       { headers: { "Cache-Control": "no-store" } },
     );

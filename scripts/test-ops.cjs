@@ -68,6 +68,15 @@ assert(
     fs.readFileSync("ops/release.sh", "utf8"),
   ),
 );
+const releaseScript = fs.readFileSync("ops/release.sh", "utf8");
+const verifiedBackupPosition = releaseScript.indexOf(
+  "docker compose --env-file .env -f compose.yml run --rm --no-deps backup --once",
+);
+const migrationPosition = releaseScript.indexOf(
+  "APP_IMAGE=\"$image\" docker compose --env-file .env -f compose.yml run --rm --no-deps migrate",
+);
+assert(verifiedBackupPosition >= 0, "release must create and verify a fresh PostgreSQL backup");
+assert(migrationPosition > verifiedBackupPosition, "backup must complete before schema migration");
 console.log(
   "PASS: Compose schema, private PostgreSQL, published-port boundary, TLS policy, resource caps, healthchecks, bounded logs, non-root read-only app/worker, fixed SSH host validation, no VPS build or volume deletion. Permanent container memory cap:",
   Math.round(permanent / 1024 / 1024),

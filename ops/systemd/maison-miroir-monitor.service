@@ -1,0 +1,14 @@
+[Unit]
+Description=Maison Miroir resource and container health checks
+After=docker.service
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/maison-miroir/ops/monitor.py
+User=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/maison-miroir
+MemoryMax=96M
+CPUQuota=10%

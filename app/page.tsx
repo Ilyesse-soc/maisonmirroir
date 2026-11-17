@@ -1,421 +1,61 @@
-import Image from 'next/image'
-import Link from 'next/link'
-import { categories, products } from '@/lib/products'
-import {
-  buttonGoldStyle,
-  buttonOutlineGoldStyle,
-  dividerStyle,
-  fonts,
-  pageMaxWidth,
-  theme,
-} from '@/lib/uiStyles'
-
+import Image from "next/image";
+import NewsletterForm from "@/components/NewsletterForm";
+import LaunchFooter from "@/components/LaunchFooter";
+import "./launch.css";
+import "./launch-fonts.css";
 export default function HomePage() {
-  const featured = products.slice(0, 4)
-  const formatPrice = (n: number) => (Number.isFinite(n) ? n.toFixed(2).replace('.00', '') : String(n))
-
   return (
-    <div style={{ overflow: 'hidden' }}>
-      {/* ── HERO ── */}
-      <section
-        style={{
-          position: 'relative',
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-        }}
-      >
-        {/* Background image */}
-        <div style={{ position: 'absolute', inset: 0 }}>
+    <main className="launch">
+      <header className="launch-header">
+        <div className="brand-line">
+          <span />
+          <p>MAISON MIROIR</p>
+          <span />
+        </div>
+        <p className="tagline">MODESTY – IDENTITY – LIFESTYLE</p>
+      </header>
+      <section className="launch-hero" aria-label="La nouvelle Maison Miroir">
+        <p className="coming sr-only">Something beautiful is coming...</p>
+        <div className="illustration">
           <Image
-            src="/images/pageprincipale.png"
-            alt="Maison Miroir"
-            fill
-            style={{ objectFit: 'cover' }}
-            priority
-          />
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              background: 'linear-gradient(180deg, rgba(0,0,0,0.60), rgba(0,0,0,0.40), rgba(0,0,0,0.70))',
-            }}
-          />
-          {/* Gold shimmer overlay */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              opacity: 0.1,
-              background: 'radial-gradient(ellipse at 50% 50%, rgba(201,162,39,0.4) 0%, transparent 70%)',
-            }}
+            width={1024}
+            height={1536}
+            src="/launch/reference.jpg"
+            alt="Deux femmes en tenues pudiques noires portant les sacs Maison Miroir : Just a girl training for Jannah et Modesty is the mood."
+            preload
           />
         </div>
-
-        {/* Content */}
-        <div
-          className="mm-hero-content"
-          style={{
-            position: 'relative',
-            zIndex: 10,
-            textAlign: 'center',
-            padding: '0 24px',
-            maxWidth: 768,
-            margin: '0 auto',
-          }}
-        >
-          {/* Decorative line */}
-          <div className="mm-hero-badge mm-fade mm-d1" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 32 }}>
-            <div style={{ height: 1, width: 64, background: 'linear-gradient(90deg, transparent, rgba(232,208,138,1))' }} />
-            <span
-              style={{
-                color: theme.goldLight,
-                fontSize: 12,
-                letterSpacing: '0.40em',
-                textTransform: 'uppercase',
-                fontFamily: fonts.body,
-              }}
-            >
-              Artisanat d'exception
-            </span>
-            <div style={{ height: 1, width: 64, background: 'linear-gradient(270deg, transparent, rgba(232,208,138,1))' }} />
-          </div>
-
-          <h1 className="mm-fade mm-d2" style={{ fontFamily: fonts.display, color: 'white', marginBottom: 16 }}>
-            <span style={{ display: 'block', fontSize: 'clamp(3rem, 7vw, 5rem)', fontWeight: 300, letterSpacing: '0.02em' }}>
-              Maison
-            </span>
-            <span
-              style={{
-                display: 'block',
-                fontFamily: fonts.script,
-                marginTop: 8,
-                fontSize: 'clamp(3rem, 8vw, 6rem)',
-                color: theme.goldLight,
-                fontWeight: 400,
-              }}
-            >
-              Miroir
-            </span>
-          </h1>
-
-          <div className="divider mm-fade mm-d3" style={{ ...dividerStyle(60), margin: '24px auto' }} />
-
-          <p
-            className="mm-hero-tagline mm-fade mm-d3"
-            style={{
-              color: 'rgba(255,255,255,0.80)',
-              lineHeight: 1.8,
-              letterSpacing: '0.04em',
-              fontFamily: fonts.script,
-              marginBottom: 40,
-            }}
-          >
-            Maison Miroir vous aide à créer des détails uniques et raffinés pour les plus beaux moments de votre vie.
-          </p>
-
-          <div className="mm-hero-btns mm-fade mm-d4" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, justifyContent: 'center' }}>
-            <Link href="/category/sacs" className="btn-gold" style={buttonGoldStyle()}>
-              Découvrir les sacs
-            </Link>
-            <Link
-              href="/category/gourmandises"
-              style={{
-                ...buttonOutlineGoldStyle(),
-                color: 'white',
-                border: '1px solid rgba(255,255,255,0.60)',
-              }}
-            >
-              Voir les gourmandises
-            </Link>
-          </div>
-        </div>
-
-        {/* Scroll indicator */}
-        <div
-          className="mm-scroll-hint"
-          style={{
-            position: 'absolute',
-            bottom: 40,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <span
-            style={{
-              color: 'rgba(255,255,255,0.40)',
-              fontSize: 12,
-              letterSpacing: '0.20em',
-              textTransform: 'uppercase',
-              fontFamily: fonts.body,
-            }}
-          >
-            Défiler
-          </span>
-          <div style={{ width: 1, height: 40, background: 'linear-gradient(180deg, rgba(232,208,138,0.60), transparent)' }} />
-        </div>
       </section>
-
-      {/* ── BRAND MESSAGE ── */}
-      <section className="mm-reveal" style={{ padding: '96px 24px', background: 'white' }}>
-        <div style={{ maxWidth: 672, margin: '0 auto', textAlign: 'center' }}>
-          <p
-            style={{
-              fontFamily: fonts.display,
-              fontSize: 12,
-              letterSpacing: '0.40em',
-              textTransform: 'uppercase',
-              marginBottom: 24,
-              color: theme.gold,
-            }}
-          >
-            Notre savoir-faire
-          </p>
-          <h2
-            style={{
-              fontFamily: fonts.display,
-              fontSize: 'clamp(2rem, 5vw, 3.2rem)',
-              fontWeight: 300,
-              marginBottom: 24,
-              color: theme.textDark,
-            }}
-          >
-            Chaque pièce raconte<br />
-            <em>votre histoire</em>
-          </h2>
-          <div style={{ ...dividerStyle(60), margin: '24px auto' }} />
-          <p
-            className="mm-brand-text"
-            style={{
-              lineHeight: 2,
-              letterSpacing: '0.04em',
-              fontFamily: fonts.script,
-              whiteSpace: 'pre-line',
-              color: theme.textMid,
-            }}
-          >
-            {"Bienvenue chez Maison Miroir, un univers dédié à la création d’objets personnalisés pensés pour refléter votre histoire, votre style et vos émotions.\n\nChaque création est réalisée avec soin et attention, afin de s’adapter parfaitement à vos goûts et à vos événements. Ici, rien n’est standard : tout est conçu sur mesure pour vous offrir des pièces uniques, élégantes et mémorables.\n\nSacs personnalisés, cadeaux invités, décorations d’événements, panneaux de bienvenue, certificats et bien plus encore… Maison Miroir transforme vos idées en créations réelles, afin de rendre chaque moment encore plus spécial.\n\nMariage, fiançailles, fête du henné, anniversaires ou événements professionnels : chaque projet est pensé pour sublimer vos célébrations et laisser une empreinte inoubliable.\n\nMaison Miroir, c’est l’art de créer du beau à partir de vos envies 🤍"}
-          </p>
-        </div>
+      <section className="brand-message">
+        <p className="chapter">
+          <span />A NEW CHAPTER BEGINS
+          <span />
+        </p>
+        <h1>
+          For the girls with
+          <br />
+          haya and big dreams
+        </h1>
+        <p className="intro">
+          Une nouvelle vision de la mode, pensée pour les femmes
+          <br className="desktop-break" /> qui souhaitent exprimer leur identité
+          avec élégance et pudeur.
+        </p>
       </section>
-
-      {/* ── CATEGORIES ── */}
-      <section className="mm-reveal" style={{ padding: '80px 24px', background: theme.marble }}>
-        <div style={{ maxWidth: pageMaxWidth, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 56 }}>
-            <p
-              style={{
-                fontFamily: fonts.display,
-                fontSize: 12,
-                letterSpacing: '0.40em',
-                textTransform: 'uppercase',
-                marginBottom: 16,
-                color: theme.gold,
-              }}
-            >
-              Collections
-            </p>
-            <h2
-              style={{
-                fontFamily: fonts.display,
-                fontSize: 'clamp(2rem, 5vw, 3.2rem)',
-                fontWeight: 300,
-                color: theme.textDark,
-              }}
-            >
-              Nos produits
-            </h2>
-            <div style={{ ...dividerStyle(60), marginTop: 24 }} />
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-              gap: 32,
-            }}
-          >
-            {categories.map((cat) => (
-              <Link
-                key={cat.slug}
-                href={`/category/${cat.slug}`}
-                className="mm-cat-card mm-reveal"
-                style={{ display: 'block', position: 'relative', overflow: 'hidden', textDecoration: 'none' }}
-              >
-                <div style={{ position: 'relative', aspectRatio: '4 / 3', overflow: 'hidden' }}>
-                  <Image
-                    src={cat.image}
-                    alt={cat.label}
-                    fill
-                    style={{ objectFit: 'cover' }}
-                  />
-                  <div style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.40)' }} />
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      textAlign: 'center',
-                      padding: 32,
-                    }}
-                  >
-                    <div style={{ height: 1, width: 48, background: 'rgba(232,208,138,0.70)', marginBottom: 24 }} />
-                    <h3
-                      style={{
-                        fontFamily: fonts.display,
-                        fontSize: 'clamp(1.6rem, 3vw, 2.2rem)',
-                        color: 'white',
-                        fontWeight: 300,
-                        marginBottom: 12,
-                        letterSpacing: '0.02em',
-                      }}
-                    >
-                      {cat.label}
-                    </h3>
-                    <p style={{ color: 'rgba(255,255,255,0.70)', fontSize: 12, letterSpacing: '0.04em', fontFamily: fonts.body, marginBottom: 24 }}>
-                      {cat.description}
-                    </p>
-                    <span
-                      className="mm-cat-cta"
-                      style={{
-                        color: theme.goldLight,
-                        fontSize: 12,
-                        letterSpacing: '0.30em',
-                        textTransform: 'uppercase',
-                        fontFamily: fonts.body,
-                        border: '1px solid rgba(232,208,138,0.50)',
-                        padding: '10px 20px',
-                      }}
-                    >
-                      Voir la collection
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
+      <section className="private-list" aria-labelledby="newsletter-title">
+        <h2 id="newsletter-title">Soyez les premières informées.</h2>
+        <p>
+          Inscrivez-vous à notre liste privée pour recevoir la date du lancement
+          <br className="desktop-break" /> et accéder à notre première
+          collection en avant-première.
+        </p>
+        <NewsletterForm />
+        <p className="quiet">
+          Aucune actualité inutile. Seulement les informations concernant notre
+          lancement.
+        </p>
       </section>
-
-      {/* ── FEATURED PRODUCTS ── */}
-      <section className="mm-reveal" style={{ padding: '80px 24px', background: 'white' }}>
-        <div style={{ maxWidth: pageMaxWidth, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 56 }}>
-            <p style={{ fontFamily: fonts.display, fontSize: 12, letterSpacing: '0.40em', textTransform: 'uppercase', marginBottom: 16, color: theme.gold }}>
-              Sélection
-            </p>
-            <h2 style={{ fontFamily: fonts.display, fontSize: 'clamp(2rem, 5vw, 3.2rem)', fontWeight: 300, color: theme.textDark }}>
-              Nos créations
-            </h2>
-            <div style={{ ...dividerStyle(60), marginTop: 24 }} />
-          </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              gap: 24,
-            }}
-          >
-            {featured.map((product, i) => (
-              <Link
-                key={product.id}
-                href={`/product/${product.id}`}
-                className="mm-prod-card mm-reveal"
-                style={{ display: 'block', textDecoration: 'none' }}
-              >
-                <div className="mm-prod-img" style={{ position: 'relative', aspectRatio: '1 / 1', overflow: 'hidden', marginBottom: 16, background: '#fafaf9' }}>
-                  <Image
-                    src={product.images[0]}
-                    alt={product.name}
-                    fill
-                    style={{ objectFit: 'cover' }}
-                  />
-                  <div className="mm-prod-hover" style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.06)' }} />
-                </div>
-                <div style={{ textAlign: 'center', padding: '0 8px' }}>
-                  <p style={{ fontSize: 12, letterSpacing: '0.20em', textTransform: 'uppercase', fontFamily: fonts.body, marginBottom: 4, color: theme.gold }}>
-                    {product.categoryLabel}
-                  </p>
-                  <h3 style={{ fontFamily: fonts.display, fontSize: 18, fontWeight: 300, marginBottom: 8, color: theme.textDark }}>
-                    {product.name}
-                  </h3>
-                  {typeof product.originalPrice === 'number' && product.originalPrice > product.price ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <span
-                        style={{
-                          fontFamily: fonts.body,
-                          fontSize: 12,
-                          color: theme.textMid,
-                          textDecoration: 'line-through',
-                        }}
-                      >
-                        {product.originalPrice} €
-                      </span>
-                      <span style={{ fontFamily: fonts.display, fontSize: 16, fontWeight: 400, color: theme.gold }}>
-                        {product.price} €
-                      </span>
-                      <span
-                        style={{
-                          fontFamily: fonts.body,
-                          fontSize: 10,
-                          letterSpacing: '0.18em',
-                          textTransform: 'uppercase',
-                          color: theme.gold,
-                          border: `1px solid ${theme.gold}`,
-                          padding: '4px 8px',
-                        }}
-                      >
-                        -{Math.round((1 - product.price / product.originalPrice) * 100)}%
-                      </span>
-                    </div>
-                  ) : (
-                    <p style={{ fontFamily: fonts.body, fontSize: 14, color: theme.gold }}>
-                      À partir de {formatPrice(product.price)} €
-                    </p>
-                  )}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ── TRUST BADGES ── */}
-      <section className="mm-reveal" style={{ padding: '64px 24px', background: theme.cream }}>
-        <div
-          style={{
-            maxWidth: 896,
-            margin: '0 auto',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: 40,
-            textAlign: 'center',
-          }}
-        >
-          {[
-            { icon: '✦', title: 'Personnalisation totale', desc: 'Prénoms, date, verset ou phrase à votre choix' },
-            { icon: '◈', title: 'Fabrication artisanale', desc: 'Chaque pièce est unique, créée avec soin' },
-            { icon: '◇', title: 'Livraison sécurisée', desc: 'Emballage luxe et expédition soigneuse' },
-          ].map(({ icon, title, desc }) => (
-            <div key={title} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 24, color: theme.gold }}>{icon}</span>
-              <h4 style={{ fontFamily: fonts.display, fontSize: 18, fontWeight: 300, color: theme.textDark }}>{title}</h4>
-              <div style={dividerStyle(60)} />
-              <p style={{ fontSize: 12, letterSpacing: '0.04em', lineHeight: 1.8, fontFamily: fonts.body, color: theme.textMid }}>{desc}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  )
+      <LaunchFooter />
+    </main>
+  );
 }

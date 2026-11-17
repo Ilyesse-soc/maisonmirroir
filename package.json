@@ -7,7 +7,14 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint app components lib proxy.ts",
+    "test": "node scripts/test-newsletter.cjs && node scripts/test-admin-console.cjs",
+    "test:security": "node scripts/test-security.cjs && node scripts/test-webhook.cjs",
+    "db:migrate": "node scripts/newsletter-migrate.cjs",
+    "auth:setup": "node scripts/setup-auth.mjs",
+    "test:ops": "node scripts/test-ops.cjs",
+    "build:runtime": "node ops/build-runtime.cjs"
   },
   "keywords": [],
   "author": "",
@@ -18,11 +25,32 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.27",
-    "next": "^14.2.35",
-    "postcss": "^8.5.8",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "resend": "^6.9.4",
-    "typescript": "^6.0.2"
+    "better-auth": "1.7.25",
+    "next": "16.4.6",
+    "pg": "^8.23.1",
+    "postcss": "8.5.33",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "resend": "6.38.1",
+    "server-only": "0.0.1",
+    "typescript": "^6.0.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.16",
+    "@playwright/test": "1.65.1",
+    "@types/pg": "^8.23.1",
+    "esbuild": "0.28.2",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.6",
+    "prettier": "3.10.1"
+  },
+  "overrides": {
+    "@typescript-eslint/typescript-estree": {
+      "minimatch": "11.0.8"
+    }
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

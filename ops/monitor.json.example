@@ -1,0 +1,6 @@
+{
+  "enabled": false,
+  "resend_key": "CONFIGURE_PRIVATELY_ON_VPS",
+  "from": "CONFIGURE_VERIFIED_SENDER",
+  "to": "CONFIGURE_OWNER_ADDRESS"
+}

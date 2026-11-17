@@ -1,0 +1,65 @@
+.legal-shell {
+  text-align: left;
+}
+.legal-content {
+  width: min(100% - 2.5rem, 49rem);
+  margin-inline: auto;
+  padding-block: clamp(2rem, 6vw, 5rem);
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.legal-content h1 {
+  font-size: clamp(2.25rem, 6vw, 3.75rem);
+  font-weight: 500;
+  line-height: 1.08;
+  margin: 1rem 0;
+}
+.legal-content h2 {
+  font-size: clamp(1.65rem, 3.5vw, 2.1rem);
+  font-weight: 500;
+  line-height: 1.2;
+  margin: 2rem 0 0.75rem;
+}
+.legal-content p,
+.legal-content li,
+.legal-content dd,
+.legal-content dt {
+  font-size: clamp(1.125rem, 2vw, 1.3rem);
+}
+.legal-content dt {
+  font-weight: 600;
+  margin-top: 0.8rem;
+}
+.legal-content dd {
+  margin-inline-start: 0;
+}
+.legal-content ul {
+  padding-left: 1.4rem;
+}
+.legal-content li + li {
+  margin-top: 0.5rem;
+}
+.legal-content .legal-date,
+.legal-content .legal-eyebrow {
+  font:
+    0.75rem/1.6 Jost,
+    sans-serif;
+}
+.legal-eyebrow {
+  letter-spacing: 0.2em;
+  margin-top: 2rem;
+}
+.legal-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+.legal-note {
+  border-left: 2px solid #94704d;
+  padding: 0.75rem 1rem;
+  background: #fff4;
+  border-radius: 0 0.75rem 0.75rem 0;
+}
+.legal-shell .launch-footer {
+  text-align: center;
+}

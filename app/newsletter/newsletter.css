@@ -1,0 +1,68 @@
+.newsletter-page {
+  min-height: 100vh;
+  padding: 80px max(24px, calc((100vw - 850px) / 2));
+  background: #f3ece1;
+  color: #4f3012;
+  font-family: Georgia, serif;
+  line-height: 1.7;
+}
+.newsletter-page h1 {
+  font-family: "Cormorant Garamond", Georgia, serif;
+  font-size: clamp(34px, 5vw, 56px);
+  line-height: 1.1;
+}
+.newsletter-page a {
+  color: inherit;
+}
+.newsletter-page button {
+  background: #4f3012;
+  color: #f3ece1;
+  border: 0;
+  border-radius: 30px;
+  padding: 16px 26px;
+  cursor: pointer;
+  margin: 20px 0;
+}
+.newsletter-page input,
+.newsletter-page textarea,
+.newsletter-page select {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #c4a27a;
+  border-radius: 6px;
+  background: #fffaf3;
+  color: #4f3012;
+  font: inherit;
+}
+.newsletter-page label {
+  display: block;
+  margin: 16px 0;
+}
+.newsletter-page table {
+  width: 100%;
+  border-collapse: collapse;
+  font: 14px/1.5 sans-serif;
+}
+.newsletter-page th,
+.newsletter-page td {
+  text-align: left;
+  border-bottom: 1px solid #c4a27a;
+  padding: 12px 6px;
+}
+.newsletter-page .admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.newsletter-page .admin-actions button {
+  margin: 5px 0;
+}
+.newsletter-page iframe {
+  width: 100%;
+  min-height: 500px;
+  border: 1px solid #c4a27a;
+}
+.newsletter-page .table-scroll {
+  overflow-x: auto;
+}

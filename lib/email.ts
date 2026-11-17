@@ -1,41 +1,59 @@
-import { Resend } from 'resend'
+import "server-only";
+import { Resend } from "resend";
 
 function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0
+  return typeof value === "string" && value.trim().length > 0;
 }
 
 export function getEmailFrom() {
-  const value = (process.env.EMAIL_FROM || process.env.RESEND_FROM || process.env.OWNER_EMAIL || '').trim()
-  return value
+  const value = (
+    process.env.EMAIL_FROM ||
+    process.env.RESEND_FROM ||
+    process.env.OWNER_EMAIL ||
+    ""
+  ).trim();
+  return value;
 }
 
 export function getAdminEmail() {
-  const value = (process.env.EMAIL_ADMIN || process.env.OWNER_EMAIL || '').trim()
-  return value
+  const value = (
+    process.env.EMAIL_ADMIN ||
+    process.env.OWNER_EMAIL ||
+    ""
+  ).trim();
+  return value;
 }
 
 export function getResendClient() {
-  const apiKey = (process.env.RESEND_API_KEY || '').trim()
-  if (!apiKey) return null
-  return new Resend(apiKey)
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  if (!apiKey) return null;
+  return new Resend(apiKey);
 }
 
 export function isEmailConfigReady() {
-  return Boolean(getResendClient() && isNonEmptyString(getEmailFrom()) && isNonEmptyString(getAdminEmail()))
+  return Boolean(
+    getResendClient() &&
+    isNonEmptyString(getEmailFrom()) &&
+    isNonEmptyString(getAdminEmail()),
+  );
 }
 
 export async function sendEmailOrThrow(params: {
-  from?: string
-  to: string | string[]
-  subject: string
-  html: string
-  replyTo?: string
-  attachments?: Array<{ filename: string; contentType: string; content: string }>
+  from?: string;
+  to: string | string[];
+  subject: string;
+  html: string;
+  replyTo?: string;
+  attachments?: Array<{
+    filename: string;
+    contentType: string;
+    content: string;
+  }>;
 }) {
-  const resend = getResendClient()
-  const from = (params.from || getEmailFrom()).trim()
-  if (!resend) throw new Error('RESEND_API_KEY is not configured')
-  if (!from) throw new Error('EMAIL_FROM or RESEND_FROM is not configured')
+  const resend = getResendClient();
+  const from = (params.from || getEmailFrom()).trim();
+  if (!resend) throw new Error("RESEND_API_KEY is not configured");
+  if (!from) throw new Error("EMAIL_FROM or RESEND_FROM is not configured");
 
   const result = await resend.emails.send({
     from,
@@ -44,23 +62,23 @@ export async function sendEmailOrThrow(params: {
     html: params.html,
     replyTo: params.replyTo,
     attachments: params.attachments,
-  } as any)
+  });
 
-  if ((result as any)?.error) {
-    const providerError = (result as any).error
+  if (result.error) {
+    const providerError = result.error;
     const providerMessage =
-      typeof providerError?.message === 'string'
+      typeof providerError?.message === "string"
         ? providerError.message
-        : typeof providerError === 'string'
+        : typeof providerError === "string"
           ? providerError
-          : 'Email provider returned an error'
-    throw new Error(providerMessage)
+          : "Email provider returned an error";
+    throw new Error(providerMessage);
   }
 
-  return result
+  return result;
 }
 
 export function normalizeEmailError(error: unknown) {
-  if (error instanceof Error) return error.message
-  return typeof error === 'string' ? error : 'Unknown email error'
+  if (error instanceof Error) return error.message;
+  return typeof error === "string" ? error : "Unknown email error";
 }

@@ -1,5 +1,7 @@
 # Maison Miroir — Site e-commerce luxe
 
+Production préparée pour OVH VPS-2 2027 : Next.js 16 standalone, PostgreSQL, worker et Nginx via Docker Compose. Consulter [le guide OVH](DEPLOIEMENT-OVH.md) et [le rapport de sécurité](RAPPORT-SECURITE-OVH.md) avant toute migration. Les instructions historiques ci-dessous ne décrivent plus l'hébergement cible. Aucun changement DNS ni import définitif n'a été effectué.
+
 Site Next.js 14 + Tailwind CSS pour une boutique de décoration de mariage personnalisée.
 
 ## 🚀 Installation
@@ -18,7 +20,7 @@ Ouvre http://localhost:3000
 ```
 app/
 ├── page.tsx                  → Homepage
-├── admin/                    → Interface admin des commandes
+├── admin/                    → Administration protégée (dashboard, newsletter, commandes...)
 ├── category/[slug]/          → Pages catégories
 ├── product/[id]/             → Page produit + commande
 ├── success/                  → Page de confirmation
@@ -63,18 +65,23 @@ API admin: app/api/admin/orders/[orderId]/route.ts
 - Lors d'une mise a jour de statut ou numero de suivi, un email client de suivi est envoye automatiquement
 - Le lien de suivi correspond au transporteur choisi
 
-## 🛠️ Interface admin
+## 🛠️ Administration
 
-Page: app/admin/page.tsx
+L'espace existant est accessible après connexion à `/77774555474447777554555`, puis depuis `/admin`. Le layout protégé réunit :
 
-Permet de:
-- Voir toutes les commandes
-- Voir toutes les infos client et adresse
-- Voir mode/prix/delai de livraison
-- Modifier le statut (En attente, Payee, En preparation, Expediee, Livree, Annulee)
-- Ajouter/modifier le numero de suivi
+- `/admin` : tableau de bord PostgreSQL, inscriptions sur 30 jours, activité récente et état réel du worker/envoi.
+- `/admin/subscribers` : recherche, filtres, tri, pagination, historique du consentement, export CSV et effacement RGPD explicite.
+- `/admin/newsletter` : brouillons, aperçu mobile/ordinateur, historique et validation manuelle des campagnes.
+- `/admin/miroir-ai` : assistant Gemini côté serveur, brouillons uniquement ; désactivé tant que `GEMINI_API_KEY` n'est pas configurée.
+- `/admin/calendar` : calendrier marketing et événements persistés.
+- `/admin/settings` : coordonnées et textes de marque non sensibles. Les secrets ne sont jamais affichés.
+- `/admin/orders` : gestion existante des commandes et du suivi.
 
-Chaque changement declenche l'email client associe.
+La migration additive `migrations/006_admin_console.sql` ajoute le pré-en-tête des campagnes, le calendrier et les paramètres éditables sans supprimer de données existantes. Les taux d'ouverture et de clic restent indiqués comme indisponibles lorsque le suivi n'existe pas. Une campagne ne peut être approuvée que par une action explicite et seulement si `SHOP_OPEN=true`; ne pas activer ce paramètre avant validation métier. `NEWSLETTER_AUTO_PUBLISH` reste indépendant et doit demeurer désactivé tant qu'une publication automatique n'est pas souhaitée.
+
+Les tests admin isolés sont inclus dans `npm test`; ils utilisent PostgreSQL embarqué, une authentification mockée et un fournisseur Gemini simulé. Aucun email ni campagne réel n'est envoyé.
+
+Pour activer Miroir AI, renseigner `GEMINI_API_KEY` uniquement dans l'environnement serveur protégé (`ops/secrets/app.env` sur OVH) après vérification des accès et quotas du compte Google. `GEMINI_MODEL` vaut `gemini-2.5-flash` par défaut. Ne pas transmettre la clé dans le navigateur, les issues, les journaux ou Git; sans clé, les autres fonctions admin continuent de marcher.
 
 ## 🔑 Configuration
 

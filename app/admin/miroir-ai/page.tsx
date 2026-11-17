@@ -4,7 +4,12 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
 type Message = { role: "user" | "assistant"; text: string };
-type AiStatus = { enabled: boolean; model: string | null };
+type AiStatus = {
+  enabled: boolean;
+  provider: "gemini" | "grok" | null;
+  model: string | null;
+  fallbackEnabled: boolean;
+};
 
 export default function MiroirAiPage() {
   const [status, setStatus] = useState<AiStatus | null>(null);
@@ -50,7 +55,7 @@ export default function MiroirAiPage() {
       if (!response.ok) throw new Error(data.error || "Miroir AI n’a pas pu répondre.");
       setMessages((items) => [...items, {
         role: "assistant",
-        text: `${data.reply}${data.createdDraft ? "\n\nBrouillon créé — aucune campagne envoyée ni programmée." : ""}`,
+        text: `${data.reply}${data.fallbackUsed ? "\n\nGemini indisponible : réponse fournie par Grok." : ""}${data.createdDraft ? "\n\nBrouillon créé — aucune campagne envoyée ni programmée." : ""}`,
       }]);
       if (data.draftId) setMessages((items) => [...items, {
         role: "assistant",
@@ -81,7 +86,9 @@ export default function MiroirAiPage() {
       </header>
       <section className="admin-card">
         <p role="status">
-          {status?.enabled ? `Modèle configuré : ${status.model}` : status ? "Gemini n’est pas configuré. L’assistant est désactivé." : "Vérification de la configuration…"}
+          {status?.enabled
+            ? `${status.provider === "gemini" ? "Gemini" : "Grok"} actif : ${status.model}${status.fallbackEnabled ? " — Grok est prêt à prendre le relais automatiquement." : status.provider === "gemini" ? " — le relais Grok n’est pas configuré." : ""}`
+            : status ? "Aucune clé Gemini ou Grok n’est configurée. L’assistant est désactivé." : "Vérification de la configuration…"}
         </p>
         <p className="admin-muted">Les requêtes sont limitées. Seules des statistiques agrégées lui sont transmises ; n’incluez aucune donnée personnelle, adresse e-mail ni secret.</p>
         {error && <p className="admin-error" role="alert">{error}</p>}

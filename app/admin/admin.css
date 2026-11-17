@@ -297,4 +297,12 @@
   .admin-page {
     padding-top: 26px;
   }
+  .miroir-ai-intro {
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .miroir-ai-avatar {
+    width: 76px;
+    height: 76px;
+  }
 }

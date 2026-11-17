@@ -26,7 +26,7 @@ const empty: Settings = {
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<Settings>(empty);
-  const [secretStatus, setSecretStatus] = useState({ resend: false, gemini: false });
+  const [secretStatus, setSecretStatus] = useState({ resend: false, gemini: false, grok: false });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -92,6 +92,7 @@ export default function AdminSettingsPage() {
           <button disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer"}</button>
           <span>Resend : {secretStatus.resend ? "configuré" : "non configuré"}</span>
           <span>Gemini : {secretStatus.gemini ? "configuré" : "non configuré"}</span>
+          <span>Grok (secours) : {secretStatus.grok ? "configuré" : "non configuré"}</span>
         </div>
       </form>
       <section className="admin-card" style={{ marginTop: 18 }}>

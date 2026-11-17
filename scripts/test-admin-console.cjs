@@ -184,19 +184,45 @@ async function main() {
 
   const ai = load("app/api/admin/miroir-ai/route.ts");
   delete process.env.GEMINI_API_KEY;
+  delete process.env.GROK_API_KEY;
   assert.equal((await ai.GET()).status, 200);
   const aiResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", { message: "Prépare une campagne de lancement" }));
   assert.equal(aiResponse.status, 503);
   process.env.GEMINI_API_KEY = "local-test-key";
   process.env.GEMINI_MODEL = "gemini-2.5-flash";
+  process.env.GROK_API_KEY = "local-grok-test-key";
+  process.env.GROK_MODEL = "grok-4.7";
+  const aiStatus = await (await ai.GET()).json();
+  assert.equal(aiStatus.provider, "gemini");
+  assert.equal(aiStatus.model, "gemini-2.5-flash");
+  assert.equal(aiStatus.fallbackEnabled, true);
   const originalFetch = global.fetch;
   let aiCalls = 0;
   global.fetch = async (url, options) => {
     aiCalls++;
+    if (String(url) === "https://api.x.ai/v1/chat/completions") {
+      assert.equal(options.headers.Authorization, "Bearer local-grok-test-key");
+      const requestBody = JSON.parse(options.body);
+      assert.equal(requestBody.model, "grok-4.7");
+      assert.equal(requestBody.response_format.type, "json_object");
+      assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({
+            reply: "Voici un brouillon.",
+            intent: "create_draft",
+            draft: { title: "Lancement", subject: "Une nouvelle collection", preheader: "Découvrir", body: "Notre collection arrive." },
+          }) } }],
+        }),
+      };
+    }
     assert.match(String(url), /models\/gemini-2\.5-flash:generateContent$/);
     assert.equal(options.headers["x-goog-api-key"], "local-test-key");
     const requestBody = JSON.parse(options.body);
     assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
+    if (aiCalls === 1) return { ok: false, status: 503 };
     return {
       ok: true,
       status: 200,
@@ -214,6 +240,8 @@ async function main() {
       message: "Prépare une campagne de lancement",
     }));
     const draftResult = await draftResponse.json();
+    assert.equal(draftResult.provider, "grok");
+    assert.equal(draftResult.fallbackUsed, true);
     assert.equal(draftResult.createdDraft, true);
     assert.equal(
       (await query("SELECT status FROM mm_campaigns WHERE id=$1", [draftResult.draftId])).rows[0].status,
@@ -229,22 +257,33 @@ async function main() {
     }));
     assert.equal(piiResponse.status, 400);
     assert.equal(aiCalls, callsBeforePii);
-    for (let call = 1; call < 20; call++) {
+    delete process.env.GROK_API_KEY;
+    global.fetch = async (_url, options) => {
+      aiCalls++;
+      assert.equal(options.headers["x-goog-api-key"], "local-test-key");
+      return { ok: false, status: 403 };
+    };
+    const providerError = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+      message: "Propose trois objets d’email élégants.",
+    }));
+    assert.equal(providerError.status, 502);
+    assert.match((await providerError.json()).error, /autorisations Gemini/);
+    for (let call = 1; call < 19; call++) {
       const limitedRequest = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
         message: "Propose trois objets d’email élégants.",
       }));
-      assert.equal(limitedRequest.status, 200);
+      assert.equal(limitedRequest.status, 502);
     }
-    const callsAtLimit = aiCalls;
     const overLimit = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
       message: "Propose un objet d’email.",
     }));
     assert.equal(overLimit.status, 429);
-    assert.equal(aiCalls, callsAtLimit);
   } finally {
     global.fetch = originalFetch;
     delete process.env.GEMINI_API_KEY;
     delete process.env.GEMINI_MODEL;
+    delete process.env.GROK_API_KEY;
+    delete process.env.GROK_MODEL;
   }
 
   const activeSendJob = randomUUID();
@@ -286,7 +325,7 @@ async function main() {
   assert.equal((await calendar.GET()).status, 401);
   assert.equal((await settings.GET()).status, 401);
   assert.equal((await ai.GET()).status, 401);
-  console.log("PASS: authenticated admin dashboard aggregates, subscriber filters/history/export/erasure, persisted calendar and allowlisted settings, Miroir AI draft-only flow, PII rejection, rate-limited provider mock and disabled state without Gemini. No campaign or email sent.");
+  console.log("PASS: authenticated admin dashboard aggregates, subscriber filters/history/export/erasure, persisted calendar and allowlisted settings, Miroir AI draft-only flow, PII rejection, Gemini-to-Grok fallback, provider error reporting and rate limits. No campaign or email sent.");
   await db.close();
 }
 

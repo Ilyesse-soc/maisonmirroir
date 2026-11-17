@@ -29,6 +29,7 @@ const fields = {
     .min(1)
     .max(200)
     .refine((value) => !/[\r\n]/.test(value)),
+  preheader: z.string().trim().max(250).optional().default(""),
   body: z.string().trim().min(1).max(12000),
   imageUrl: url,
   linkUrl: url,

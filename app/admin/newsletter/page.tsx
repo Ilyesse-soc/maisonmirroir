@@ -6,6 +6,7 @@ type Campaign = {
   id: string;
   title: string;
   subject: string;
+  preheader: string;
   status: string;
   recipients: string;
   accepted: string;
@@ -24,6 +25,7 @@ export default function NewsletterAdmin() {
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [preview, setPreview] = useState(""),
+    [previewWidth, setPreviewWidth] = useState<"mobile" | "desktop">("desktop"),
     [schedule, setSchedule] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const [editing, setEditing] = useState("");
@@ -40,6 +42,7 @@ export default function NewsletterAdmin() {
     for (const [name, value] of Object.entries({
       title: c.title,
       subject: c.subject,
+      preheader: c.preheader || "",
       body: c.body,
       imageUrl: c.image_url || "",
       linkUrl: c.link_url || "",
@@ -181,6 +184,10 @@ export default function NewsletterAdmin() {
           <input name="subject" required maxLength={200} />
         </label>
         <label>
+          Pré-en-tête
+          <input name="preheader" maxLength={250} />
+        </label>
+        <label>
           Texte principal
           <textarea name="body" required maxLength={12000} rows={5} />
         </label>
@@ -314,7 +321,11 @@ export default function NewsletterAdmin() {
       {preview ? (
         <>
           <h2>Aperçu de l’e-mail</h2>
-          <iframe title="Aperçu de la campagne" sandbox="" srcDoc={preview} />
+          <div className="admin-actions">
+            <button type="button" aria-pressed={previewWidth === "mobile"} onClick={() => setPreviewWidth("mobile")}>Mobile — 390 px</button>
+            <button type="button" aria-pressed={previewWidth === "desktop"} onClick={() => setPreviewWidth("desktop")}>Ordinateur — 600 px</button>
+          </div>
+          <iframe title={`Aperçu ${previewWidth === "mobile" ? "mobile" : "ordinateur"} de la campagne`} sandbox="" srcDoc={preview} style={{ width: previewWidth === "mobile" ? 390 : "100%", maxWidth: "100%", display: "block", margin: "16px auto" }} />
         </>
       ) : null}
     </main>

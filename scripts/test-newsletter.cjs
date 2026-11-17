@@ -13,6 +13,7 @@ async function main() {
   await db.exec(
     fs.readFileSync("migrations/005_unsubscribe_receipt.sql", "utf8"),
   );
+  await db.exec(fs.readFileSync("migrations/006_admin_console.sql", "utf8"));
   // Advisory locks are unnecessary for this single-connection test database.
   let failReceiptInsert = false;
   const query = async (text, params) => {
@@ -75,6 +76,17 @@ async function main() {
           ? { database: () => pool, transaction }
           : id === "./email"
             ? email
+            : id === "./brandSettings"
+              ? {
+                  getBrandSettings: async () => {
+                    const result = await query(
+                      "SELECT key,value FROM mm_brand_settings",
+                    );
+                    return Object.fromEntries(
+                      result.rows.map((row) => [row.key, row.value]),
+                    );
+                  },
+                }
             : id === "server-only"
               ? {}
               : id === "./deliveryEvents"
@@ -117,6 +129,13 @@ async function main() {
     (await query("SELECT * FROM mm_subscribers")).rows[0].status,
     "active",
   );
+  assert.deepEqual(
+    (await query(
+      "SELECT event FROM mm_consent_events WHERE subscriber_id=$1 ORDER BY created_at,id",
+      [subscriber.id],
+    )).rows.map((event) => event.event).sort(),
+    ["confirmed", "requested"],
+  );
   process.env.SHOP_OPEN = "false";
   await n.processQueue();
   assert.equal(calls.length, 1);
@@ -138,8 +157,14 @@ async function main() {
   calls = [];
   const campaignId = require("node:crypto").randomUUID();
   await query(
-    "INSERT INTO mm_campaigns(id,title,subject,body) VALUES($1,$2,$3,$4)",
-    [campaignId, "New chapter", "Bienvenue", "Bonjour <script>bad()</script>"],
+    "INSERT INTO mm_campaigns(id,title,subject,preheader,body) VALUES($1,$2,$3,$4,$5)",
+    [
+      campaignId,
+      "New chapter",
+      "Bienvenue",
+      "Pré-en-tête de test & titre",
+      "Bonjour <script>bad()</script>",
+    ],
   );
   await assert.rejects(() => n.approveCampaign(campaignId), /SHOP_CLOSED/);
   assert.equal(
@@ -172,6 +197,7 @@ async function main() {
   );
   assert(calls[0].payload.html.includes("&lt;script&gt;"));
   assert(!calls[0].payload.html.includes("<script>"));
+  assert(calls[0].payload.html.includes("Pré-en-tête de test &amp; titre"));
   assert.equal(
     (await query(`SELECT status FROM mm_jobs WHERE kind='campaign'`)).rows[0]
       .status,
@@ -185,6 +211,15 @@ async function main() {
     (
       await query(
         "SELECT count(*)::int AS n FROM mm_jobs WHERE kind='unsubscribe_confirmation'",
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await query(
+        "SELECT count(*)::int AS n FROM mm_consent_events WHERE subscriber_id=$1 AND event='unsubscribed'",
+        [subscriber.id],
       )
     ).rows[0].n,
     1,

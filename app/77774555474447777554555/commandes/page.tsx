@@ -1,7 +1,7 @@
 import { requireAdminPage } from "@/lib/adminAuth";
-import OrdersPage from "@/app/admin/page";
+import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 export default async function AdminOrders() {
   await requireAdminPage();
-  return <OrdersPage />;
+  redirect("/admin/orders");
 }

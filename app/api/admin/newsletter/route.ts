@@ -19,6 +19,7 @@ import {
   inputResponse,
 } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
+import { getBrandSettings } from "@/lib/brandSettings";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET() {
@@ -31,12 +32,16 @@ export async function GET() {
     const subscribers = await database().query(
       "SELECT status,count(*) FROM mm_subscribers GROUP BY status",
     );
+    const brandSettings = await getBrandSettings();
     return NextResponse.json(
       {
         campaigns: campaigns.rows,
         subscribers: subscribers.rows,
         products: products.map((p) => ({ id: p.id, name: p.name })),
-        launchTemplate: launchAnnouncementTemplate(),
+        launchTemplate: {
+          ...launchAnnouncementTemplate(),
+          body: brandSettings.launch_copy,
+        },
         shopOpen: process.env.SHOP_OPEN === "true",
       },
       { headers: { "Cache-Control": "no-store" } },
@@ -74,8 +79,19 @@ export async function POST(request: NextRequest) {
           { error: "Campagne introuvable." },
           { status: 404 },
         );
+      const brandSettings = await getBrandSettings();
       return NextResponse.json({
-        html: campaignHtml(c, siteUrl() + "/newsletter/desinscription"),
+        html: campaignHtml(
+          {
+            ...c,
+            brand_name: brandSettings.brand_name,
+            contact_email: brandSettings.contact_email,
+            instagram_url: brandSettings.instagram_url,
+            tiktok_url: brandSettings.tiktok_url,
+            campaign_footer: brandSettings.campaign_footer,
+          },
+          siteUrl() + "/newsletter/desinscription",
+        ),
       });
     }
     if (data.productIds.some((id) => !products.some((p) => p.id === id)))
@@ -101,6 +117,7 @@ export async function POST(request: NextRequest) {
       id,
       data.title,
       data.subject,
+      data.preheader,
       data.body,
       safeUrl(data.imageUrl),
       safeUrl(data.linkUrl),
@@ -110,7 +127,7 @@ export async function POST(request: NextRequest) {
     ];
     if (data.action === "update") {
       const result = await database().query(
-        `UPDATE mm_campaigns SET title=$2,subject=$3,body=$4,image_url=$5,link_url=$6,promo_code=$7,ends_at=$8,products=$9 WHERE id=$1 AND status='draft' RETURNING id`,
+        `UPDATE mm_campaigns SET title=$2,subject=$3,preheader=$4,body=$5,image_url=$6,link_url=$7,promo_code=$8,ends_at=$9,products=$10 WHERE id=$1 AND status='draft' RETURNING id`,
         values,
       );
       if (!result.rowCount)
@@ -120,7 +137,7 @@ export async function POST(request: NextRequest) {
         );
     } else
       await database().query(
-        "INSERT INTO mm_campaigns(id,title,subject,body,image_url,link_url,promo_code,ends_at,products) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+        "INSERT INTO mm_campaigns(id,title,subject,preheader,body,image_url,link_url,promo_code,ends_at,products) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)",
         values,
       );
     return NextResponse.json({ id });

@@ -139,6 +139,16 @@ async function main() {
         }),
       /HTTPS_URL_REQUIRED/,
     );
+    const customized = renderNewsletterEmail("welcome", {
+      siteUrl: "https://maison-miroir.fr",
+      actionUrl: "https://maison-miroir.fr",
+      unsubscribeUrl: "https://maison-miroir.fr/newsletter/desinscription#token=" + "0".repeat(64),
+      brandName: "<script>Maison</script>",
+      instagramUrl: "https://www.instagram.com/maison-miroir-test/",
+    });
+    assert(!customized.html.includes("<script>"));
+    assert(customized.html.includes("&lt;SCRIPT&gt;MAISON&lt;/SCRIPT&gt;"));
+    assert(customized.html.includes('href="https://www.instagram.com/maison-miroir-test/"'));
     fs.writeFileSync(
       path.join(directory, "results.json"),
       JSON.stringify(

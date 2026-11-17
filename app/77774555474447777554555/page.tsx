@@ -1,9 +1,8 @@
-import AdminSessionControls from "@/components/AdminSessionControls";
 import { adminSession } from "@/lib/adminAuth";
+import { redirect } from "next/navigation";
 import PasswordLogin from "@/components/PasswordLogin";
 import AdminSetup from "@/components/AdminSetup";
 import { database } from "@/lib/newsletterDb";
-import AdminNewsletterPage from "@/app/admin/newsletter/page";
 import "../newsletter/newsletter.css";
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -15,13 +14,7 @@ export default async function AdminEntry() {
   try {
     session = await adminSession();
   } catch {}
-  if (session)
-    return (
-      <>
-        <AdminSessionControls />
-        <AdminNewsletterPage />
-      </>
-    );
+  if (session) redirect("/admin");
   let needsSetup = false;
   try {
     const result = await database().query(

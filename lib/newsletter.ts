@@ -6,6 +6,7 @@ import { reconcileDelivery } from "./deliveryEvents";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { database, transaction } from "./newsletterDb";
 import { getEmailFrom, getResendClient } from "./email";
+import { getBrandSettings, type BrandSettings } from "./brandSettings";
 
 export const CONSENT_VERSION = "launch-marketing-v1-2026-11-15";
 export const hash = (value: string) =>
@@ -49,6 +50,7 @@ export function emailReady() {
 export async function subscribe(email: string, ip: string) {
   if (!emailReady()) throw new Error("Newsletter unavailable");
   const base = siteUrl();
+  const brandSettings = await getBrandSettings();
   const ipHash = hash(`${process.env.NEWSLETTER_HASH_SECRET}:${ip}`);
   await transaction(async (db) => {
     const limit = await db.query(
@@ -111,6 +113,11 @@ export async function subscribe(email: string, ip: string) {
           renderNewsletterEmail("confirmation", {
             siteUrl: base,
             actionUrl: link,
+            body: brandSettings.confirmation_copy,
+            brandName: brandSettings.brand_name,
+            contactEmail: brandSettings.contact_email,
+            instagramUrl: brandSettings.instagram_url || undefined,
+            tiktokUrl: brandSettings.tiktok_url || undefined,
           }),
         ),
       ],
@@ -119,13 +126,19 @@ export async function subscribe(email: string, ip: string) {
 }
 export async function confirm(token: string) {
   if (!/^[a-f0-9]{64}$/.test(token)) return false;
+  const brandSettings = await getBrandSettings();
   return transaction(async (db) => {
     const result = await db.query(
-      `UPDATE mm_subscribers SET status='active',confirmed_at=now(),confirmation_hash=NULL WHERE confirmation_hash=$1 AND status='pending' AND confirmation_expires>now() RETURNING id,unsubscribe_token`,
+      `UPDATE mm_subscribers SET status='active',confirmed_at=now(),confirmation_hash=NULL WHERE confirmation_hash=$1 AND status='pending' AND confirmation_expires>now() RETURNING id,unsubscribe_token,consent_version,consent_ip_hash`,
       [hash(token)],
     );
     if (!result.rowCount) return false;
     const subscriber = result.rows[0];
+    await db.query(
+      `INSERT INTO mm_consent_events(id,subscriber_id,event,consent_version,ip_hash)
+       VALUES($1,$2,'confirmed',$3,$4)`,
+      [randomUUID(), subscriber.id, subscriber.consent_version, subscriber.consent_ip_hash],
+    );
     const unsubscribeUrl = `${siteUrl()}/newsletter/desinscription?token=${subscriber.unsubscribe_token}`;
     await db.query(
       `INSERT INTO mm_jobs(id,subscriber_id,kind,dedupe_key,payload) VALUES($1,$2,'welcome',$3,$4) ON CONFLICT(dedupe_key) DO NOTHING`,
@@ -138,6 +151,12 @@ export async function confirm(token: string) {
             siteUrl: siteUrl(),
             actionUrl: siteUrl(),
             unsubscribeUrl: unsubscribeUrl.replace("?token=", "#token="),
+            body: brandSettings.welcome_copy,
+            brandName: brandSettings.brand_name,
+            contactEmail: brandSettings.contact_email,
+            instagramUrl: brandSettings.instagram_url || undefined,
+            tiktokUrl: brandSettings.tiktok_url || undefined,
+            footerText: brandSettings.campaign_footer,
           }),
           unsubscribe: unsubscribeUrl,
         }),
@@ -166,7 +185,7 @@ export async function unsubscribe(token: string) {
   return transaction(async (db) => {
     const previous = (
       await db.query(
-        "SELECT id,status,confirmed_at FROM mm_subscribers WHERE unsubscribe_token=$1 FOR UPDATE",
+        "SELECT id,status,confirmed_at,consent_version FROM mm_subscribers WHERE unsubscribe_token=$1 FOR UPDATE",
         [token],
       )
     ).rows[0];
@@ -177,6 +196,11 @@ export async function unsubscribe(token: string) {
       [token],
     );
     if (!result.rowCount) return false;
+    await db.query(
+      `INSERT INTO mm_consent_events(id,subscriber_id,event,consent_version,ip_hash)
+       VALUES($1,$2,'unsubscribed',$3,NULL)`,
+      [randomUUID(), result.rows[0].id, previous.consent_version],
+    );
     await db.query(
       `UPDATE mm_jobs SET status='cancelled',payload='{}' WHERE subscriber_id=$1 AND status IN ('pending','retry')`,
       [result.rows[0].id],
@@ -218,15 +242,30 @@ type CampaignProduct = {
 };
 type CampaignContent = {
   title: string;
+  preheader?: string;
   body: string;
   image_url?: string;
   link_url?: string;
   promo_code?: string;
   ends_at?: string;
   products?: CampaignProduct[];
+  brand_name?: string;
+  contact_email?: string;
+  instagram_url?: string;
+  tiktok_url?: string;
+  campaign_footer?: string;
 };
 export function campaignHtml(c: CampaignContent, unsubscribeUrl: string) {
   return campaignEmail(c, unsubscribeUrl).html;
+}
+function campaignBrandSettings(settings: BrandSettings) {
+  return {
+    brand_name: settings.brand_name,
+    contact_email: settings.contact_email,
+    instagram_url: settings.instagram_url,
+    tiktok_url: settings.tiktok_url,
+    campaign_footer: settings.campaign_footer,
+  };
 }
 function campaignEmail(c: CampaignContent, unsubscribeUrl: string) {
   const products = Array.isArray(c.products) ? c.products : [];
@@ -277,6 +316,12 @@ function campaignEmail(c: CampaignContent, unsubscribeUrl: string) {
     siteUrl: siteUrl(),
     title: c.title === launchAnnouncementTemplate().title ? undefined : c.title,
     body: c.body,
+    preheader: c.preheader,
+    brandName: c.brand_name,
+    contactEmail: c.contact_email,
+    instagramUrl: c.instagram_url || undefined,
+    tiktokUrl: c.tiktok_url || undefined,
+    footerText: c.campaign_footer,
     contentHtml:
       c.image_url || c.products?.length || c.promo_code || c.ends_at
         ? contentHtml
@@ -292,6 +337,7 @@ function campaignEmail(c: CampaignContent, unsubscribeUrl: string) {
 }
 export async function approveCampaign(id: string, scheduledAt?: string) {
   if (process.env.SHOP_OPEN !== "true") throw new Error("SHOP_CLOSED");
+  const brandSettings = await getBrandSettings();
   return transaction(async (db) => {
     const c = (
       await db.query(
@@ -318,8 +364,8 @@ export async function approveCampaign(id: string, scheduledAt?: string) {
           `${id}:${subscriber.id}`,
           JSON.stringify({
             subject: c.subject,
-            html: campaignHtml(c, url.replace("?token=", "#token=")),
-            text: campaignEmail(c, url.replace("?token=", "#token=")).text,
+            html: campaignHtml({ ...c, ...campaignBrandSettings(brandSettings) }, url.replace("?token=", "#token=")),
+            text: campaignEmail({ ...c, ...campaignBrandSettings(brandSettings) }, url.replace("?token=", "#token=")).text,
             unsubscribe: url,
           }),
           c.scheduled_at,

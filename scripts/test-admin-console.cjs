@@ -184,63 +184,89 @@ async function main() {
 
   const ai = load("app/api/admin/miroir-ai/route.ts");
   delete process.env.GEMINI_API_KEY;
-  delete process.env.GROK_API_KEY;
+  delete process.env.GROQ_API_KEY;
   assert.equal((await ai.GET()).status, 200);
   const aiResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", { message: "Prépare une campagne de lancement" }));
   assert.equal(aiResponse.status, 503);
   process.env.GEMINI_API_KEY = "local-test-key";
-  process.env.GEMINI_MODEL = "gemini-2.5-flash";
-  process.env.GROK_API_KEY = "local-grok-test-key";
-  process.env.GROK_MODEL = "grok-4.7";
+  process.env.GEMINI_MODEL = "gemini-3.8-flash";
+  process.env.GROQ_API_KEY = "local-groq-test-key";
+  process.env.GROQ_MODEL = "llama-3.3-70b-versatile";
   const aiStatus = await (await ai.GET()).json();
   assert.equal(aiStatus.provider, "gemini");
-  assert.equal(aiStatus.model, "gemini-2.5-flash");
+  assert.equal(aiStatus.model, "gemini-3.8-flash");
   assert.equal(aiStatus.fallbackEnabled, true);
   const originalFetch = global.fetch;
   let aiCalls = 0;
+  let transientGeminiStatuses = [];
+  let forceGeminiCredentialsError = false;
+  let forceGroqUnavailable = false;
+  const normalReply = {
+    reply: "Voici trois propositions élégantes.",
+    intent: "none",
+    draft: null,
+  };
+  const draftReply = {
+    reply: "Voici un brouillon.",
+    intent: "create_draft",
+    draft: { title: "Lancement", subject: "Une nouvelle collection", preheader: "Découvrir", body: "Notre collection arrive." },
+  };
   global.fetch = async (url, options) => {
     aiCalls++;
-    if (String(url) === "https://api.x.ai/v1/chat/completions") {
-      assert.equal(options.headers.Authorization, "Bearer local-grok-test-key");
+    if (String(url) === "https://api.groq.com/openai/v1/chat/completions") {
+      assert.equal(options.headers.Authorization, "Bearer local-groq-test-key");
       const requestBody = JSON.parse(options.body);
-      assert.equal(requestBody.model, "grok-4.7");
+      assert.equal(requestBody.model, "llama-3.3-70b-versatile");
       assert.equal(requestBody.response_format.type, "json_object");
       assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
+      if (forceGroqUnavailable) return { ok: false, status: 503 };
       return {
         ok: true,
         status: 200,
         json: async () => ({
           choices: [{ message: { content: JSON.stringify({
-            reply: "Voici un brouillon.",
-            intent: "create_draft",
-            draft: { title: "Lancement", subject: "Une nouvelle collection", preheader: "Découvrir", body: "Notre collection arrive." },
+            ...draftReply,
           }) } }],
         }),
       };
     }
-    assert.match(String(url), /models\/gemini-2\.5-flash:generateContent$/);
+    assert.match(String(url), /models\/gemini-3\.8-flash:generateContent$/);
     assert.equal(options.headers["x-goog-api-key"], "local-test-key");
     const requestBody = JSON.parse(options.body);
     assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
-    if (aiCalls === 1) return { ok: false, status: 503 };
+    if (forceGeminiCredentialsError) return { ok: false, status: 403 };
+    if (transientGeminiStatuses.length) {
+      const status = transientGeminiStatuses.shift();
+      if (status === "timeout") throw new Error("simulated timeout");
+      return { ok: false, status };
+    }
     return {
       ok: true,
       status: 200,
       json: async () => ({
         candidates: [{ content: { parts: [{ text: JSON.stringify({
-          reply: "Voici un brouillon.",
-          intent: "create_draft",
-          draft: { title: "Lancement", subject: "Une nouvelle collection", preheader: "Découvrir", body: "Notre collection arrive." },
+          ...normalReply,
         }) }] } }],
       }),
     };
   };
   try {
+    const geminiResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+      message: "Propose trois idées de communication.",
+    }));
+    const geminiResult = await geminiResponse.json();
+    assert.equal(geminiResponse.status, 200);
+    assert.equal(geminiResult.provider, "gemini");
+    assert.equal(geminiResult.fallbackUsed, false);
+
+    transientGeminiStatuses = [503, 503];
+    const callsBeforeFallback = aiCalls;
     const draftResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
       message: "Prépare une campagne de lancement",
     }));
     const draftResult = await draftResponse.json();
-    assert.equal(draftResult.provider, "grok");
+    assert.equal(aiCalls - callsBeforeFallback, 3);
+    assert.equal(draftResult.provider, "groq");
     assert.equal(draftResult.fallbackUsed, true);
     assert.equal(draftResult.createdDraft, true);
     assert.equal(
@@ -251,28 +277,73 @@ async function main() {
       (await query("SELECT count(*)::int AS count FROM mm_jobs WHERE campaign_id=$1", [draftResult.draftId])).rows[0].count,
       0,
     );
+
+    for (const transient of [429, 500, 502, 503, 504, "timeout"]) {
+      await query("DELETE FROM mm_rate_limits");
+      transientGeminiStatuses = [transient, transient];
+      const before = aiCalls;
+      const fallbackResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+        message: "Propose une idée de communication.",
+      }));
+      const fallbackResult = await fallbackResponse.json();
+      assert.equal(fallbackResponse.status, 200);
+      assert.equal(aiCalls - before, 3);
+      assert.equal(fallbackResult.provider, "groq");
+      assert.equal(fallbackResult.fallbackUsed, true);
+    }
+
+    await query("DELETE FROM mm_rate_limits");
+    transientGeminiStatuses = [503, 503];
+    forceGroqUnavailable = true;
+    const callsBeforeBothUnavailable = aiCalls;
+    const bothUnavailableResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+      message: "Propose une idée de communication.",
+    }));
+    const bothUnavailable = await bothUnavailableResponse.json();
+    assert.equal(bothUnavailableResponse.status, 502);
+    assert.match(bothUnavailable.error, /Gemini est momentanément indisponible/);
+    assert.match(bothUnavailable.error, /relais Groq : Groq est momentanément indisponible/);
+    assert.equal(aiCalls - callsBeforeBothUnavailable, 4);
+    forceGroqUnavailable = false;
+
+    await query("DELETE FROM mm_rate_limits");
+    delete process.env.GEMINI_API_KEY;
+    const groqStatus = await (await ai.GET()).json();
+    assert.equal(groqStatus.provider, "groq");
+    assert.equal(groqStatus.model, "llama-3.3-70b-versatile");
+    const groqResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+      message: "Propose une idée de communication.",
+    }));
+    const groqResult = await groqResponse.json();
+    assert.equal(groqResponse.status, 200);
+    assert.equal(groqResult.provider, "groq");
+    assert.equal(groqResult.fallbackUsed, false);
+    process.env.GEMINI_API_KEY = "local-test-key";
+
+    await query("DELETE FROM mm_rate_limits");
     const callsBeforePii = aiCalls;
     const piiResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
       message: "Écris à cliente@example.test",
     }));
     assert.equal(piiResponse.status, 400);
     assert.equal(aiCalls, callsBeforePii);
-    delete process.env.GROK_API_KEY;
-    global.fetch = async (_url, options) => {
-      aiCalls++;
-      assert.equal(options.headers["x-goog-api-key"], "local-test-key");
-      return { ok: false, status: 403 };
-    };
+    delete process.env.GROQ_API_KEY;
+    forceGeminiCredentialsError = true;
+    await query("DELETE FROM mm_rate_limits");
+    const callsBeforeCredentialError = aiCalls;
     const providerError = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
       message: "Propose trois objets d’email élégants.",
     }));
     assert.equal(providerError.status, 502);
     assert.match((await providerError.json()).error, /autorisations Gemini/);
-    for (let call = 1; call < 19; call++) {
+    assert.equal(aiCalls - callsBeforeCredentialError, 1);
+    forceGeminiCredentialsError = false;
+    await query("DELETE FROM mm_rate_limits");
+    for (let call = 1; call <= 20; call++) {
       const limitedRequest = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
         message: "Propose trois objets d’email élégants.",
       }));
-      assert.equal(limitedRequest.status, 502);
+      assert.equal(limitedRequest.status, 200);
     }
     const overLimit = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
       message: "Propose un objet d’email.",
@@ -282,8 +353,8 @@ async function main() {
     global.fetch = originalFetch;
     delete process.env.GEMINI_API_KEY;
     delete process.env.GEMINI_MODEL;
-    delete process.env.GROK_API_KEY;
-    delete process.env.GROK_MODEL;
+    delete process.env.GROQ_API_KEY;
+    delete process.env.GROQ_MODEL;
   }
 
   const activeSendJob = randomUUID();
@@ -325,7 +396,7 @@ async function main() {
   assert.equal((await calendar.GET()).status, 401);
   assert.equal((await settings.GET()).status, 401);
   assert.equal((await ai.GET()).status, 401);
-  console.log("PASS: authenticated admin dashboard aggregates, subscriber filters/history/export/erasure, persisted calendar and allowlisted settings, Miroir AI draft-only flow, PII rejection, Gemini-to-Grok fallback, provider error reporting and rate limits. No campaign or email sent.");
+  console.log("PASS: authenticated admin dashboard aggregates, subscriber filters/history/export/erasure, persisted calendar and allowlisted settings, Miroir AI draft-only flow, PII rejection, Gemini, Groq, transient retry/fallback, provider error reporting and rate limits. No campaign or email sent.");
   await db.close();
 }
 

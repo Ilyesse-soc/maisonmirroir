@@ -32,6 +32,8 @@ docker image inspect "$previous" >/dev/null && docker tag "$previous" maison-mir
 docker --config "$registry_dir" pull "$image"
 docker --config "$registry_dir" pull "$backup_image"
 docker --config "$registry_dir" pull "$postgres_image"
+docker compose --env-file .env -f compose.yml run --rm --no-deps backup --once
+echo VERIFIED_PREDEPLOY_DATABASE_BACKUP
 APP_IMAGE="$image" docker compose --env-file .env -f compose.yml run --rm --no-deps migrate
 sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$image|" .env
 if ! docker compose --env-file .env -f compose.yml up -d --no-build --wait --wait-timeout 150 app worker proxy;then

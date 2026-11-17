@@ -72,7 +72,7 @@ L'espace existant est accessible après connexion à `/77774555474447777554555`,
 - `/admin` : tableau de bord PostgreSQL, inscriptions sur 30 jours, activité récente et état réel du worker/envoi.
 - `/admin/subscribers` : recherche, filtres, tri, pagination, historique du consentement, export CSV et effacement RGPD explicite.
 - `/admin/newsletter` : brouillons, aperçu mobile/ordinateur, historique et validation manuelle des campagnes.
-- `/admin/miroir-ai` : assistant Gemini côté serveur avec relais Grok optionnel, brouillons uniquement ; désactivé si aucune clé fournisseur n'est configurée.
+- `/admin/miroir-ai` : assistant Gemini côté serveur avec relais Groq optionnel, brouillons uniquement ; désactivé si aucune clé fournisseur n'est configurée.
 - `/admin/calendar` : calendrier marketing et événements persistés.
 - `/admin/settings` : coordonnées et textes de marque non sensibles. Les secrets ne sont jamais affichés.
 - `/admin/orders` : gestion existante des commandes et du suivi.
@@ -81,7 +81,7 @@ La migration additive `migrations/006_admin_console.sql` ajoute le pré-en-tête
 
 Les tests admin isolés sont inclus dans `npm test`; ils utilisent PostgreSQL embarqué, une authentification mockée et un fournisseur Gemini simulé. Aucun email ni campagne réel n'est envoyé.
 
-Pour activer Miroir AI, renseigner `GEMINI_API_KEY` uniquement dans l'environnement serveur protégé (`ops/secrets/app.env` sur OVH), après vérification des accès et quotas du compte Google. En configurant aussi `GROK_API_KEY`, Grok prend automatiquement le relais si Gemini échoue. `GEMINI_MODEL` vaut `gemini-2.5-flash` et `GROK_MODEL` vaut `grok-4.7` par défaut. Ne jamais transmettre de clé dans le navigateur, les issues, les journaux ou Git ; sans aucune clé, les autres fonctions admin continuent de marcher.
+Pour activer Miroir AI, renseigner `GEMINI_API_KEY` uniquement dans l'environnement serveur protégé (`ops/secrets/app.env` sur OVH), après vérification des accès et quotas du compte Google. Avec `GROQ_API_KEY`, Groq prend automatiquement le relais après deux échecs transitoires de Gemini. `GEMINI_MODEL` vaut `gemini-3.8-flash` et `GROQ_MODEL` vaut `llama-3.3-70b-versatile` par défaut. Ne jamais transmettre de clé dans le navigateur, les issues, les journaux ou Git ; sans aucune clé, les autres fonctions admin continuent de marcher.
 
 ## 🔑 Configuration
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import Image from "next/image";
 
 type Message = { role: "user" | "assistant"; text: string };
 type AiStatus = { enabled: boolean; model: string | null };
@@ -64,8 +65,20 @@ export default function MiroirAiPage() {
 
   return (
     <main className="admin-page">
-      <h1>Miroir AI</h1>
-      <p className="admin-muted">Assistante marketing Maison Miroir — elle peut proposer et créer des brouillons, jamais envoyer ou programmer une campagne.</p>
+      <header className="miroir-ai-intro">
+        <Image
+          className="miroir-ai-avatar"
+          src="/images/miroir-ai-avatar.png"
+          alt="Avatar de Miroir AI"
+          width={104}
+          height={104}
+          priority
+        />
+        <div>
+          <h1>Miroir AI</h1>
+          <p className="admin-muted">Assistante marketing Maison Miroir — elle peut proposer et créer des brouillons, jamais envoyer ou programmer une campagne.</p>
+        </div>
+      </header>
       <section className="admin-card">
         <p role="status">
           {status?.enabled ? `Modèle configuré : ${status.model}` : status ? "Gemini n’est pas configuré. L’assistant est désactivé." : "Vérification de la configuration…"}
@@ -74,8 +87,32 @@ export default function MiroirAiPage() {
         {error && <p className="admin-error" role="alert">{error}</p>}
         <div className="admin-chat" ref={chatRef} aria-live="polite">
           {!messages.length && <p className="admin-muted">Vous pourrez demander des idées de campagne, des objets d’e-mail ou des statistiques agrégées.</p>}
-          {messages.map((message, index) => <div className="admin-chat-message" data-role={message.role} key={`${message.role}-${index}`}>{message.text}</div>)}
-          {busy && <p role="status">Miroir AI réfléchit…</p>}
+          {messages.map((message, index) => (
+            <div className="admin-chat-row" data-role={message.role} key={`${message.role}-${index}`}>
+              {message.role === "assistant" && (
+                <Image
+                  className="miroir-ai-chat-avatar"
+                  src="/images/miroir-ai-avatar.png"
+                  alt=""
+                  width={36}
+                  height={36}
+                />
+              )}
+              <div className="admin-chat-message" data-role={message.role}>{message.text}</div>
+            </div>
+          ))}
+          {busy && (
+            <div className="admin-chat-row" data-role="assistant">
+              <Image
+                className="miroir-ai-chat-avatar"
+                src="/images/miroir-ai-avatar.png"
+                alt=""
+                width={36}
+                height={36}
+              />
+              <p role="status">Miroir AI réfléchit…</p>
+            </div>
+          )}
         </div>
         <div className="admin-actions" style={{ margin: "12px 0" }}>
           {[

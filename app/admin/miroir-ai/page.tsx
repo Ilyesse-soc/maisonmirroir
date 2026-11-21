@@ -45,6 +45,14 @@ function healthLabel(name: string, health?: ProviderHealth) {
   }
 }
 
+async function responseJson(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 export default function MiroirAiPage() {
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -57,8 +65,9 @@ export default function MiroirAiPage() {
     let active = true;
     fetch("/api/admin/miroir-ai", { cache: "no-store" })
       .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "État IA indisponible.");
+        const data = await responseJson(response);
+        if (!response.ok) throw new Error(data?.error || "État IA indisponible.");
+        if (!data) throw new Error("Le service a renvoyé un état illisible.");
         if (active) setStatus(data);
       })
       .catch((cause) => {
@@ -85,8 +94,16 @@ export default function MiroirAiPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Miroir AI n’a pas pu répondre.");
+      const data = await responseJson(response);
+      if (!response.ok) {
+        const timeoutMessage =
+          response.status === 504
+            ? "Miroir AI met trop de temps à répondre. Réessayez dans quelques instants."
+            : "Miroir AI est momentanément indisponible. Réessayez.";
+        throw new Error(data?.error || timeoutMessage);
+      }
+      if (!data || typeof data.reply !== "string")
+        throw new Error("Miroir AI a renvoyé une réponse illisible. Réessayez.");
       setMessages((items) => [...items, {
         role: "assistant",
         text: `${data.reply}${data.fallbackUsed ? "\n\nGemini indisponible : réponse fournie par Groq." : ""}${data.createdDraft ? "\n\nBrouillon créé — aucune campagne envoyée ni programmée." : ""}`,

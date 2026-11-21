@@ -294,6 +294,12 @@ async function main() {
     assert.equal(unavailableModelStatus.providers.gemini.status, "model_unavailable");
     assert.equal(unavailableModelStatus.provider, "groq");
     geminiModelListed = true;
+    groqModelListed = false;
+    testNow += 30001;
+    const unavailableGroqStatus = await (await ai.GET()).json();
+    assert.equal(unavailableGroqStatus.providers.groq.status, "model_unavailable");
+    assert.equal(unavailableGroqStatus.fallbackEnabled, false);
+    groqModelListed = true;
     testNow += 60001;
 
     const geminiResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
@@ -413,7 +419,7 @@ async function main() {
     assert.equal(bothUnavailableResponse.status, 503);
     assert.match(bothUnavailable.error, /Gemini est momentanément indisponible/);
     assert.match(bothUnavailable.error, /relais Groq : Groq est momentanément indisponible/);
-    assert.equal(aiCalls - callsBeforeBothUnavailable, 4);
+    assert.equal(aiCalls - callsBeforeBothUnavailable, 3);
     const callsWithBothCircuitsOpen = aiCalls;
     await query("DELETE FROM mm_rate_limits");
     const fastCircuitResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {

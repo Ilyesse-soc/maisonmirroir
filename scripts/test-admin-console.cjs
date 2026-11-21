@@ -192,15 +192,16 @@ async function main() {
   process.env.GEMINI_MODEL = "gemini-3.8-flash";
   process.env.GROQ_API_KEY = "local-groq-test-key";
   process.env.GROQ_MODEL = "llama-3.3-70b-versatile";
-  const aiStatus = await (await ai.GET()).json();
-  assert.equal(aiStatus.provider, "gemini");
-  assert.equal(aiStatus.model, "gemini-3.8-flash");
-  assert.equal(aiStatus.fallbackEnabled, true);
   const originalFetch = global.fetch;
   let aiCalls = 0;
+  let geminiModelListed = true;
+  let groqModelListed = true;
   let transientGeminiStatuses = [];
   let forceGeminiCredentialsError = false;
   let forceGroqUnavailable = false;
+  let testNow = Date.now();
+  const originalDateNow = Date.now;
+  Date.now = () => testNow;
   const normalReply = {
     reply: "Voici trois propositions élégantes.",
     intent: "none",
@@ -213,19 +214,44 @@ async function main() {
   };
   global.fetch = async (url, options) => {
     aiCalls++;
+    const urlString = String(url);
+    if ((!options.method || options.method === "GET") && urlString.endsWith("/v1beta/models")) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          models: geminiModelListed
+            ? [{ name: "models/gemini-3.8-flash", supportedGenerationMethods: ["generateContent"] }]
+            : [{ name: "models/another-model", supportedGenerationMethods: ["generateContent"] }],
+        }),
+      };
+    }
+    if ((!options.method || options.method === "GET") && urlString === "https://api.groq.com/openai/v1/models") {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          data: groqModelListed ? [{ id: "llama-3.3-70b-versatile" }] : [{ id: "other-model" }],
+        }),
+      };
+    }
     if (String(url) === "https://api.groq.com/openai/v1/chat/completions") {
       assert.equal(options.headers.Authorization, "Bearer local-groq-test-key");
       const requestBody = JSON.parse(options.body);
       assert.equal(requestBody.model, "llama-3.3-70b-versatile");
       assert.equal(requestBody.response_format.type, "json_object");
       assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
+      const requestData = JSON.parse(requestBody.messages[1].content);
+      const reply = /(?:prépare|rédige|crée)/i.test(requestData.question)
+        ? draftReply
+        : normalReply;
       if (forceGroqUnavailable) return { ok: false, status: 503 };
       return {
         ok: true,
         status: 200,
         json: async () => ({
           choices: [{ message: { content: JSON.stringify({
-            ...draftReply,
+            ...reply,
           }) } }],
         }),
       };
@@ -234,6 +260,10 @@ async function main() {
     assert.equal(options.headers["x-goog-api-key"], "local-test-key");
     const requestBody = JSON.parse(options.body);
     assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
+    const requestData = JSON.parse(requestBody.contents[0].parts[0].text);
+    const reply = /(?:prépare|rédige|crée)/i.test(requestData.question)
+      ? draftReply
+      : normalReply;
     if (forceGeminiCredentialsError) return { ok: false, status: 403 };
     if (transientGeminiStatuses.length) {
       const status = transientGeminiStatuses.shift();
@@ -245,20 +275,83 @@ async function main() {
       status: 200,
       json: async () => ({
         candidates: [{ content: { parts: [{ text: JSON.stringify({
-          ...normalReply,
+          ...reply,
         }) }] } }],
       }),
     };
   };
   try {
+    const aiStatus = await (await ai.GET()).json();
+    assert.equal(aiStatus.provider, "gemini");
+    assert.equal(aiStatus.model, "gemini-3.8-flash");
+    assert.equal(aiStatus.fallbackEnabled, true);
+    assert.equal(aiStatus.providers.gemini.verified, true);
+    assert.equal(aiStatus.providers.groq.verified, true);
+    assert.equal(JSON.stringify(aiStatus).includes("local-test-key"), false);
+    geminiModelListed = false;
+    testNow += 30001;
+    const unavailableModelStatus = await (await ai.GET()).json();
+    assert.equal(unavailableModelStatus.providers.gemini.status, "model_unavailable");
+    assert.equal(unavailableModelStatus.provider, "groq");
+    geminiModelListed = true;
+    testNow += 60001;
+
     const geminiResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
-      message: "Propose trois idées de communication.",
+      message: "Propose-moi trois objets d’email élégants.",
     }));
     const geminiResult = await geminiResponse.json();
     assert.equal(geminiResponse.status, 200);
     assert.equal(geminiResult.provider, "gemini");
     assert.equal(geminiResult.fallbackUsed, false);
 
+    const callsBeforeWeeklyStats = aiCalls;
+    const expectedWeeklyCount = Number(
+      (await query(
+        `SELECT count(*)::int AS count FROM mm_subscribers
+         WHERE created_at >= (date_trunc('week',now() AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris')`,
+      )).rows[0].count,
+    );
+    const weeklyStats = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+      message: "Combien de nouvelles abonnées avons-nous cette semaine ?",
+    }));
+    const weeklyStatsResult = await weeklyStats.json();
+    assert.equal(weeklyStatsResult.source, "postgres");
+    assert.match(weeklyStatsResult.reply, new RegExp(String(expectedWeeklyCount)));
+    assert.equal(aiCalls, callsBeforeWeeklyStats);
+
+    const groqTestKey = process.env.GROQ_API_KEY;
+    delete process.env.GROQ_API_KEY;
+    await query("DELETE FROM mm_rate_limits");
+    const geminiOnlyResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+      message: "Propose trois objets d’email élégants.",
+    }));
+    assert.equal(geminiOnlyResponse.status, 200);
+    assert.equal((await geminiOnlyResponse.json()).provider, "gemini");
+    process.env.GROQ_API_KEY = groqTestKey;
+
+    for (const prompt of [
+      "Prépare une campagne de lancement pour notre collection.",
+      "Rédige une newsletter professionnelle.",
+      "Crée un brouillon de campagne marketing.",
+    ]) {
+      await query("DELETE FROM mm_rate_limits");
+      const draftResponseForPrompt = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+        message: prompt,
+      }));
+      const draftResultForPrompt = await draftResponseForPrompt.json();
+      assert.equal(draftResponseForPrompt.status, 200);
+      assert.equal(draftResultForPrompt.createdDraft, true);
+      assert.equal(
+        (await query("SELECT status FROM mm_campaigns WHERE id=$1", [draftResultForPrompt.draftId])).rows[0].status,
+        "draft",
+      );
+      assert.equal(
+        (await query("SELECT count(*)::int AS count FROM mm_jobs WHERE campaign_id=$1", [draftResultForPrompt.draftId])).rows[0].count,
+        0,
+      );
+    }
+
+    testNow += 60001;
     transientGeminiStatuses = [503, 503];
     const callsBeforeFallback = aiCalls;
     const draftResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
@@ -279,6 +372,7 @@ async function main() {
     );
 
     for (const transient of [429, 500, 502, 503, 504, "timeout"]) {
+      testNow += 60001;
       await query("DELETE FROM mm_rate_limits");
       transientGeminiStatuses = [transient, transient];
       const before = aiCalls;
@@ -292,6 +386,22 @@ async function main() {
       assert.equal(fallbackResult.fallbackUsed, true);
     }
 
+    for (const inaccessibleModelStatus of [400, 404]) {
+      testNow += 60001;
+      await query("DELETE FROM mm_rate_limits");
+      transientGeminiStatuses = [inaccessibleModelStatus];
+      const before = aiCalls;
+      const modelFallback = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+        message: "Propose une idée de communication.",
+      }));
+      const modelFallbackResult = await modelFallback.json();
+      assert.equal(modelFallback.status, 200);
+      assert.equal(aiCalls - before, 2);
+      assert.equal(modelFallbackResult.provider, "groq");
+      assert.equal(modelFallbackResult.fallbackUsed, true);
+    }
+
+    testNow += 60001;
     await query("DELETE FROM mm_rate_limits");
     transientGeminiStatuses = [503, 503];
     forceGroqUnavailable = true;
@@ -300,12 +410,20 @@ async function main() {
       message: "Propose une idée de communication.",
     }));
     const bothUnavailable = await bothUnavailableResponse.json();
-    assert.equal(bothUnavailableResponse.status, 502);
+    assert.equal(bothUnavailableResponse.status, 503);
     assert.match(bothUnavailable.error, /Gemini est momentanément indisponible/);
     assert.match(bothUnavailable.error, /relais Groq : Groq est momentanément indisponible/);
     assert.equal(aiCalls - callsBeforeBothUnavailable, 4);
+    const callsWithBothCircuitsOpen = aiCalls;
+    await query("DELETE FROM mm_rate_limits");
+    const fastCircuitResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+      message: "Propose une idée de communication.",
+    }));
+    assert.equal(fastCircuitResponse.status, 503);
+    assert.equal(aiCalls, callsWithBothCircuitsOpen);
     forceGroqUnavailable = false;
 
+    testNow += 60001;
     await query("DELETE FROM mm_rate_limits");
     delete process.env.GEMINI_API_KEY;
     const groqStatus = await (await ai.GET()).json();
@@ -319,6 +437,19 @@ async function main() {
     assert.equal(groqResult.provider, "groq");
     assert.equal(groqResult.fallbackUsed, false);
     process.env.GEMINI_API_KEY = "local-test-key";
+
+    forceGeminiCredentialsError = true;
+    await query("DELETE FROM mm_rate_limits");
+    const callsBeforeCredentialFallback = aiCalls;
+    const credentialFallback = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
+      message: "Propose une idée de communication.",
+    }));
+    const credentialFallbackResult = await credentialFallback.json();
+    assert.equal(credentialFallback.status, 200);
+    assert.equal(credentialFallbackResult.provider, "groq");
+    assert.equal(aiCalls - callsBeforeCredentialFallback, 2);
+    forceGeminiCredentialsError = false;
+    testNow += 60001;
 
     await query("DELETE FROM mm_rate_limits");
     const callsBeforePii = aiCalls;
@@ -338,6 +469,7 @@ async function main() {
     assert.match((await providerError.json()).error, /autorisations Gemini/);
     assert.equal(aiCalls - callsBeforeCredentialError, 1);
     forceGeminiCredentialsError = false;
+    testNow += 60001;
     await query("DELETE FROM mm_rate_limits");
     for (let call = 1; call <= 20; call++) {
       const limitedRequest = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
@@ -351,6 +483,7 @@ async function main() {
     assert.equal(overLimit.status, 429);
   } finally {
     global.fetch = originalFetch;
+    Date.now = originalDateNow;
     delete process.env.GEMINI_API_KEY;
     delete process.env.GEMINI_MODEL;
     delete process.env.GROQ_API_KEY;

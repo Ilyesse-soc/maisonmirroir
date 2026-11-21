@@ -28,6 +28,20 @@ const systemInstruction =
 
 type AiProvider = "gemini" | "groq";
 type ProviderFailureReason = "credentials" | "model" | "quota" | "unavailable" | "invalid_response";
+type ProviderHealth = {
+  configured: boolean;
+  verified: boolean;
+  available: boolean;
+  model: string | null;
+  status: "unconfigured" | "checking" | "available" | "credentials_invalid" | "model_unavailable" | "unavailable" | "circuit_open";
+  circuitOpen: boolean;
+};
+const circuitCooldownMs = 60_000;
+const providerCircuits = new Map<AiProvider, number>();
+const providerHealthCache = new Map<
+  AiProvider,
+  { model: string; checkedAt: number; health: Omit<ProviderHealth, "circuitOpen" | "available"> }
+>();
 
 class ProviderFailure extends Error {
   constructor(
@@ -62,7 +76,7 @@ function getAiConfig() {
 
 function providerFailureReason(status: number): ProviderFailureReason {
   if (status === 401 || status === 403) return "credentials";
-  if (status === 404) return "model";
+  if (status === 400 || status === 404) return "model";
   if (status === 429) return "quota";
   if ([500, 502, 503, 504].includes(status)) return "unavailable";
   return "invalid_response";
@@ -85,7 +99,97 @@ function providerFailureMessage(failure: ProviderFailure) {
 }
 
 function retryableStatus(status: number) {
-  return status === 429 || [500, 502, 503, 504].includes(status);
+  return [408, 425, 429, 500, 502, 503, 504, 529].includes(status);
+}
+
+function circuitIsOpen(provider: AiProvider) {
+  const until = providerCircuits.get(provider) ?? 0;
+  if (until <= Date.now()) {
+    providerCircuits.delete(provider);
+    return false;
+  }
+  return true;
+}
+
+function openCircuit(provider: AiProvider) {
+  providerCircuits.set(provider, Date.now() + circuitCooldownMs);
+  securityEvent(`${provider.toUpperCase()}_CIRCUIT_OPEN`, "warn");
+}
+
+function closeCircuit(provider: AiProvider) {
+  providerCircuits.delete(provider);
+}
+
+async function checkProviderHealth(provider: AiProvider): Promise<ProviderHealth> {
+  const config = providerConfig(provider);
+  if (!config) {
+    return {
+      configured: false,
+      verified: false,
+      available: false,
+      model: null,
+      status: "unconfigured",
+      circuitOpen: circuitIsOpen(provider),
+    };
+  }
+  const circuitOpen = circuitIsOpen(provider);
+  const cached = providerHealthCache.get(provider);
+  let health: Omit<ProviderHealth, "circuitOpen" | "available">;
+  if (cached?.model === config.model && Date.now() - cached.checkedAt < 30_000) {
+    health = cached.health;
+  } else {
+    let status: ProviderHealth["status"] = "unavailable";
+    let verified = false;
+    if (!/^[a-z0-9._-]{1,80}$/i.test(config.model)) {
+      status = "model_unavailable";
+    } else {
+      const isGemini = provider === "gemini";
+      const endpoint = isGemini
+        ? "https://generativelanguage.googleapis.com/v1beta/models"
+        : "https://api.groq.com/openai/v1/models";
+      try {
+        const response = await fetch(endpoint, {
+          headers: {
+            ...(isGemini
+              ? { "x-goog-api-key": config.key }
+              : { Authorization: `Bearer ${config.key}` }),
+          },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (response.status === 401 || response.status === 403) {
+          status = "credentials_invalid";
+        } else if (response.ok) {
+          const result = await response.json();
+          verified = isGemini
+            ? result.models?.some(
+                (item: { name?: string; supportedGenerationMethods?: string[] }) =>
+                  item.name === `models/${config.model}` &&
+                  item.supportedGenerationMethods?.includes("generateContent"),
+              ) === true
+            : result.data?.some((item: { id?: string }) => item.id === config.model) === true;
+          status = verified ? "available" : "model_unavailable";
+        }
+      } catch {
+        status = "unavailable";
+      }
+    }
+    health = {
+      configured: true,
+      verified,
+      model: config.model,
+      status,
+    };
+    providerHealthCache.set(provider, { model: config.model, checkedAt: Date.now(), health });
+    if (!verified && !circuitOpen) {
+      openCircuit(provider);
+    }
+  }
+  const activeCircuit = circuitIsOpen(provider);
+  return {
+    ...health,
+    circuitOpen: activeCircuit,
+    available: health.verified && !activeCircuit,
+  };
 }
 
 async function requestProvider(
@@ -187,6 +291,46 @@ async function requestProviderWithRetry(
   }
 }
 
+async function requestProviderWithCircuitBreaker(
+  provider: AiProvider,
+  promptData: { question: string; aggregateStatistics: Record<string, unknown> },
+) {
+  if (circuitIsOpen(provider))
+    throw new ProviderFailure(provider, "unavailable", true);
+  try {
+    const result = await requestProviderWithRetry(provider, promptData);
+    closeCircuit(provider);
+    return result;
+  } catch (error) {
+    if (error instanceof ProviderFailure) openCircuit(provider);
+    throw error;
+  }
+}
+
+function asksWeeklySubscriberCount(message: string) {
+  const normalized = message
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return (
+    /\bcombien\b/.test(normalized) &&
+    /\b(nouvell\w*|inscription\w*)\b/.test(normalized) &&
+    /\b(abonne\w*|inscrite?\w*)\b/.test(normalized) &&
+    /\bsemaine\b/.test(normalized)
+  );
+}
+
+function asksOperationalStatistics(message: string) {
+  const normalized = message
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  return (
+    /\b(combien|nombre|statistiques?|taux|performance|performances)\b/.test(normalized) &&
+    /\b(abonne\w*|inscript\w*|campagne\w*|newsletter\w*|ouverture\w*|clics?)\b/.test(normalized)
+  );
+}
+
 async function takeLimit(actorId: string, period: "hour" | "day", maximum: number) {
   const key = createHash("sha256").update(`miroir-ai:${period}:${actorId}`).digest("hex");
   const interval = period === "hour" ? "1 hour" : "1 day";
@@ -205,7 +349,23 @@ async function takeLimit(actorId: string, period: "hour" | "day", maximum: numbe
 export async function GET() {
   const denied = await adminDenied();
   if (denied) return denied;
-  return NextResponse.json(getAiConfig(), { headers: { "Cache-Control": "no-store" } });
+  const [gemini, groq] = await Promise.all([
+    checkProviderHealth("gemini"),
+    checkProviderHealth("groq"),
+  ]);
+  const selectedProvider = gemini.available ? "gemini" : groq.available ? "groq" : null;
+  const selectedModel =
+    selectedProvider === "gemini" ? gemini.model : selectedProvider === "groq" ? groq.model : null;
+  return NextResponse.json(
+    {
+      enabled: gemini.configured || groq.configured,
+      provider: selectedProvider,
+      model: selectedModel,
+      fallbackEnabled: gemini.available && groq.available,
+      providers: { gemini, groq },
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -246,27 +406,37 @@ export async function POST(request: NextRequest) {
     );
     const promptData = {
       question: message,
-      aggregateStatistics: {
-        subscribers: aggregate.rows[0],
-        campaigns: campaignStats.rows[0],
-        opensAndClicks: "indisponibles",
-      },
+      aggregateStatistics: {},
     };
+    if (asksOperationalStatistics(message)) {
+      const subscribers = aggregate.rows[0];
+      const campaigns = campaignStats.rows[0];
+      const weeklyCount = Number(subscribers.new_this_week);
+      const reply = asksWeeklySubscriberCount(message)
+        ? `Cette semaine : ${weeklyCount} nouvelle${weeklyCount === 1 ? "" : "s"} abonnée${weeklyCount === 1 ? "" : "s"}.`
+        : `Données PostgreSQL : ${subscribers.total} inscriptions au total, ${subscribers.confirmed} confirmées, ${subscribers.pending} en attente et ${weeklyCount} nouvelle${weeklyCount === 1 ? "" : "s"} cette semaine. Campagnes : ${campaigns.drafts} brouillons, ${campaigns.scheduled} programmées et ${campaigns.completed} terminées. Ouvertures et clics : données indisponibles.`;
+      await adminAudit("MIROIR_AI_QUERY");
+      return NextResponse.json({
+        reply,
+        createdDraft: false,
+        provider: "postgres",
+        source: "postgres",
+        fallbackUsed: false,
+      });
+    }
     if (!aiConfig.provider)
       return NextResponse.json({ error: "Aucun fournisseur Miroir AI n’est configuré." }, { status: 503 });
     const primaryProvider = aiConfig.provider;
     let response: z.infer<typeof outputSchema>;
     let responseProvider = primaryProvider;
     try {
-      response = await requestProviderWithRetry(primaryProvider, promptData);
+      response = await requestProviderWithCircuitBreaker(primaryProvider, promptData);
     } catch (primaryError) {
       if (!(primaryError instanceof ProviderFailure)) throw primaryError;
       securityEvent(
         `${primaryError.provider.toUpperCase()}_${primaryError.reason.toUpperCase()}`,
         "warn",
       );
-      if (!primaryError.retryable)
-        return NextResponse.json({ error: providerFailureMessage(primaryError) }, { status: 502 });
       const fallbackProvider: AiProvider = primaryProvider === "gemini" ? "groq" : "gemini";
       if (!providerConfig(fallbackProvider))
         return NextResponse.json(
@@ -274,15 +444,16 @@ export async function POST(request: NextRequest) {
           { status: primaryError.reason === "quota" ? 429 : 502 },
         );
       try {
-        response = await requestProviderWithRetry(fallbackProvider, promptData);
+        response = await requestProviderWithCircuitBreaker(fallbackProvider, promptData);
         responseProvider = fallbackProvider;
         securityEvent(`${fallbackProvider.toUpperCase()}_FALLBACK_SUCCEEDED`, "warn");
       } catch (fallbackError) {
         if (!(fallbackError instanceof ProviderFailure)) throw fallbackError;
         securityEvent(`${fallbackError.provider.toUpperCase()}_FALLBACK_FAILED`);
+        const fallbackName = fallbackProvider === "groq" ? "Groq" : "Gemini";
         return NextResponse.json(
-          { error: `${providerFailureMessage(primaryError)} Le relais Groq : ${providerFailureMessage(fallbackError)}` },
-          { status: primaryError.reason === "quota" && fallbackError.reason === "quota" ? 429 : 502 },
+          { error: `${providerFailureMessage(primaryError)} Le relais ${fallbackName} : ${providerFailureMessage(fallbackError)}` },
+          { status: primaryError.reason === "quota" && fallbackError.reason === "quota" ? 429 : 503 },
         );
       }
     }

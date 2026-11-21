@@ -4,12 +4,46 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
 type Message = { role: "user" | "assistant"; text: string };
+type ProviderHealth = {
+  configured: boolean;
+  verified: boolean;
+  available: boolean;
+  model: string | null;
+  status:
+    | "unconfigured"
+    | "checking"
+    | "available"
+    | "credentials_invalid"
+    | "model_unavailable"
+    | "unavailable"
+    | "circuit_open";
+  circuitOpen: boolean;
+};
 type AiStatus = {
   enabled: boolean;
   provider: "gemini" | "groq" | null;
   model: string | null;
   fallbackEnabled: boolean;
+  providers: { gemini: ProviderHealth; groq: ProviderHealth };
 };
+
+function healthLabel(name: string, health?: ProviderHealth) {
+  if (!health || !health.configured) return `${name} : non configuré`;
+  if (health.circuitOpen && health.status === "available")
+    return `${name} : temporairement suspendu après des échecs récents`;
+  switch (health.status) {
+    case "available":
+      return `${name} : modèle ${health.model} vérifié`;
+    case "circuit_open":
+      return `${name} : temporairement suspendu après des échecs récents`;
+    case "credentials_invalid":
+      return `${name} : clé ou autorisations invalides`;
+    case "model_unavailable":
+      return `${name} : modèle configuré introuvable ou inaccessible`;
+    default:
+      return `${name} : vérification indisponible`;
+  }
+}
 
 export default function MiroirAiPage() {
   const [status, setStatus] = useState<AiStatus | null>(null);
@@ -85,11 +119,23 @@ export default function MiroirAiPage() {
         </div>
       </header>
       <section className="admin-card">
-        <p role="status">
-          {status?.enabled
-            ? `${status.provider === "gemini" ? "Gemini" : "Groq"} actif : ${status.model}${status.fallbackEnabled ? " — Groq est prêt à prendre le relais automatiquement." : status.provider === "gemini" ? " — le relais Groq n’est pas configuré." : ""}`
-            : status ? "Aucune clé Gemini ou Groq n’est configurée. L’assistant est désactivé." : "Vérification de la configuration…"}
-        </p>
+        {!status ? (
+          <p role="status">Vérification des fournisseurs IA…</p>
+        ) : (
+          <>
+            <p role="status">{healthLabel("Gemini", status.providers?.gemini)}</p>
+            <p role="status">{healthLabel("Groq", status.providers?.groq)}</p>
+            <p className="admin-muted">
+              {status.provider === "gemini"
+                ? `Gemini est le fournisseur principal${status.fallbackEnabled ? " ; Groq est également vérifié et prêt à prendre le relais." : "."}`
+                : status.provider === "groq"
+                  ? "Gemini n’est pas disponible actuellement ; Groq est vérifié et utilisé automatiquement."
+                  : status.enabled
+                    ? "Aucun fournisseur n’est vérifié pour le moment. Vous pouvez réessayer ; les clés ne sont jamais affichées."
+                    : "Aucune clé fournisseur n’est configurée. L’assistant est désactivé."}
+            </p>
+          </>
+        )}
         <p className="admin-muted">Les requêtes sont limitées. Seules des statistiques agrégées lui sont transmises ; n’incluez aucune donnée personnelle, adresse e-mail ni secret.</p>
         {error && <p className="admin-error" role="alert">{error}</p>}
         <div className="admin-chat" ref={chatRef} aria-live="polite">
@@ -126,6 +172,8 @@ export default function MiroirAiPage() {
             "Propose-moi trois objets d’email élégants.",
             "Combien de nouvelles abonnées avons-nous cette semaine ?",
             "Prépare une campagne de lancement pour notre collection.",
+            "Rédige une newsletter professionnelle.",
+            "Crée un brouillon de campagne marketing.",
           ].map((prompt) => <button key={prompt} disabled={!status?.enabled || busy} type="button" onClick={() => void send(undefined, prompt)}>{prompt}</button>)}
         </div>
         <form className="admin-actions" onSubmit={(event) => void send(event)}>

@@ -191,7 +191,7 @@ async function main() {
   process.env.GEMINI_API_KEY = "local-test-key";
   process.env.GEMINI_MODEL = "gemini-3.8-flash";
   process.env.GROQ_API_KEY = "local-groq-test-key";
-  process.env.GROQ_MODEL = "llama-3.3-70b-versatile";
+  process.env.GROQ_MODEL = "openai/gpt-oss-120b";
   const originalFetch = global.fetch;
   let aiCalls = 0;
   let geminiModelListed = true;
@@ -231,14 +231,16 @@ async function main() {
         ok: true,
         status: 200,
         json: async () => ({
-          data: groqModelListed ? [{ id: "llama-3.3-70b-versatile" }] : [{ id: "other-model" }],
+          data: groqModelListed ? [{ id: "openai/gpt-oss-120b" }] : [{ id: "other-model" }],
         }),
       };
     }
     if (String(url) === "https://api.groq.com/openai/v1/chat/completions") {
       assert.equal(options.headers.Authorization, "Bearer local-groq-test-key");
       const requestBody = JSON.parse(options.body);
-      assert.equal(requestBody.model, "llama-3.3-70b-versatile");
+      assert.equal(requestBody.model, "openai/gpt-oss-120b");
+      assert.equal(requestBody.max_completion_tokens, 700);
+      assert.equal("max_tokens" in requestBody, false);
       assert.equal(requestBody.response_format.type, "json_object");
       assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
       const requestData = JSON.parse(requestBody.messages[1].content);
@@ -434,7 +436,7 @@ async function main() {
     delete process.env.GEMINI_API_KEY;
     const groqStatus = await (await ai.GET()).json();
     assert.equal(groqStatus.provider, "groq");
-    assert.equal(groqStatus.model, "llama-3.3-70b-versatile");
+    assert.equal(groqStatus.model, "openai/gpt-oss-120b");
     const groqResponse = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
       message: "Propose une idée de communication.",
     }));

@@ -104,6 +104,12 @@ function retryableStatus(status: number) {
   return [408, 425, 429, 500, 502, 503, 504, 529].includes(status);
 }
 
+function validModelId(provider: AiProvider, model: string) {
+  return provider === "groq"
+    ? model.length <= 80 && /^[a-z0-9][a-z0-9._-]*(?:\/[a-z0-9][a-z0-9._-]*)?$/i.test(model)
+    : /^[a-z0-9][a-z0-9._-]{0,79}$/i.test(model);
+}
+
 function circuitIsOpen(provider: AiProvider) {
   const until = providerCircuits.get(provider) ?? 0;
   if (until <= Date.now()) {
@@ -142,7 +148,7 @@ async function checkProviderHealth(provider: AiProvider): Promise<ProviderHealth
   } else {
     let status: ProviderHealth["status"] = "unavailable";
     let verified = false;
-    if (!/^[a-z0-9._-]{1,80}$/i.test(config.model)) {
+    if (!validModelId(provider, config.model)) {
       status = "model_unavailable";
     } else {
       const isGemini = provider === "gemini";
@@ -199,7 +205,7 @@ async function requestProvider(
   promptData: { question: string; aggregateStatistics: Record<string, unknown> },
 ) {
   const config = providerConfig(provider);
-  if (!config || !/^[a-z0-9._-]{1,80}$/i.test(config.model))
+  if (!config || !validModelId(provider, config.model))
     throw new ProviderFailure(provider, config ? "model" : "credentials");
 
   const isGemini = provider === "gemini";
@@ -242,7 +248,7 @@ async function requestProvider(
           { role: "user", content: JSON.stringify(promptData) },
         ],
         temperature: 0.5,
-        max_tokens: 700,
+        max_completion_tokens: 700,
         response_format: { type: "json_object" },
       };
 

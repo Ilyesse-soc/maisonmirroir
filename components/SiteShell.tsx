@@ -22,7 +22,7 @@ export default function SiteShell({
 
   const showNavigation = !(
     pathname === "/connexion" ||
-    pathname.startsWith("/newsletter") ||
+    pathname.startsWith("/newsletter/") ||
     pathname === "/confidentialite" ||
     pathname === "/mentions-legales" ||
     pathname === "/politique-de-confidentialite" ||

@@ -5,6 +5,7 @@ const baseUrl = "https://maison-miroir.fr";
 export default function sitemap(): MetadataRoute.Sitemap {
   const paths = [
     "/",
+    "/newsletter",
     "/catalogue",
     "/notre-histoire",
     "/faq",

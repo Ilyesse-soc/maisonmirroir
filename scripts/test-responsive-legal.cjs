@@ -57,6 +57,51 @@ async function main() {
     });
     const context = await browser.newContext();
     const page = await context.newPage();
+    const openCartDrawer = async (width) => {
+      if (width < 1024) {
+        await page.locator(".mm-navbar-menu").click();
+        await page.locator("#mm-mobile-menu .mm-navbar-cart").click();
+      } else {
+        await page.locator(".mm-navbar-cart").click();
+      }
+      await page.locator("dialog[open]").waitFor();
+      await page
+        .locator(".mm-cart-panel")
+        .evaluate(async (panel) =>
+          Promise.all(panel.getAnimations().map((animation) => animation.finished)),
+        );
+    };
+    const seedCartWithCatalogProducts = () =>
+      page.evaluate(() => {
+        localStorage.setItem(
+          "mm:cart:v1",
+          JSON.stringify({
+            shippingMethodId: "mondial-relay-point-relais",
+            items: [
+              {
+                key: "qa-modest-era",
+                productId: "modest-era",
+                name: "Modest Era",
+                category: "sacs",
+                categoryLabel: "Première collection - For Modest Girls",
+                image: "/collection/modest-era-feature.jpeg",
+                unitPrice: 29.69,
+                quantity: 1,
+              },
+              {
+                key: "qa-paradise-way",
+                productId: "paradise-way",
+                name: "Paradise Way",
+                category: "sacs",
+                categoryLabel: "Première collection - For Modest Girls",
+                image: "/collection/paradise-way-product.webp",
+                unitPrice: 31.69,
+                quantity: 1,
+              },
+            ],
+          }),
+        );
+      });
     const errors = [];
     const thirdParties = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -171,7 +216,7 @@ async function main() {
       }
     }
 
-    for (const width of [320, 375, 390, 430, 768, 1024, 1440]) {
+    for (const width of [320, 375, 390, 430, 768, 1024, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       const response = await page.goto("http://127.0.0.1:43819/newsletter", {
         waitUntil: "networkidle",
@@ -242,35 +287,199 @@ async function main() {
         });
     }
 
-    await page.setViewportSize({ width: 390, height: 844 });
+    const cartViewports = [
+      [320, 568],
+      [375, 812],
+      [390, 844],
+      [430, 932],
+      [768, 1024],
+      [1024, 1366],
+      [1440, 900],
+      [1920, 1080],
+    ];
+    for (const [width, height] of cartViewports) {
+      await page.setViewportSize({ width, height });
+      await page.goto("http://127.0.0.1:43819/newsletter", {
+        waitUntil: "networkidle",
+      });
+      await openCartDrawer(width);
+      const dialog = page.getByRole("dialog", { name: "PANIER" });
+      assert.equal(await dialog.getAttribute("aria-modal"), "true");
+      assert.equal(await dialog.getAttribute("aria-labelledby"), "cart-drawer-title");
+      assert.equal(
+        await dialog.getByRole("heading", { name: "PANIER", exact: true }).count(),
+        1,
+      );
+      assert.equal(
+        await page.locator(".mm-cart-close").evaluate(
+          (button) => button === document.activeElement,
+        ),
+        true,
+      );
+      const panelSize = await page.locator(".mm-cart-panel").evaluate((panel) => {
+        const rect = panel.getBoundingClientRect();
+        const style = getComputedStyle(panel);
+        return {
+          width: rect.width,
+          height: rect.height,
+          clientWidth: panel.clientWidth,
+          backgroundColor: style.backgroundColor,
+        };
+      });
+      assert(Math.abs(panelSize.width - Math.min(width, 480)) <= 1);
+      assert(Math.abs(panelSize.height - height) <= 1);
+      assert(Math.abs(panelSize.clientWidth - panelSize.width) <= 1);
+      assert.equal(panelSize.backgroundColor, "rgb(250, 247, 242)");
+      const summary = await page.locator(".mm-cart-footer").innerText();
+      assert.match(summary, /Sous-total\s+0,00\s*€/);
+      assert.match(summary, /Livraison\s+À calculer/);
+      assert.match(summary, /Total\s+0,00\s*€/);
+      assert.equal(await page.locator(".mm-cart-checkout").isDisabled(), true);
+      assert.match(
+        await page.locator("#cart-orders-notice").innerText(),
+        /Les commandes ouvriront prochainement/,
+      );
+      assert.equal(
+        await page.locator(".mm-cart-checkout").evaluate(
+          (button) => getComputedStyle(button).backgroundColor,
+        ),
+        "rgb(48, 32, 23)",
+      );
+      assert.equal(
+        await page.locator(".mm-cart-checkout").evaluate(
+          (button) => getComputedStyle(button).backgroundImage,
+        ),
+        "none",
+      );
+      assert(
+        await page.locator(".mm-cart-footer").evaluate(
+          (footer) =>
+            footer.getBoundingClientRect().bottom <= window.innerHeight + 1,
+        ),
+        `Cart actions remain visible at ${width}x${height}`,
+      );
+      assert.equal(
+        await page.evaluate(
+          () => getComputedStyle(document.body).position,
+        ),
+        "fixed",
+      );
+      if ([390, 1440].includes(width)) {
+        await page.screenshot({
+          path: path.join(
+            directory,
+            `cart-empty-${width === 390 ? "mobile" : "desktop"}.png`,
+          ),
+          animations: "disabled",
+        });
+      }
+      if (width === 320) {
+        await page.keyboard.press("Escape");
+      } else if (width === 1440) {
+        await page.mouse.click(100, Math.round(height / 2));
+      } else {
+        await page.getByRole("button", { name: "Fermer le panier" }).click();
+      }
+      await page.waitForFunction(() => !document.querySelector("dialog")?.open);
+      assert.equal(
+        await page.evaluate(
+          () => getComputedStyle(document.body).position !== "fixed",
+        ),
+        true,
+      );
+      await page.waitForFunction((selector) => {
+        return document.activeElement === document.querySelector(selector);
+      }, width < 1024 ? ".mm-navbar-menu" : ".mm-navbar-cart");
+    }
+
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("http://127.0.0.1:43819/newsletter", {
       waitUntil: "networkidle",
     });
-    await page.locator(".mm-navbar-menu").click();
-    await page.locator("#mm-mobile-menu .mm-navbar-cart").click();
-    assert.equal(
-      await page.locator('[aria-hidden="false"] .mm-drawer-panel').count(),
-      1,
-    );
+    await seedCartWithCatalogProducts();
+    await page.reload({ waitUntil: "networkidle" });
+    await openCartDrawer(1440);
+    assert.equal(await page.getByText("Modest Era", { exact: true }).count(), 1);
+    assert.equal(await page.getByText("Paradise Way", { exact: true }).count(), 1);
     assert(
-      (await page.locator(".mm-drawer-panel").getAttribute("class")).includes(
-        "mm-drawer-panel--launch",
-      ),
-    );
-    const emptyCartSummary = await page
-      .locator(".mm-drawer-summary")
-      .innerText();
-    assert.match(emptyCartSummary, /Sous-total\s+0\.00 €/);
-    assert.match(emptyCartSummary, /Livraison\s+0\.00 €/);
-    assert.match(emptyCartSummary, /Total\s+0\.00 €/);
-    assert.doesNotMatch(emptyCartSummary, /Mode:/);
-    assert.equal(
       await page
-        .locator(".mm-drawer-panel .btn-gold")
-        .evaluate((button) => getComputedStyle(button).color),
-      "rgb(243, 236, 225)",
+        .locator(".mm-cart-item-image img")
+        .evaluateAll(
+          (images) =>
+            images.length === 2 &&
+            images.every((image) => image.complete && image.naturalWidth > 0),
+        ),
+      "real catalog product images load",
     );
+    assert.match(await page.locator(".mm-cart-footer").innerText(), /61,38\s*€/);
+    assert.match(await page.locator(".mm-cart-item").nth(0).innerText(), /29,69\s*€ l’unité/);
+    assert.match(await page.locator(".mm-cart-item").nth(1).innerText(), /31,69\s*€ l’unité/);
+    assert.match(await page.locator(".mm-cart-footer").innerText(), /Livraison\s+À calculer/);
+    assert.match(await page.locator(".mm-cart-footer").innerText(), /Total\s+À calculer/);
+    await page.screenshot({
+      path: path.join(directory, "cart-filled-desktop.png"),
+      animations: "disabled",
+    });
+    const itemQuantity = page.locator(".mm-cart-item").nth(0).locator(".mm-cart-quantity span");
+    await page
+      .getByRole("button", { name: "Augmenter la quantité de Modest Era" })
+      .click();
+    assert.equal(await itemQuantity.innerText(), "2");
+    assert.match(await page.locator(".mm-cart-header p").innerText(), /3 articles/);
+    assert.match(await page.locator(".mm-cart-footer").innerText(), /91,07\s*€/);
+    assert.equal(
+      await page.evaluate(
+        () =>
+          JSON.parse(localStorage.getItem("mm:cart:v1") || "{}").items[0]
+            .quantity,
+      ),
+      2,
+    );
+    assert.match(
+      await page
+        .locator('.sr-only[aria-live="polite"][aria-atomic="true"]')
+        .innerText(),
+      /Modest Era, quantité 2/,
+    );
+    await page
+      .getByRole("button", { name: "Diminuer la quantité de Modest Era" })
+      .click();
+    assert.equal(await itemQuantity.innerText(), "1");
+    await page
+      .getByRole("button", { name: "Supprimer Modest Era du panier" })
+      .click();
+    assert.equal(await page.getByText("Paradise Way", { exact: true }).count(), 1);
+    assert.match(await page.locator(".mm-cart-header p").innerText(), /1 article/);
+    assert.match(await page.locator(".mm-cart-footer").innerText(), /31,69\s*€/);
+    await page
+      .getByRole("button", { name: "Supprimer Paradise Way du panier" })
+      .click();
+    assert.equal(await page.getByText("Votre panier est vide").count(), 1);
+    assert.equal(await page.locator(".mm-cart-header p").innerText(), "0 article");
     await page.getByRole("button", { name: "Fermer le panier" }).click();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedCartWithCatalogProducts();
+    await page.reload({ waitUntil: "networkidle" });
+    await openCartDrawer(390);
+    await page.waitForFunction(() => {
+      const images = Array.from(
+        document.querySelectorAll(".mm-cart-item-image img"),
+      );
+      return (
+        images.length === 2 &&
+        images.every((image) => image.complete && image.naturalWidth > 0)
+      );
+    });
+    await page.screenshot({
+      path: path.join(directory, "cart-filled-mobile.png"),
+      animations: "disabled",
+    });
+    await page.getByRole("button", { name: "Fermer le panier" }).click();
+    await page.evaluate(() => {
+      localStorage.removeItem("mm:cart:v1");
+      localStorage.removeItem("mm:cart:shipping:v1");
+    });
 
     await page.route("**/api/newsletter", async (route) => {
       assert.equal(route.request().method(), "POST");
@@ -405,7 +614,7 @@ async function main() {
       ),
     );
     console.log(
-      `PASS: ${results.length} responsive viewport checks, storefront and restored newsletter pages, legal placeholders, safely disabled newsletter delivery and order APIs, no third-party requests, no emails or payments.`,
+      `PASS: ${results.length} storefront responsive checks, ${cartViewports.length} cart viewports, empty and filled cart controls, accessibility, responsive newsletter pages, safely disabled newsletter delivery and orders, no third-party requests, no emails or payments.`,
     );
   } finally {
     if (browser) await browser.close();

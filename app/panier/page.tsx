@@ -33,6 +33,7 @@ export default function CartPage() {
   );
 
   const subtotal = getCartSubtotal(items);
+  const shippingPrice = items.length > 0 ? selectedShipping.price : 0;
   const total = getCartTotal(items, selectedShipping.id);
 
   return (
@@ -352,7 +353,7 @@ export default function CartPage() {
                   style={{ display: "flex", justifyContent: "space-between" }}
                 >
                   <span>Livraison</span>
-                  <span>{selectedShipping.price.toFixed(2)} €</span>
+                  <span>{shippingPrice.toFixed(2)} €</span>
                 </div>
                 <div
                   style={{

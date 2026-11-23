@@ -81,6 +81,7 @@ export function getCartShippingPrice(shippingMethodId: string) {
 }
 
 export function getCartTotal(items: CartItem[], shippingMethodId: string) {
+  if (items.length === 0) return 0;
   return getCartSubtotal(items) + getCartShippingPrice(shippingMethodId);
 }
 

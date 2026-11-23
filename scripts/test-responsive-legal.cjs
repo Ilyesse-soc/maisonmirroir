@@ -242,6 +242,36 @@ async function main() {
         });
     }
 
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("http://127.0.0.1:43819/newsletter", {
+      waitUntil: "networkidle",
+    });
+    await page.locator(".mm-navbar-menu").click();
+    await page.locator("#mm-mobile-menu .mm-navbar-cart").click();
+    assert.equal(
+      await page.locator('[aria-hidden="false"] .mm-drawer-panel').count(),
+      1,
+    );
+    assert(
+      (await page.locator(".mm-drawer-panel").getAttribute("class")).includes(
+        "mm-drawer-panel--launch",
+      ),
+    );
+    const emptyCartSummary = await page
+      .locator(".mm-drawer-summary")
+      .innerText();
+    assert.match(emptyCartSummary, /Sous-total\s+0\.00 €/);
+    assert.match(emptyCartSummary, /Livraison\s+0\.00 €/);
+    assert.match(emptyCartSummary, /Total\s+0\.00 €/);
+    assert.doesNotMatch(emptyCartSummary, /Mode:/);
+    assert.equal(
+      await page
+        .locator(".mm-drawer-panel .btn-gold")
+        .evaluate((button) => getComputedStyle(button).color),
+      "rgb(243, 236, 225)",
+    );
+    await page.getByRole("button", { name: "Fermer le panier" }).click();
+
     await page.route("**/api/newsletter", async (route) => {
       assert.equal(route.request().method(), "POST");
       assert.deepEqual(route.request().postDataJSON(), {

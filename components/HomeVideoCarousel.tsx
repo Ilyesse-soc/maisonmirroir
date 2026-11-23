@@ -3,7 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { TouchEvent } from "react";
 
-const films = [
+type Film = {
+  title: string;
+  subtitle: string;
+  src: string;
+  poster: string;
+  videoLabel?: string;
+  indicatorLabel?: string;
+};
+
+const films: Film[] = [
   {
     title: "Paradise Way",
     subtitle: "Just a girl training for Jannah",
@@ -15,6 +24,14 @@ const films = [
     subtitle: "Modesty is the mood",
     src: "/collection/IMG_7199.mov",
     poster: "/collection/modest-era-film-poster.webp",
+  },
+  {
+    title: "Modest Era",
+    subtitle: "Modesty is the mood",
+    src: "/collection/IMG_7197.mov",
+    poster: "/collection/modest-era-film-poster.webp",
+    videoLabel: "Film complémentaire du tote bag Modest Era",
+    indicatorLabel: "Afficher le deuxième film de Modest Era",
   },
 ];
 
@@ -120,7 +137,7 @@ export default function HomeVideoCarousel() {
                 playsInline
                 preload={isActive ? "metadata" : "none"}
                 poster={film.poster}
-                aria-label={`Film du tote bag ${film.title}`}
+                aria-label={film.videoLabel ?? `Film du tote bag ${film.title}`}
                 onEnded={() => showSlide(activeIndex + 1)}
                 onError={() => setMediaUnavailable(true)}
                 onPlay={() => {
@@ -177,7 +194,7 @@ export default function HomeVideoCarousel() {
               className={`storefront-showcase-indicator${index === activeIndex ? " is-active" : ""}`}
               type="button"
               key={film.src}
-              aria-label={`Afficher le film ${film.title}`}
+              aria-label={film.indicatorLabel ?? `Afficher le film ${film.title}`}
               aria-pressed={index === activeIndex}
               onClick={() => showSlide(index)}
             />

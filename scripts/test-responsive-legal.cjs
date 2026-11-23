@@ -105,16 +105,11 @@ async function main() {
           "MAISON MIROIR",
         );
         assert.equal(await page.locator(".storefront-product-card").count(), 2);
-        assert.equal(await page.locator("form").count(), 1);
-        assert.equal(await page.locator("#newsletter .newsletter-form").count(), 1);
-        assert.equal(await page.locator("#newsletter input[type=email]").count(), 1);
-        assert.equal(
-          await page.locator("#newsletter input[name=consent][required]").count(),
-          1,
-        );
+        assert.equal(await page.locator("form").count(), 0);
+        assert.equal(await page.locator("#newsletter").count(), 0);
         if (viewportWidth >= 1024)
           assert.equal(
-            await page.locator('.mm-navbar-links a[href="/#newsletter"]').count(),
+            await page.locator('.mm-navbar-links a[href="/newsletter"]').count(),
             1,
           );
         assert(
@@ -176,8 +171,58 @@ async function main() {
       }
     }
 
+    for (const width of [320, 375, 390, 430, 768, 1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const response = await page.goto("http://127.0.0.1:43819/newsletter", {
+        waitUntil: "networkidle",
+      });
+      assert.equal(response.status(), 200);
+      assert.equal(await page.locator(".newsletter-landing .newsletter-form").count(), 1);
+      assert.equal(await page.locator('input[type="email"]').count(), 1);
+      assert.equal(await page.getByLabel("Votre adresse e-mail").count(), 1);
+      assert.equal(await page.locator('input[name="consent"][required]').count(), 1);
+      assert.equal(
+        await page.locator(".newsletter-landing .sr-only").evaluate(
+          (element) => getComputedStyle(element).position,
+        ),
+        "absolute",
+      );
+      assert.equal(await page.locator(".mm-navbar").count(), 1);
+      assert.equal(await page.locator(".storefront-footer").count(), 1);
+      const navbarBottom = await page
+        .locator(".mm-navbar")
+        .evaluate((element) => element.getBoundingClientRect().bottom);
+      const headingTop = (await page
+        .locator("#newsletter-landing-title")
+        .boundingBox()).y;
+      assert(headingTop > navbarBottom, `newsletter heading overlaps navigation at ${width}px`);
+      assert(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+        `newsletter has horizontal overflow at ${width}px`,
+      );
+      if ([390, 1440].includes(width))
+        await page.screenshot({
+          path: path.join(directory, `newsletter-${width}.png`),
+          fullPage: true,
+          animations: "disabled",
+        });
+    }
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("http://127.0.0.1:43819", { waitUntil: "networkidle" });
+    await page.locator(".mm-navbar-menu").click();
+    assert.equal(
+      await page.locator('#mm-mobile-menu a[href="/newsletter"]').count(),
+      1,
+    );
+    await page.locator('#mm-mobile-menu a[href="/newsletter"]').click();
+    await page.waitForURL("**/newsletter");
+
     const publicRoutes = [
       "catalogue",
+      "newsletter",
       "notre-histoire",
       "faq",
       "contact",

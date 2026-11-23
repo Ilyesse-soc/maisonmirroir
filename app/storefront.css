@@ -494,33 +494,38 @@
   margin-top: 10px;
 }
 
-.home-newsletter {
-  scroll-margin-top: 96px;
-  padding: clamp(52px, 8vw, 104px) 0;
+.newsletter-landing {
+  box-sizing: border-box;
+  display: flex;
+  min-height: min(680px, calc(100svh - 76px));
+  align-items: center;
+  padding: calc(76px + clamp(32px, 5vw, 72px)) 0 clamp(52px, 8vw, 104px);
   color: #fffaf3;
   background: #38261f;
 }
 
-.home-newsletter-inner {
+.newsletter-landing-inner {
   display: grid;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   align-items: center;
   gap: clamp(28px, 7vw, 96px);
 }
 
-.home-newsletter .storefront-eyebrow {
+.newsletter-landing .storefront-eyebrow {
   color: #d3b792;
 }
 
-.home-newsletter h2 {
+.newsletter-landing h1 {
   max-width: 520px;
   margin: 0;
+  font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
   font-size: clamp(2.4rem, 5vw, 4.5rem);
+  font-weight: 400;
   letter-spacing: -0.035em;
   line-height: 1;
 }
 
-.home-newsletter-copy > p:last-child {
+.newsletter-landing-copy > p:last-child {
   max-width: 440px;
   margin: 20px 0 0;
   color: #e2d5c6;
@@ -528,18 +533,29 @@
   line-height: 1.8;
 }
 
-.home-newsletter .newsletter-form {
+.newsletter-landing-form {
   min-width: 0;
 }
 
-.home-newsletter .signup-row {
+.newsletter-landing-form > p {
+  margin: 14px 0 0;
+  color: #d2c3b4;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.newsletter-landing .newsletter-form {
+  min-width: 0;
+}
+
+.newsletter-landing .signup-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
   align-items: stretch;
   gap: 12px;
 }
 
-.home-newsletter .email-field {
+.newsletter-landing .email-field {
   display: flex;
   min-width: 0;
   min-height: 54px;
@@ -549,11 +565,11 @@
   border-bottom: 1px solid rgb(225 194 147 / 60%);
 }
 
-.home-newsletter .email-field > span:first-child {
+.newsletter-landing .email-field > span:first-child {
   color: #d3b792;
 }
 
-.home-newsletter .email-field input {
+.newsletter-landing .email-field input {
   width: 100%;
   min-width: 0;
   min-height: 52px;
@@ -564,17 +580,17 @@
   font: inherit;
 }
 
-.home-newsletter .email-field input::placeholder {
+.newsletter-landing .email-field input::placeholder {
   color: #d2c3b4;
   opacity: 1;
 }
 
-.home-newsletter .email-field:focus-within {
+.newsletter-landing .email-field:focus-within {
   border-bottom-color: #f0c77e;
   box-shadow: 0 1px 0 #f0c77e;
 }
 
-.home-newsletter .signup-row button {
+.newsletter-landing .signup-row button {
   display: inline-flex;
   min-height: 54px;
   align-items: center;
@@ -590,18 +606,18 @@
   cursor: pointer;
 }
 
-.home-newsletter .signup-row button:focus-visible,
-.home-newsletter .consent a:focus-visible {
+.newsletter-landing .signup-row button:focus-visible,
+.newsletter-landing .consent a:focus-visible {
   outline: 2px solid #f0c77e;
   outline-offset: 3px;
 }
 
-.home-newsletter .signup-row button:disabled {
+.newsletter-landing .signup-row button:disabled {
   cursor: wait;
   opacity: 0.7;
 }
 
-.home-newsletter .consent {
+.newsletter-landing .consent {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -612,14 +628,14 @@
   line-height: 1.6;
 }
 
-.home-newsletter .consent label {
+.newsletter-landing .consent label {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   margin: 0;
 }
 
-.home-newsletter .consent input {
+.newsletter-landing .consent input {
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
@@ -627,13 +643,13 @@
   accent-color: #d3b792;
 }
 
-.home-newsletter .consent a {
+.newsletter-landing .consent a {
   margin-left: 27px;
   color: #f0c77e;
   text-underline-offset: 3px;
 }
 
-.home-newsletter .form-message {
+.newsletter-landing .form-message {
   min-height: 24px;
   margin: 12px 0 0;
   color: #f4d8bd;
@@ -641,11 +657,11 @@
   line-height: 1.5;
 }
 
-.home-newsletter .form-message.success {
+.newsletter-landing .form-message.success {
   color: #d7e8d2;
 }
 
-.home-newsletter .honeypot {
+.newsletter-landing .honeypot {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -1439,16 +1455,21 @@
     width: min(100% - 36px, 560px);
   }
 
-  .home-newsletter-inner {
+  .newsletter-landing {
+    min-height: 0;
+    padding: 120px 0 64px;
+  }
+
+  .newsletter-landing-inner {
     grid-template-columns: 1fr;
     gap: 26px;
   }
 
-  .home-newsletter .signup-row {
+  .newsletter-landing .signup-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .home-newsletter .signup-row button {
+  .newsletter-landing .signup-row button {
     width: 100%;
   }
 

@@ -15,6 +15,7 @@ type ProviderHealth = {
     | "available"
     | "credentials_invalid"
     | "model_unavailable"
+    | "request_incompatible"
     | "unavailable"
     | "circuit_open";
   circuitOpen: boolean;
@@ -33,13 +34,15 @@ function healthLabel(name: string, health?: ProviderHealth) {
     return `${name} : temporairement suspendu après des échecs récents`;
   switch (health.status) {
     case "available":
-      return `${name} : modèle ${health.model} vérifié`;
+      return `${name} : test de génération réussi avec ${health.model}`;
     case "circuit_open":
       return `${name} : temporairement suspendu après des échecs récents`;
     case "credentials_invalid":
       return `${name} : clé ou autorisations invalides`;
     case "model_unavailable":
       return `${name} : modèle configuré introuvable ou inaccessible`;
+    case "request_incompatible":
+      return `${name} : paramètres ou format de requête incompatibles`;
     default:
       return `${name} : vérification indisponible`;
   }

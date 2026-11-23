@@ -4,6 +4,7 @@ import { brandInfo } from "@/lib/brandInfo";
 const discoveryLinks = [
   { href: "/catalogue", label: "La collection" },
   { href: "/notre-histoire", label: "Notre histoire" },
+  { href: "/#newsletter", label: "Newsletter" },
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Contact" },
 ];

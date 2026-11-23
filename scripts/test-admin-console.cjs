@@ -32,6 +32,8 @@ async function main() {
     }
   };
   let authorized = true;
+  const newsletterSubscriptions = [];
+  let newsletterSubscribeError = null;
   const session = { user: { id: "admin-test" } };
   const cache = new Map();
   const requestSecurity = load("lib/requestSecurity.ts");
@@ -62,6 +64,10 @@ async function main() {
       if (id === "@/lib/newsletter")
         return {
           emailReady: () => true,
+          subscribe: async (email, ip) => {
+            if (newsletterSubscribeError) throw newsletterSubscribeError;
+            newsletterSubscriptions.push({ email, ip });
+          },
           siteUrl: () => "https://example.test",
           safeUrl: (value) => value || "",
           campaignHtml: () => "<html>preview</html>",
@@ -129,6 +135,47 @@ async function main() {
       [id, email, status, day, randomUUID().replaceAll("-", "")],
     );
   }
+
+  const publicNewsletter = load("app/api/newsletter/route.ts");
+  const invalidNewsletterSignup = await publicNewsletter.POST(
+    req("https://example.test/api/newsletter", "POST", {
+      email: "reader@example.test",
+      consent: false,
+      website: "",
+    }),
+  );
+  assert.equal(invalidNewsletterSignup.status, 400);
+  const spamSignup = await publicNewsletter.POST(
+    req("https://example.test/api/newsletter", "POST", {
+      email: "bot@example.test",
+      consent: true,
+      website: "filled-by-bot",
+    }),
+  );
+  assert.equal(spamSignup.status, 202);
+  assert.equal(newsletterSubscriptions.length, 0);
+  const publicSignup = await publicNewsletter.POST(
+    req("https://example.test/api/newsletter", "POST", {
+      email: " Reader@Example.Test ",
+      consent: true,
+      website: "",
+    }),
+  );
+  assert.equal(publicSignup.status, 200);
+  assert.deepEqual(newsletterSubscriptions[0], {
+    email: "reader@example.test",
+    ip: "unknown",
+  });
+  newsletterSubscribeError = new Error("RATE_LIMIT");
+  const rateLimitedSignup = await publicNewsletter.POST(
+    req("https://example.test/api/newsletter", "POST", {
+      email: "another@example.test",
+      consent: true,
+      website: "",
+    }),
+  );
+  assert.equal(rateLimitedSignup.status, 429);
+  newsletterSubscribeError = null;
 
   const activeId = "10000000-0000-4000-8000-000000000001";
   const pendingId = "10000000-0000-4000-8000-000000000002";
@@ -243,6 +290,8 @@ async function main() {
   let transientGeminiStatuses = [];
   let forceGeminiCredentialsError = false;
   let forceGroqUnavailable = false;
+  let rejectGroqParameter = "";
+  let adaptedGroqRequestSeen = false;
   let testNow = Date.now();
   const originalDateNow = Date.now;
   Date.now = () => testNow;
@@ -283,15 +332,27 @@ async function main() {
       assert.equal(options.headers.Authorization, "Bearer local-groq-test-key");
       const requestBody = JSON.parse(options.body);
       assert.equal(requestBody.model, "openai/gpt-oss-120b");
-      assert.equal(requestBody.max_completion_tokens, 700);
-      assert.equal("max_tokens" in requestBody, false);
-      assert.equal(requestBody.response_format.type, "json_object");
+      assert.equal(requestBody.max_completion_tokens ?? requestBody.max_tokens, 700);
+      if (requestBody.response_format)
+        assert.equal(requestBody.response_format.type, "json_object");
       assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
       const requestData = JSON.parse(requestBody.messages[1].content);
       if (requestData.campaignProducts) {
         assert.ok(requestData.campaignProducts.some((product) => product.id === "modest-era"));
         assert.ok(requestData.campaignProducts.some((product) => product.id === "paradise-way"));
         assert.ok(requestData.campaignProducts.every((product) => product.availableForSale === false));
+      }
+      if (!("temperature" in requestBody)) adaptedGroqRequestSeen = true;
+      if (rejectGroqParameter) {
+        const parameter = rejectGroqParameter;
+        rejectGroqParameter = "";
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({
+            error: { code: "unsupported_parameter", param: parameter },
+          }),
+        };
       }
       const reply = /(?:prépare|rédige|crée)/i.test(requestData.question)
         ? draftReply
@@ -506,6 +567,7 @@ async function main() {
     process.env.GEMINI_API_KEY = "local-test-key";
 
     forceGeminiCredentialsError = true;
+    rejectGroqParameter = "temperature";
     await query("DELETE FROM mm_rate_limits");
     const callsBeforeCredentialFallback = aiCalls;
     const credentialFallback = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
@@ -514,7 +576,8 @@ async function main() {
     const credentialFallbackResult = await credentialFallback.json();
     assert.equal(credentialFallback.status, 200);
     assert.equal(credentialFallbackResult.provider, "groq");
-    assert.equal(aiCalls - callsBeforeCredentialFallback, 2);
+    assert.equal(aiCalls - callsBeforeCredentialFallback, 3);
+    assert.equal(adaptedGroqRequestSeen, true);
     forceGeminiCredentialsError = false;
     testNow += 60001;
 

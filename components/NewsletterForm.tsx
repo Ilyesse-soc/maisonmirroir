@@ -73,14 +73,16 @@ export default function NewsletterForm() {
           <input name="website" tabIndex={-1} autoComplete="off" />
         </label>
       </div>
-      <label className="consent">
-        <input type="checkbox" name="consent" required disabled={success} />
-        <span>
-          J’accepte de recevoir les nouveautés, offres exclusives et annonces de
-          MAISON MIROIR. Désinscription à tout moment.{" "}
-          <a href="/politique-de-confidentialite">Confidentialité</a>
-        </span>
-      </label>
+      <div className="consent">
+        <label>
+          <input type="checkbox" name="consent" required disabled={success} />
+          <span>
+            J’accepte de recevoir les nouveautés, offres exclusives et annonces
+            de MAISON MIROIR. Désinscription à tout moment.
+          </span>
+        </label>
+        <a href="/politique-de-confidentialite">Confidentialité</a>
+      </div>
       <p
         role="status"
         aria-live="polite"

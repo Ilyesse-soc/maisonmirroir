@@ -105,7 +105,18 @@ async function main() {
           "MAISON MIROIR",
         );
         assert.equal(await page.locator(".storefront-product-card").count(), 2);
-        assert.equal(await page.locator("form").count(), 0);
+        assert.equal(await page.locator("form").count(), 1);
+        assert.equal(await page.locator("#newsletter .newsletter-form").count(), 1);
+        assert.equal(await page.locator("#newsletter input[type=email]").count(), 1);
+        assert.equal(
+          await page.locator("#newsletter input[name=consent][required]").count(),
+          1,
+        );
+        if (viewportWidth >= 1024)
+          assert.equal(
+            await page.locator('.mm-navbar-links a[href="/#newsletter"]').count(),
+            1,
+          );
         assert(
           await page
             .locator(".storefront-showcase-slide.is-active video")
@@ -236,7 +247,7 @@ async function main() {
           data: { email: "qa@example.test", consent: true },
         })
       ).status(),
-      410,
+      503,
     );
     assert.equal(
       (
@@ -269,7 +280,7 @@ async function main() {
       ),
     );
     console.log(
-      `PASS: ${results.length} responsive viewport checks, storefront pages, legal placeholders, disabled newsletter and order APIs, no third-party requests, no emails or payments.`,
+      `PASS: ${results.length} responsive viewport checks, storefront pages, legal placeholders, safely disabled newsletter delivery and order APIs, no third-party requests, no emails or payments.`,
     );
   } finally {
     if (browser) await browser.close();

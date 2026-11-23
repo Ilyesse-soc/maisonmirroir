@@ -11,6 +11,7 @@ const links = [
   { href: "/notre-histoire", label: "Notre histoire" },
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Contact" },
+  { href: "/#newsletter", label: "Newsletter" },
 ];
 
 export default function Navbar({ homeOverlay = false }: { homeOverlay?: boolean }) {

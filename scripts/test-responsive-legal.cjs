@@ -190,7 +190,27 @@ async function main() {
         ),
         "absolute",
       );
-      assert.equal(await page.locator(".mm-navbar").count(), 0);
+      assert.equal(await page.locator(".mm-navbar").count(), 1);
+      if (width >= 1024) {
+        assert.equal(await page.locator(".mm-navbar-links a").count(), 6);
+        assert.equal(
+          await page.locator('.mm-navbar-links a[href="/newsletter"]').getAttribute("aria-current"),
+          "page",
+        );
+      } else {
+        const menuButton = page.locator(".mm-navbar-menu");
+        assert.equal(await menuButton.count(), 1);
+        await menuButton.click();
+        assert.equal(
+          await page.locator('#mm-mobile-menu a[href="/newsletter"]').count(),
+          1,
+        );
+        assert.equal(
+          await page.locator("#mm-mobile-menu a").count(),
+          6,
+        );
+        await menuButton.click();
+      }
       assert.equal(await page.locator(".storefront-footer").count(), 0);
       assert.equal(
         await page.locator(".brand-message h1").innerText(),

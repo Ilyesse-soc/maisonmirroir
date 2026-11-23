@@ -21,7 +21,13 @@ export default function SiteShell({
     return <>{children}</>;
 
   if (pathname === "/newsletter")
-    return <>{children}</>;
+    return (
+      <CartProvider syncEnabled={false}>
+        <Navbar />
+        {children}
+        <CartDrawer />
+      </CartProvider>
+    );
 
   const showNavigation = !(
     pathname === "/connexion" ||

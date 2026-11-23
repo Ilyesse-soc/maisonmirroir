@@ -21,7 +21,7 @@ import {
   inputResponse,
 } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
-import { getBrandSettings } from "@/lib/brandSettings";
+import { getBrandSettings, normalizeBrandText } from "@/lib/brandSettings";
 import { getAdminEmail } from "@/lib/email";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,7 +38,13 @@ export async function GET() {
     const brandSettings = await getBrandSettings();
     return NextResponse.json(
       {
-        campaigns: campaigns.rows,
+        campaigns: campaigns.rows.map((campaign) => ({
+          ...campaign,
+          title: normalizeBrandText(campaign.title),
+          subject: normalizeBrandText(campaign.subject),
+          preheader: normalizeBrandText(campaign.preheader),
+          body: normalizeBrandText(campaign.body),
+        })),
         subscribers: subscribers.rows,
         products: products.map((p) => ({ id: p.id, name: p.name })),
         launchTemplate: {
@@ -141,10 +147,10 @@ export async function POST(request: NextRequest) {
     );
     const values = [
       id,
-      data.title,
-      data.subject,
-      data.preheader,
-      data.body,
+      normalizeBrandText(data.title),
+      normalizeBrandText(data.subject),
+      normalizeBrandText(data.preheader),
+      normalizeBrandText(data.body),
       safeUrl(data.imageUrl),
       safeUrl(data.linkUrl),
       data.promoCode || "",

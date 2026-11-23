@@ -1,4 +1,4 @@
-﻿import fs from "node:fs/promises";
+import fs from "node:fs/promises";
 import { Pool } from "pg";
 import { connectionOptions } from "../lib/databaseConnection.mjs";
 import { getMigrations } from "better-auth/db/migration";
@@ -37,7 +37,7 @@ try {
       throw Error("Admin already exists; password not changed");
     await auth.api.signUpEmail({
       body: {
-        name: "Maison Miroir",
+        name: "MAISON MIROIR",
         email,
         password: process.env.ADMIN_BOOTSTRAP_PASSWORD,
       },

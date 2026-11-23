@@ -24,7 +24,7 @@ async function main() {
         <body>
           <div class="admin-shell">
             <aside class="admin-sidebar">
-              <a class="admin-brand" href="#">Maison Miroir</a>
+              <a class="admin-brand" href="#">MAISON MIROIR</a>
               <nav>
                 <a href="#">Tableau de bord</a><a href="#">Abonnées</a>
                 <a href="#">Campagnes</a><a href="#">Miroir AI</a>
@@ -34,7 +34,7 @@ async function main() {
             </aside>
             <div class="admin-content">
               <main class="newsletter-page">
-                <h1>La correspondance Maison Miroir</h1>
+                <h1>La correspondance MAISON MIROIR</h1>
                 <p>Préparez et prévisualisez votre campagne.</p>
                 <button>Préparer l’annonce du lancement</button>
                 <form>

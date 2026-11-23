@@ -95,7 +95,7 @@ export default function CartCheckoutButton({
                       },
                     },
                   },
-                  description: "Commande panier Maison Miroir",
+                  description: "Commande panier MAISON MIROIR",
                   items: items.map((item) => ({
                     name: item.variantLabel
                       ? `${item.name} - ${item.variantLabel}`
@@ -251,7 +251,7 @@ export default function CartCheckoutButton({
               );
               setStatus("error");
               setErrorMessage(
-                "PayPal a confirmé la capture, mais la commande n’a pas pu être confirmée. Ne relancez pas le paiement et contactez Maison Miroir.",
+                "PayPal a confirmé la capture, mais la commande n’a pas pu être confirmée. Ne relancez pas le paiement et contactez MAISON MIROIR.",
               );
               return;
             }

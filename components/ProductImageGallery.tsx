@@ -208,7 +208,7 @@ export default function ProductImageGallery({
       >
         <Image
           src={images[0]}
-          alt={`${productName}, tote bag Maison Miroir`}
+          alt={`${productName}, tote bag MAISON MIROIR`}
           fill
           sizes={imageSizes}
           priority={priority}
@@ -363,7 +363,7 @@ export default function ProductImageGallery({
         >
           <Image
             src={images[0]}
-            alt={`${productName}, tote bag Maison Miroir`}
+            alt={`${productName}, tote bag MAISON MIROIR`}
             fill
             sizes={imageSizes}
             priority={priority}

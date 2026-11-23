@@ -102,7 +102,7 @@ async function main() {
         await page.evaluate(() => document.fonts.ready);
         assert.equal(
           await page.locator(".storefront-showcase-title").textContent(),
-          "Maison Miroir",
+          "MAISON MIROIR",
         );
         assert.equal(await page.locator(".storefront-product-card").count(), 2);
         assert.equal(await page.locator("form").count(), 0);

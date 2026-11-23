@@ -1,7 +1,7 @@
 import LegalPage from "@/components/LegalPage";
 
 export const metadata = {
-  title: "Retours et remboursements - Maison Miroir",
+  title: "Retours et remboursements - MAISON MIROIR",
   robots: { index: false, follow: true },
 };
 

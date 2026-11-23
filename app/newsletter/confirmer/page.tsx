@@ -20,7 +20,7 @@ export default async function ConfirmPage({
         action="/api/newsletter/confirmer"
         label="Confirmer mon inscription"
       />
-      <Link href="/">Revenir à Maison Miroir</Link>
+      <Link href="/">Revenir à MAISON MIROIR</Link>
     </div>
   );
 }

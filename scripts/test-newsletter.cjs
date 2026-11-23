@@ -80,12 +80,20 @@ async function main() {
             ? email
             : id === "./brandSettings"
               ? {
+                  normalizeBrandText: (value) =>
+                    value.replace(/\bMAISON MIROIRS?\b/gi, "MAISON MIROIR"),
                   getBrandSettings: async () => {
                     const result = await query(
                       "SELECT key,value FROM mm_brand_settings",
                     );
                     return Object.fromEntries(
-                      result.rows.map((row) => [row.key, row.value]),
+                      result.rows.map((row) => [
+                        row.key,
+                        row.value.replace(
+                          /\bMAISON MIROIRS?\b/gi,
+                          "MAISON MIROIR",
+                        ),
+                      ]),
                     );
                   },
                 }
@@ -143,10 +151,10 @@ async function main() {
   assert.equal(calls.length, 1);
   assert.equal(
     calls[0].payload.subject,
-    "Bienvenue dans l'univers Maison Miroir",
+    "Bienvenue dans l'univers MAISON MIROIR",
   );
-  assert(calls[0].payload.html.includes("L’équipe Maison Miroir"));
-  assert(calls[0].payload.text.includes("L’équipe Maison Miroir"));
+  assert(calls[0].payload.html.includes("L’équipe MAISON MIROIR"));
+  assert(calls[0].payload.text.includes("L’équipe MAISON MIROIR"));
   assert(calls[0].payload.html.includes("Se désinscrire"));
   await n.subscribe("girl@example.test", "another-ip");
   await n.processQueue();
@@ -163,9 +171,9 @@ async function main() {
     [
       campaignId,
       "New chapter",
-      "Bienvenue",
-      "Pré-en-tête de test & titre",
-      "Bonjour <script>bad()</script>",
+      "Bienvenue Maison Miroir",
+      "Pré-en-tête de test Maison Miroir & titre",
+      "Bonjour Maison Miroir <script>bad()</script>",
     ],
   );
   const testResult = await n.sendCampaignTest(campaignId);
@@ -174,7 +182,8 @@ async function main() {
     recipient: "admin@example.test",
   });
   assert.deepEqual(calls[0].payload.to, ["admin@example.test"]);
-  assert.equal(calls[0].payload.subject, "[Test] Bienvenue");
+  assert.equal(calls[0].payload.subject, "[Test] Bienvenue MAISON MIROIR");
+  assert(calls[0].payload.html.includes("Bonjour MAISON MIROIR &lt;script&gt;"));
   calls = [];
   fail = true;
   await assert.rejects(() => n.sendCampaignTest(campaignId), /EMAIL_PROVIDER_ERROR/);
@@ -207,6 +216,8 @@ async function main() {
   process.env.NEWSLETTER_SEND_ENABLED = "true";
   await n.processQueue();
   assert.equal(calls.length, 1, "Campaigns can be processed while the shop is closed");
+  assert.equal(calls[0].payload.subject, "Bienvenue MAISON MIROIR");
+  assert(calls[0].payload.html.includes("Bonjour MAISON MIROIR &lt;script&gt;"));
   assert(
     calls[0].payload.headers["List-Unsubscribe"].includes(
       "/api/newsletter/desinscription",
@@ -214,7 +225,7 @@ async function main() {
   );
   assert(calls[0].payload.html.includes("&lt;script&gt;"));
   assert(!calls[0].payload.html.includes("<script>"));
-  assert(calls[0].payload.html.includes("Pré-en-tête de test &amp; titre"));
+  assert(calls[0].payload.html.includes("Pré-en-tête de test MAISON MIROIR &amp; titre"));
   assert.equal(
     (await query(`SELECT status FROM mm_jobs WHERE kind='campaign'`)).rows[0]
       .status,
@@ -247,7 +258,7 @@ async function main() {
   assert.equal(calls.length, beforeReceipt + 1);
   assert.equal(
     calls.at(-1).payload.subject,
-    "Votre désinscription - Maison Miroir",
+    "Votre désinscription - MAISON MIROIR",
   );
   assert(calls.at(-1).payload.text.includes("ne recevrez plus"));
   await n.processQueue();

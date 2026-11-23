@@ -52,7 +52,7 @@ async function assertGlobalFooter(page, width) {
   );
   assert.equal(await footer.locator(".storefront-footer-main > *").count(), 4);
   assert.equal(
-    await footer.getByRole("link", { name: "Maison Miroir, accueil" }).getAttribute("href"),
+    await footer.getByRole("link", { name: "MAISON MIROIR, accueil" }).getAttribute("href"),
     "https://preview.maison-miroir.fr:9443/",
   );
   assert.equal(await footer.locator(".storefront-footer-monogram").count(), 0);
@@ -71,7 +71,7 @@ async function assertGlobalFooter(page, width) {
     1,
   );
   assert.equal(
-    await footer.getByText("© 2026 Maison Miroir. Tous droits réservés.").count(),
+    await footer.getByText("© 2026 MAISON MIROIR. Tous droits réservés.").count(),
     1,
   );
   assert.equal(await footer.getByText("For Modest Girls").count(), 1);
@@ -252,7 +252,7 @@ async function main() {
       await page.setViewportSize({ width, height: 1000 });
       await page.goto("http://localhost:3000", { waitUntil: "networkidle" });
       await page.evaluate(() => document.fonts.ready);
-      assert.match(await page.locator("h1").textContent(), /Maison Miroir/);
+      assert.match(await page.locator("h1").textContent(), /MAISON MIROIR/);
       assert.equal(await page.locator(".storefront-announcement").count(), 0);
       assert.equal(await page.locator(".mm-navbar-monogram, .storefront-footer-monogram").count(), 0);
       assert.equal(
@@ -268,7 +268,7 @@ async function main() {
       assert.equal(await page.getByText("Deux films, une même identité.").count(), 0);
       assert.equal(
         await page.locator(".storefront-showcase-title").textContent(),
-        "Maison Miroir",
+        "MAISON MIROIR",
       );
       assert.equal(
         await page.locator(".storefront-showcase-subtitle").textContent(),

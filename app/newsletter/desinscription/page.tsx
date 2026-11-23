@@ -17,7 +17,7 @@ export default async function UnsubscribePage({
         action="/api/newsletter/desinscription"
         label="Me désinscrire"
       />
-      <Link href="/">Revenir à Maison Miroir</Link>
+      <Link href="/">Revenir à MAISON MIROIR</Link>
     </div>
   );
 }

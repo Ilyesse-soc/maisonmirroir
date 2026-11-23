@@ -97,7 +97,7 @@ export default function Navbar({ homeOverlay = false }: { homeOverlay?: boolean 
           <Link
             href="/"
             className="mm-navbar-brand"
-            aria-label="Maison Miroir, accueil"
+            aria-label="MAISON MIROIR, accueil"
           >
             <span className="mm-navbar-wordmark">MAISON MIROIR</span>
           </Link>

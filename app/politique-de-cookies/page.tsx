@@ -1,7 +1,7 @@
 import LegalPage from "@/components/LegalPage";
 
 export const metadata = {
-  title: "Politique de cookies - Maison Miroir",
+  title: "Politique de cookies - MAISON MIROIR",
   robots: { index: false, follow: true },
 };
 

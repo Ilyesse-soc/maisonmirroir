@@ -84,7 +84,7 @@ export default function HomePage() {
           </div>
           <div className="home-story-copy">
             <p>
-              Maison Miroir explore la modestie, l’identité et le lifestyle à
+              MAISON MIROIR explore la modestie, l’identité et le lifestyle à
               travers des pièces qui portent un message personnel.
             </p>
             <p>

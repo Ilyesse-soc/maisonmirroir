@@ -1,7 +1,7 @@
 export const metadata = {
-  title: "Notre histoire - Maison Miroir",
+  title: "Notre histoire - MAISON MIROIR",
   description:
-    "Découvrez l’univers Maison Miroir : modestie, identité et lifestyle.",
+    "Découvrez l’univers MAISON MIROIR : modestie, identité et lifestyle.",
 };
 
 export default function StoryPage() {
@@ -11,7 +11,7 @@ export default function StoryPage() {
         <p className="storefront-eyebrow">Modesty, identity, lifestyle</p>
         <h1>Notre histoire</h1>
         <p className="editorial-intro">
-          Maison Miroir est née d’une envie : proposer des créations qui
+          MAISON MIROIR est née d’une envie : proposer des créations qui
           accompagnent les femmes au quotidien et reflètent une identité, des
           valeurs et une manière d’être au monde.
         </p>
@@ -24,7 +24,7 @@ export default function StoryPage() {
               moments ordinaires comme dans les grandes journées.
             </p>
             <p>
-              C’est cette idée qui guide la première collection Maison Miroir :
+              C’est cette idée qui guide la première collection MAISON MIROIR :
               des tote bags aux lignes simples et aux messages choisis pour
               celles qui souhaitent exprimer leur identité avec douceur et
               assurance.
@@ -40,7 +40,7 @@ export default function StoryPage() {
               sans renoncer à l’élégance ni à la personnalité.
             </p>
             <p>
-              Maison Miroir, c’est une invitation à choisir ce qui nous
+              MAISON MIROIR, c’est une invitation à choisir ce qui nous
               ressemble - et à le porter à notre façon.
             </p>
           </div>

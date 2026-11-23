@@ -37,7 +37,7 @@ export default function LaunchFooter() {
         <Link href="/politique-de-cookies">Politique de cookies</Link>
       </nav>
       <p className="launch-copyright">
-        © {new Date().getFullYear()} Maison Miroir
+        © {new Date().getFullYear()} MAISON MIROIR
       </p>
     </footer>
   );

@@ -6,7 +6,11 @@ import { reconcileDelivery } from "./deliveryEvents";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { database, transaction } from "./newsletterDb";
 import { getAdminEmail, getEmailFrom, getResendClient } from "./email";
-import { getBrandSettings, type BrandSettings } from "./brandSettings";
+import {
+  getBrandSettings,
+  normalizeBrandText,
+  type BrandSettings,
+} from "./brandSettings";
 
 export const CONSENT_VERSION = "launch-marketing-v1-2026-11-15";
 export const hash = (value: string) =>
@@ -66,7 +70,7 @@ export async function sendCampaignTest(id: string) {
   const result = await resend.emails.send({
     from: getEmailFrom(),
     to: [recipient],
-    subject: `[Test] ${c.subject}`,
+    subject: `[Test] ${normalizeBrandText(c.subject)}`,
     html: rendered.html,
     text: rendered.text,
   });
@@ -201,8 +205,8 @@ export function welcomeHtml(unsubscribeUrl: string) {
 }
 export function launchAnnouncementTemplate() {
   return {
-    title: "Ouverture de Maison Miroir",
-    subject: "Maison Miroir ouvre enfin ses portes",
+    title: "Ouverture de MAISON MIROIR",
+    subject: "MAISON MIROIR ouvre enfin ses portes",
     body: launchBody,
     linkUrl: `${siteUrl()}/catalogue`,
   };
@@ -296,22 +300,24 @@ function campaignBrandSettings(settings: BrandSettings) {
 }
 function campaignEmail(c: CampaignContent, unsubscribeUrl: string) {
   const products = Array.isArray(c.products) ? c.products : [];
+  const title = normalizeBrandText(c.title),
+    body = normalizeBrandText(c.body);
   const contentHtml =
     (c.image_url
-      ? '<img width="540" style="max-width:100%;height:auto" alt="Visuel de la campagne Maison Miroir" src="' +
+      ? '<img width="540" style="max-width:100%;height:auto" alt="Visuel de la campagne MAISON MIROIR" src="' +
         escapeHtml(safeUrl(c.image_url)) +
         '">'
       : "") +
     '<p style="white-space:pre-line">' +
-    escapeHtml(c.body) +
+    escapeHtml(body) +
     "</p>" +
     products
       .map(
         (p) =>
           "<h2>" +
-          escapeHtml(p.name) +
+          escapeHtml(normalizeBrandText(p.name)) +
           "</h2><p>" +
-          escapeHtml(p.description || "") +
+          escapeHtml(normalizeBrandText(p.description || "")) +
           "</p><p>" +
           escapeHtml(String(p.price)) +
           " EUR</p>" +
@@ -341,9 +347,10 @@ function campaignEmail(c: CampaignContent, unsubscribeUrl: string) {
       : "");
   return renderNewsletterEmail("launch", {
     siteUrl: siteUrl(),
-    title: c.title === launchAnnouncementTemplate().title ? undefined : c.title,
-    body: c.body,
-    preheader: c.preheader,
+    title:
+      title === launchAnnouncementTemplate().title ? undefined : title,
+    body,
+    preheader: c.preheader ? normalizeBrandText(c.preheader) : undefined,
     brandName: c.brand_name,
     contactEmail: c.contact_email,
     instagramUrl: c.instagram_url || undefined,
@@ -356,9 +363,17 @@ function campaignEmail(c: CampaignContent, unsubscribeUrl: string) {
     actionUrl: safeUrl(c.link_url || siteUrl()),
     unsubscribeUrl,
     text:
-      c.body +
+      body +
       products
-        .map((p) => "\n" + p.name + " - " + p.price + " EUR : " + p.url)
+        .map(
+          (p) =>
+            "\n" +
+            normalizeBrandText(p.name) +
+            " - " +
+            p.price +
+            " EUR : " +
+            p.url,
+        )
         .join(""),
   });
 }
@@ -388,7 +403,7 @@ export async function approveCampaign(id: string, scheduledAt?: string) {
           id,
           `${id}:${subscriber.id}`,
           JSON.stringify({
-            subject: c.subject,
+            subject: normalizeBrandText(c.subject),
             html: campaignHtml({ ...c, ...campaignBrandSettings(brandSettings) }, url.replace("?token=", "#token=")),
             text: campaignEmail({ ...c, ...campaignBrandSettings(brandSettings) }, url.replace("?token=", "#token=")).text,
             unsubscribe: url,

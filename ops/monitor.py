@@ -35,7 +35,7 @@ previous = json.loads(STATE.read_text()) if STATE.exists() else {'failures': 0, 
 current = {'failures': previous['failures'] + 1 if problems else 0, 'last_alert': previous['last_alert']}
 if current['failures'] >= 3 and time.time() - previous['last_alert'] >= 3600:
     if config.get('enabled') and all(config.get(k) for k in ['resend_key', 'from', 'to']):
-        payload = json.dumps({'from': config['from'], 'to': config['to'], 'subject': 'Maison Miroir - incident serveur', 'html': '<h1>Vérification du VPS nécessaire</h1><ul>' + ''.join('<li>' + html.escape(p) + '</li>' for p in sorted(set(problems))) + '</ul>'}).encode()
+        payload = json.dumps({'from': config['from'], 'to': config['to'], 'subject': 'MAISON MIROIR - incident serveur', 'html': '<h1>Vérification du VPS nécessaire</h1><ul>' + ''.join('<li>' + html.escape(p) + '</li>' for p in sorted(set(problems))) + '</ul>'}).encode()
         request = urllib.request.Request('https://api.resend.com/emails', data=payload, headers={'Authorization': 'Bearer ' + config['resend_key'], 'Content-Type': 'application/json', 'Idempotency-Key': 'incident-' + datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d%H')})
         with urllib.request.urlopen(request, timeout=10) as response:
             if response.status not in (200, 201): raise RuntimeError('ALERT_REQUEST_REJECTED')

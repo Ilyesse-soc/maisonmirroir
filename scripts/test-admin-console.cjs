@@ -80,10 +80,18 @@ async function main() {
         return { getAdminEmail: () => "admin@example.test" };
       if (id === "@/lib/products") return load("lib/products.ts");
       if (id === "@/lib/brandSettings") {
+        const normalizeBrandText = (value) =>
+          value.replace(/\bMAISON MIROIRS?\b/gi, "MAISON MIROIR");
         return {
+          normalizeBrandText,
           getBrandSettings: async () => {
             const result = await query("SELECT key,value FROM mm_brand_settings");
-            return Object.fromEntries(result.rows.map((row) => [row.key, row.value]));
+            return Object.fromEntries(
+              result.rows.map((row) => [
+                row.key,
+                normalizeBrandText(row.value),
+              ]),
+            );
           },
         };
       }
@@ -191,13 +199,28 @@ async function main() {
 
   const settings = load("app/api/admin/settings/route.ts");
   const settingsData = await (await settings.GET()).json();
-  assert.equal(settingsData.settings.brand_name, "Maison Miroir");
+  assert.equal(settingsData.settings.brand_name, "MAISON MIROIR");
   assert.equal(Object.hasOwn(settingsData, "resendApiKey"), false);
   const updatedSettings = await settings.PUT(req("https://example.test/api/admin/settings", "PUT", {
     ...settingsData.settings,
+    brand_name: "Maison Miroir",
+    confirmation_copy: "Merci pour Maison Miroir.",
     instagram_url: "https://www.instagram.com/maison-miroir-test/",
   }));
   assert.equal(updatedSettings.status, 200);
+  const updatedSettingsData = await updatedSettings.json();
+  assert.equal(updatedSettingsData.settings.brand_name, "MAISON MIROIR");
+  assert.equal(updatedSettingsData.settings.confirmation_copy, "Merci pour MAISON MIROIR.");
+  assert.equal(
+    (await query("SELECT value FROM mm_brand_settings WHERE key='brand_name'")).rows[0].value,
+    "MAISON MIROIR",
+  );
+  await query(
+    "UPDATE mm_brand_settings SET value=$1 WHERE key='confirmation_copy'",
+    ["Merci pour Maison Miroir."],
+  );
+  const legacySettings = await (await settings.GET()).json();
+  assert.equal(legacySettings.settings.confirmation_copy, "Merci pour MAISON MIROIR.");
   assert.equal(
     (await query("SELECT value FROM mm_brand_settings WHERE key='instagram_url'")).rows[0].value,
     "https://www.instagram.com/maison-miroir-test/",
@@ -568,10 +591,10 @@ async function main() {
 
   const newsletter = load("app/api/admin/newsletter/route.ts");
   const campaignFields = {
-    title: "Launch",
-    subject: "A subject",
-    preheader: "Preview",
-    body: "Body",
+    title: "Launch MAISON MIROIR",
+    subject: "Maison Miroir subject",
+    preheader: "Maison Miroir preview",
+    body: "Maison Miroir body",
     imageUrl: "",
     linkUrl: "",
     promoCode: "",
@@ -591,8 +614,8 @@ async function main() {
       action: "update",
       id: sourceCampaignId,
       ...campaignFields,
-      title: "Updated launch",
-      body: "Updated body",
+      title: "Updated launch Maison Miroir",
+      body: "Updated body Maison Miroir",
     }),
   );
   assert.equal(updatedResponse.status, 200);
@@ -602,8 +625,8 @@ async function main() {
     ])
   ).rows[0];
   assert.deepEqual(updatedRow, {
-    title: "Updated launch",
-    body: "Updated body",
+    title: "Updated launch MAISON MIROIR",
+    body: "Updated body MAISON MIROIR",
     status: "draft",
   });
   const previewResponse = await newsletter.POST(
@@ -625,9 +648,27 @@ async function main() {
   const duplicateRow = (
     await query("SELECT * FROM mm_campaigns WHERE id=$1", [duplicated.id])
   ).rows[0];
-  assert.equal(duplicateRow.title, "Updated launch - Copie");
-  assert.equal(duplicateRow.subject, "A subject");
+  assert.equal(duplicateRow.title, "Updated launch MAISON MIROIR - Copie");
+  assert.equal(duplicateRow.subject, "MAISON MIROIR subject");
   assert.equal(duplicateRow.status, "draft");
+  await query(
+    "UPDATE mm_campaigns SET title=$1,subject=$2,preheader=$3,body=$4 WHERE id=$5",
+    [
+      "Legacy Maison Miroir title",
+      "Legacy Maison Miroir subject",
+      "Legacy Maison Miroir preview",
+      "Legacy Maison Miroir body",
+      sourceCampaignId,
+    ],
+  );
+  const campaignList = await (await newsletter.GET()).json();
+  const listedCampaign = campaignList.campaigns.find(
+    (campaign) => campaign.id === sourceCampaignId,
+  );
+  assert.equal(listedCampaign.title, "Legacy MAISON MIROIR title");
+  assert.equal(listedCampaign.subject, "Legacy MAISON MIROIR subject");
+  assert.equal(listedCampaign.preheader, "Legacy MAISON MIROIR preview");
+  assert.equal(listedCampaign.body, "Legacy MAISON MIROIR body");
   const testResponse = await newsletter.POST(
     req("https://example.test/api/admin/newsletter", "POST", {
       action: "send-test",

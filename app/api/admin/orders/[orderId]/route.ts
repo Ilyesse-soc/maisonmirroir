@@ -151,7 +151,7 @@ export async function PATCH(
         const customerHtml = `
           <div style=\"${baseStyle}padding:0\">
             <div style=\"background:linear-gradient(135deg,#1a1408,#2c2010);padding:24px\">
-              <div style=\"color:#e8d08a;font-size:11px;letter-spacing:0.3em;text-transform:uppercase\">Maison Miroir</div>
+              <div style=\"color:#e8d08a;font-size:11px;letter-spacing:0.3em;text-transform:uppercase\">MAISON MIROIR</div>
               <div style=\"color:#fff;font-size:18px;font-weight:600;margin-top:6px\">Mise a jour de votre commande #${escapeHtml(updated.orderId)}</div>
             </div>
             <div style=\"padding:20px 24px\">

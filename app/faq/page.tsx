@@ -1,7 +1,7 @@
 export const metadata = {
-  title: "FAQ - Maison Miroir",
+  title: "FAQ - MAISON MIROIR",
   description:
-    "Réponses aux questions fréquentes sur la première collection Maison Miroir.",
+    "Réponses aux questions fréquentes sur la première collection MAISON MIROIR.",
 };
 
 const questions = [
@@ -18,7 +18,7 @@ const questions = [
   {
     question: "Où sont confectionnés les sacs ?",
     answer:
-      "Les sacs sont confectionnés en Chine auprès d’un fournisseur partenaire. Les produits sont sélectionnés avec attention par Maison Miroir.",
+      "Les sacs sont confectionnés en Chine auprès d’un fournisseur partenaire. Les produits sont sélectionnés avec attention par MAISON MIROIR.",
   },
   {
     question: "Quelle est la composition des tote bags ?",
@@ -51,7 +51,7 @@ const questions = [
       "La politique de retours et les modalités applicables seront publiées avant l’ouverture des commandes.",
   },
   {
-    question: "Comment contacter Maison Miroir ?",
+    question: "Comment contacter MAISON MIROIR ?",
     answer:
       "Pour toute question, écrivez-nous à l’adresse indiquée sur la page Contact. Pour une commande future, indiquez votre numéro de commande si vous en avez un.",
   },
@@ -61,7 +61,7 @@ export default function FAQPage() {
   return (
     <div className="editorial-page">
       <div className="storefront-wrap">
-        <p className="storefront-eyebrow">Maison Miroir</p>
+        <p className="storefront-eyebrow">MAISON MIROIR</p>
         <h1>Foire aux questions</h1>
         <p className="editorial-intro">
           Retrouvez ici les réponses aux questions les plus fréquentes sur nos

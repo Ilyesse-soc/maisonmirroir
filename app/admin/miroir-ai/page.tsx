@@ -129,7 +129,7 @@ export default function MiroirAiPage() {
         />
         <div>
           <h1>Miroir AI</h1>
-          <p className="admin-muted">Assistante marketing Maison Miroir - elle peut préparer des brouillons avec les produits du catalogue. Vous gardez la main sur leur vérification et leur validation, aucun envoi ni programmation n’est automatique.</p>
+          <p className="admin-muted">Assistante marketing MAISON MIROIR - elle peut préparer des brouillons avec les produits du catalogue. Vous gardez la main sur leur vérification et leur validation, aucun envoi ni programmation n’est automatique.</p>
         </div>
       </header>
       <section className="admin-card">

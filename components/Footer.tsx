@@ -53,7 +53,7 @@ export default function Footer({
           <a
             href="https://preview.maison-miroir.fr:9443/"
             className="storefront-footer-wordmark"
-            aria-label="Maison Miroir, accueil"
+            aria-label="MAISON MIROIR, accueil"
           >
             <span>MAISON MIROIR</span>
           </a>
@@ -139,7 +139,7 @@ export default function Footer({
       </div>
 
       <div className="storefront-footer-bottom">
-        <p>© 2026 Maison Miroir. Tous droits réservés.</p>
+        <p>© 2026 MAISON MIROIR. Tous droits réservés.</p>
         <p className="storefront-footer-tagline">For Modest Girls</p>
       </div>
     </footer>

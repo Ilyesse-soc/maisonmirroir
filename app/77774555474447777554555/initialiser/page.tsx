@@ -1,7 +1,7 @@
 import AdminSetup from "@/components/AdminSetup";
 import "../../newsletter/newsletter.css";
 export const metadata = {
-  title: "Initialiser mon espace - Maison Miroir",
+  title: "Initialiser mon espace - MAISON MIROIR",
   robots: { index: false, follow: false },
 };
 export default function SetupPage() {

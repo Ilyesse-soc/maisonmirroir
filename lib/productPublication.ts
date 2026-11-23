@@ -35,7 +35,7 @@ export async function recordProductPublication(
     [
       id,
       `Nouveauté : ${product.name}`,
-      `Une nouvelle pièce rejoint Maison Miroir`,
+      `Une nouvelle pièce rejoint MAISON MIROIR`,
       product.description.slice(0, 350),
       JSON.stringify([item]),
       `product:${product.id}:${event.id}`,

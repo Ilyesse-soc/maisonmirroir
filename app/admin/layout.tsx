@@ -14,7 +14,7 @@ export default async function AdminLayout({
       <AdminSessionControls />
       <div className="admin-shell">
         <aside className="admin-sidebar" aria-label="Navigation administrative">
-          <Link className="admin-brand" href="/admin">Maison Miroir</Link>
+          <Link className="admin-brand" href="/admin">MAISON MIROIR</Link>
           <nav>
             <Link href="/admin">Tableau de bord</Link>
             <Link href="/admin/subscribers">Abonnées</Link>

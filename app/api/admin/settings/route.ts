@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminDenied, adminSession } from "@/lib/adminAuth";
 import { adminAudit } from "@/lib/adminAudit";
-import { getBrandSettings } from "@/lib/brandSettings";
+import { getBrandSettings, normalizeBrandText } from "@/lib/brandSettings";
 import { transaction } from "@/lib/newsletterDb";
 import { mutationAllowed, readJson, InputError, inputResponse } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
@@ -53,6 +53,15 @@ export async function PUT(request: NextRequest) {
   if (originDenied) return originDenied;
   try {
     const settings = await readJson(request, settingsSchema, 70000);
+    for (const key of [
+      "brand_name",
+      "welcome_copy",
+      "confirmation_copy",
+      "launch_copy",
+      "campaign_footer",
+    ] as const) {
+      settings[key] = normalizeBrandText(settings[key]);
+    }
     await adminAudit("BRAND_SETTINGS_UPDATE_REQUESTED");
     const session = await adminSession();
     if (!session) return NextResponse.json({ error: "Authentification requise" }, { status: 401 });

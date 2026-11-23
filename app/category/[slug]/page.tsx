@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import ProductImageGallery from "@/components/ProductImageGallery";
 import { getProductsByCategory, categories } from "@/lib/products";
 import { dividerStyle, fonts, pageMaxWidth, theme } from "@/lib/uiStyles";
 
@@ -108,38 +109,27 @@ export default async function CategoryPage({
               }}
             >
               {products.map((product) => (
-                <Link
+                <article
                   key={product.id}
-                  href={`/product/${product.id}`}
                   className="mm-prod-card"
                   style={{ display: "block", textDecoration: "none" }}
                 >
-                  <div
-                    className="mm-prod-img"
+                  <ProductImageGallery
+                    productName={product.name}
+                    images={product.images}
+                    mode="card"
+                    interactive={false}
+                    triggerClassName="mm-prod-img"
+                  />
+                  <Link
+                    href={`/product/${product.id}`}
+                    className="mm-prod-card-copy"
                     style={{
-                      position: "relative",
-                      aspectRatio: "1 / 1",
-                      overflow: "hidden",
-                      marginBottom: 20,
-                      background: "#fafaf9",
+                      display: "block",
+                      textAlign: "center",
+                      textDecoration: "none",
                     }}
                   >
-                    <Image
-                      src={product.images[0]}
-                      alt={product.name}
-                      fill
-                      style={{ objectFit: "cover" }}
-                    />
-                    <div
-                      className="mm-prod-hover"
-                      style={{
-                        position: "absolute",
-                        inset: 0,
-                        backgroundColor: "rgba(0,0,0,0.06)",
-                      }}
-                    />
-                  </div>
-                  <div style={{ textAlign: "center" }}>
                     <h3
                       style={{
                         fontFamily: fonts.display,
@@ -211,8 +201,8 @@ export default async function CategoryPage({
                         À partir de {formatPrice(product.price)} €
                       </p>
                     )}
-                  </div>
-                </Link>
+                  </Link>
+                </article>
               ))}
             </div>
           )}

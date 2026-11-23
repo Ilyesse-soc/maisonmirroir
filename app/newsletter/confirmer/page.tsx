@@ -8,7 +8,7 @@ export default async function ConfirmPage({
 }) {
   const query = await searchParams;
   return (
-    <main className="newsletter-page">
+    <div className="newsletter-page">
       <p>MAISON MIROIR</p>
       <h1>Encore un petit pas…</h1>
       <p>
@@ -21,6 +21,6 @@ export default async function ConfirmPage({
         label="Confirmer mon inscription"
       />
       <Link href="/">Revenir à Maison Miroir</Link>
-    </main>
+    </div>
   );
 }

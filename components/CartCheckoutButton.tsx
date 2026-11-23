@@ -6,6 +6,7 @@ import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import type { CartAttachment, CartItem } from "@/lib/cart";
 import type { CustomerInfo } from "@/lib/orderTypes";
 import type { ShippingMethod } from "@/lib/shipping";
+import { getProductById } from "@/lib/products";
 
 export default function CartCheckoutButton({
   items,
@@ -31,6 +32,19 @@ export default function CartCheckoutButton({
     [items],
   );
   const total = subtotal + shippingMethod.price;
+  const unavailableItems = items.filter((item) => {
+    const product = getProductById(item.productId);
+    return !product || product.availableForSale !== true;
+  });
+
+  if (unavailableItems.length > 0) {
+    return (
+      <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
+        Un ou plusieurs articles du panier ne sont pas encore disponibles à la
+        commande. Retirez-les pour continuer.
+      </p>
+    );
+  }
 
   if (!clientId) {
     return (
@@ -164,84 +178,82 @@ export default function CartCheckoutButton({
                 body: JSON.stringify(payload),
               });
 
-              if (!res.ok) {
-                console.error(
-                  "[checkout] order api returned non-ok after payment",
-                  { status: res.status, paypalOrderId: data.orderID },
-                );
-              } else {
-                const apiData = (await res.json().catch(() => null)) as {
-                  orderId?: string;
-                  total?: string;
-                  paymentMethod?: string;
-                  subtotal?: string;
-                  shipping?: string;
-                  shippingMethod?: string;
-                  shippingDelay?: string;
-                  emailWarnings?: string[];
-                } | null;
+              if (!res.ok) throw new Error(`ORDER_API_FAILED_${res.status}`);
+              const apiData = (await res.json()) as {
+                orderId?: string;
+                total?: string;
+                paymentMethod?: string;
+                subtotal?: string;
+                shipping?: string;
+                shippingMethod?: string;
+                shippingDelay?: string;
+                emailWarnings?: string[];
+              };
 
-                const orderId = apiData?.orderId || "";
-                if (!orderId) throw new Error("Missing orderId from API");
+              const orderId = apiData.orderId || "";
+              if (!orderId) throw new Error("Missing orderId from API");
 
-                try {
-                  if (typeof window !== "undefined")
-                    sessionStorage.setItem(sentKey, "1");
-                } catch {
-                  // ignore
-                }
-
-                try {
-                  if (typeof window !== "undefined") {
-                    sessionStorage.setItem(
-                      "mm:lastOrder",
-                      JSON.stringify({
-                        orderId,
-                        paymentMethod: apiData?.paymentMethod || "PAYPAL",
-                        product: {
-                          id: items[0].productId,
-                          name: items[0].name,
-                          categoryLabel: items[0].categoryLabel,
-                          unitPrice: items[0].unitPrice.toFixed(2),
-                          quantity: items[0].quantity,
-                          subtotal: apiData?.subtotal || subtotal.toFixed(2),
-                          shipping:
-                            apiData?.shipping ||
-                            shippingMethod.price.toFixed(2),
-                          total: apiData?.total || total.toFixed(2),
-                        },
-                        items: items.map((item) => ({
-                          id: item.productId,
-                          name: item.variantLabel
-                            ? `${item.name} - ${item.variantLabel}`
-                            : item.name,
-                          categoryLabel: item.categoryLabel,
-                          unitPrice: item.unitPrice.toFixed(2),
-                          quantity: item.quantity,
-                          subtotal: (item.unitPrice * item.quantity).toFixed(2),
-                        })),
-                        shipping: {
-                          id: shippingMethod.id,
-                          label: shippingMethod.label,
-                          shortLabel: shippingMethod.shortLabel,
-                          carrier: shippingMethod.carrier,
-                          price: shippingMethod.price,
-                          estimatedDelay: shippingMethod.estimatedDelay,
-                        },
-                        customValues: {},
-                        address: customer,
-                      }),
-                    );
-                  }
-                } catch {
-                  // ignore
-                }
+              try {
+                if (typeof window !== "undefined")
+                  sessionStorage.setItem(sentKey, "1");
+              } catch {
+                // ignore
               }
-            } catch (error) {
+
+              try {
+                if (typeof window !== "undefined") {
+                  sessionStorage.setItem(
+                    "mm:lastOrder",
+                    JSON.stringify({
+                      orderId,
+                      paymentMethod: apiData.paymentMethod || "PAYPAL",
+                      product: {
+                        id: items[0].productId,
+                        name: items[0].name,
+                        categoryLabel: items[0].categoryLabel,
+                        unitPrice: items[0].unitPrice.toFixed(2),
+                        quantity: items[0].quantity,
+                        subtotal: apiData.subtotal || subtotal.toFixed(2),
+                        shipping:
+                          apiData.shipping || shippingMethod.price.toFixed(2),
+                        total: apiData.total || total.toFixed(2),
+                      },
+                      items: items.map((item) => ({
+                        id: item.productId,
+                        name: item.variantLabel
+                          ? `${item.name} - ${item.variantLabel}`
+                          : item.name,
+                        categoryLabel: item.categoryLabel,
+                        unitPrice: item.unitPrice.toFixed(2),
+                        quantity: item.quantity,
+                        subtotal: (item.unitPrice * item.quantity).toFixed(2),
+                      })),
+                      shipping: {
+                        id: shippingMethod.id,
+                        label: shippingMethod.label,
+                        shortLabel: shippingMethod.shortLabel,
+                        carrier: shippingMethod.carrier,
+                        price: shippingMethod.price,
+                        estimatedDelay: shippingMethod.estimatedDelay,
+                      },
+                      customValues: {},
+                      address: customer,
+                    }),
+                  );
+                }
+              } catch {
+                // ignore
+              }
+            } catch {
               console.error(
-                "[checkout] order post-payment processing warning",
-                { paypalOrderId: data.orderID, error },
+                "[checkout] order confirmation failed after PayPal capture",
+                { paypalOrderId: data.orderID },
               );
+              setStatus("error");
+              setErrorMessage(
+                "PayPal a confirmé la capture, mais la commande n’a pas pu être confirmée. Ne relancez pas le paiement et contactez Maison Miroir.",
+              );
+              return;
             }
 
             onSuccess?.(data.orderID);

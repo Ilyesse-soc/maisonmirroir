@@ -1,4 +1,4 @@
-# Maison Miroir — livraison locale du 15 novembre 2026
+# Maison Miroir - livraison locale du 15 novembre 2026
 
 ## État réel
 

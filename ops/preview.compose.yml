@@ -1,0 +1,176 @@
+name: maison-miroir-preview
+services:
+  postgres:
+    image: postgres:18-alpine@sha256:0115267ab5a509022df9319c77be365cef335adb71556c75f60f5360ee247e71
+    container_name: maison-miroir-preview-postgres
+    restart: unless-stopped
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: 0.3
+    pids_limit: 80
+    environment:
+      POSTGRES_DB: maison_miroir_preview
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres-password
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command: [postgres, -c, config_file=/etc/postgresql/postgresql.conf]
+    volumes:
+      - preview_data:/var/lib/postgresql/data
+      - ./secrets/postgres-password:/run/secrets/postgres-password:ro
+      - ./secrets/app-db-password:/run/secrets/app-db-password:ro
+      - ./secrets/migrate-db-password:/run/secrets/migrate-db-password:ro
+      - ./secrets/db-server.crt:/run/secrets/db-server.crt:ro
+      - ./secrets/db-server.key:/run/secrets/db-server.key:ro
+      - ./secrets/db-ca.crt:/run/secrets/db-ca.crt:ro
+      - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+      - ./init.sh:/docker-entrypoint-initdb.d/010-preview-init.sh:ro
+    tmpfs:
+      - /tmp:size=32m
+      - /var/run/postgresql:size=16m
+    expose: ["5432"]
+    networks: [preview]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U postgres -d maison_miroir_preview"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  app:
+    image: ${PREVIEW_IMAGE:?Set the locally built preview image}
+    container_name: maison-miroir-preview-app
+    restart: unless-stopped
+    user: "1000:1000"
+    init: true
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 768m
+    mem_reservation: 256m
+    cpus: 0.6
+    pids_limit: 128
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      NODE_OPTIONS: --max-old-space-size=512
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEWSLETTER_SITE_URL: https://preview.maison-miroir.fr:9443
+      NEWSLETTER_SEND_ENABLED: "false"
+      SHOP_OPEN: "false"
+      DATABASE_POOL_MAX: 3
+      DATABASE_CA_FILE: /run/secrets/db-ca.crt
+    env_file: [./secrets/app.env]
+    volumes:
+      - ./secrets/db-ca.crt:/run/secrets/db-ca.crt:ro
+    expose: ["3000"]
+    tmpfs:
+      - /tmp:size=64m,uid=1000,gid=1000
+      - /app/.next/cache:size=32m,uid=1000,gid=1000
+    networks: [preview]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          CMD,
+          node,
+          -e,
+          "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 45s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+  migrate:
+    image: ${PREVIEW_IMAGE:?Set the locally built preview image}
+    container_name: maison-miroir-preview-migrate
+    profiles: [maintenance]
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 384m
+    cpus: 0.3
+    pids_limit: 64
+    command: [node, migrate.mjs, --init-admin]
+    env_file: [./secrets/migrate.env]
+    environment:
+        DATABASE_CA_FILE: /run/secrets/db-ca.crt
+    volumes:
+        - ./secrets/db-ca.crt:/run/secrets/db-ca.crt:ro
+        - ./bootstrap:/bootstrap
+    tmpfs:
+        - /tmp:size=32m,uid=1000,gid=1000
+    networks: [preview]
+    depends_on:
+        postgres:
+          condition: service_healthy
+    logging:
+        driver: local
+        options:
+          max-size: 10m
+          max-file: "3"
+
+  nginx:
+    image: nginx:stable-alpine-slim@sha256:8c950211a641ec5b23f265450517001f6bcca533666120ebe36cb4cff3d00a55
+    container_name: maison-miroir-preview-nginx
+    restart: unless-stopped
+    user: "101:101"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    entrypoint: [nginx, -g, "daemon off;"]
+    mem_limit: 128m
+    mem_reservation: 32m
+    cpus: 0.1
+    pids_limit: 64
+    ports: ["15.235.62.124:9443:8443"]
+    volumes:
+        - ./nginx.conf:/etc/nginx/nginx.conf:ro
+        - ./tls:/etc/nginx/tls:ro
+    tmpfs:
+        - /tmp:size=16m,uid=101,gid=101
+        - /var/cache/nginx:size=16m,uid=101,gid=101
+    networks: [preview, public]
+    depends_on:
+        app:
+          condition: service_healthy
+    healthcheck:
+        test: [CMD, nginx, -t]
+        interval: 30s
+        timeout: 5s
+        retries: 3
+    logging:
+        driver: local
+        options:
+          max-size: 10m
+          max-file: "3"
+
+networks:
+  preview:
+    name: maison-miroir-preview-edge
+    internal: true
+  public:
+    name: maison-miroir-preview-public
+    driver: bridge
+
+volumes:
+  preview_data:
+    name: maison-miroir-preview-db

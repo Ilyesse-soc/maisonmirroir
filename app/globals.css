@@ -262,7 +262,7 @@ button,
   box-shadow: 0 4px 16px rgba(201, 162, 39, 0.15);
 }
 
-/* Page load — hero content stagger */
+/* Page load - hero content stagger */
 .mm-hero-content > * {
   opacity: 0;
 }

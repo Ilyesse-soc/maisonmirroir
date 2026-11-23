@@ -195,7 +195,7 @@ export default function CalendarPage() {
           <label>Type<select name="kind"><option value="campaign">Campagne</option><option value="launch">Lancement</option><option value="content">Contenu</option><option value="other">Autre</option></select></label>
           <label>Début<input name="startsAt" type="datetime-local" required /></label>
           <label>Fin (facultative)<input name="endsAt" type="datetime-local" /></label>
-          <label>Campagne liée (facultatif)<select name="campaignId"><option value="">Aucune</option>{campaigns.map((item) => <option key={item.id} value={item.id}>{item.title} — {item.status}</option>)}</select></label>
+          <label>Campagne liée (facultatif)<select name="campaignId"><option value="">Aucune</option>{campaigns.map((item) => <option key={item.id} value={item.id}>{item.title} - {item.status}</option>)}</select></label>
           <label>Notes<textarea name="notes" maxLength={2000} rows={3} /></label>
           <div className="admin-actions">
             <button disabled={busy}>{editing ? "Enregistrer les modifications" : "Ajouter au calendrier"}</button>

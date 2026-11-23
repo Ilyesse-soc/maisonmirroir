@@ -90,6 +90,8 @@ export function canonicalItems(items: ProductInfo[]) {
     );
     if (
       !p ||
+      p.publiclyListed !== true ||
+      p.availableForSale !== true ||
       !Number.isInteger(item.quantity) ||
       item.quantity < 1 ||
       item.quantity > 1000
@@ -120,18 +122,20 @@ export function canonicalItems(items: ProductInfo[]) {
     };
   });
 }
-export async function verifiedPayPalOrder(id: string, total: number) {
+
+function paypalApiBase() {
+  const environment = process.env.PAYPAL_ENV;
+  if (environment === "sandbox") return "https://api-m.sandbox.paypal.com";
+  if (environment === "production") return "https://api-m.paypal.com";
+  throw Error("PAYMENT_ENV_NOT_CONFIGURED");
+}
+
+async function paypalAccessToken(base: string) {
   const client =
       process.env.PAYPAL_CLIENT_ID || process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID,
-    secret = process.env.PAYPAL_CLIENT_SECRET,
-    merchant = process.env.PAYPAL_MERCHANT_ID;
-  if (!client || !secret || !merchant)
-    throw Error("PAYMENT_VERIFICATION_NOT_CONFIGURED");
-  const base =
-    process.env.PAYPAL_ENV === "sandbox"
-      ? "https://api-m.sandbox.paypal.com"
-      : "https://api-m.paypal.com";
-  const tokenResponse = await fetch(base + "/v1/oauth2/token", {
+    secret = process.env.PAYPAL_CLIENT_SECRET;
+  if (!client || !secret) throw Error("PAYMENT_VERIFICATION_NOT_CONFIGURED");
+  const response = await fetch(base + "/v1/oauth2/token", {
     method: "POST",
     headers: {
       Authorization:
@@ -142,12 +146,28 @@ export async function verifiedPayPalOrder(id: string, total: number) {
     cache: "no-store",
     signal: AbortSignal.timeout(10000),
   });
-  if (!tokenResponse.ok) throw Error("PAYMENT_VERIFICATION_UNAVAILABLE");
-  const token = await tokenResponse.json();
+  if (!response.ok) throw Error("PAYMENT_VERIFICATION_UNAVAILABLE");
+  const payload: unknown = await response.json();
+  if (
+    !payload ||
+    typeof payload !== "object" ||
+    !("access_token" in payload) ||
+    typeof payload.access_token !== "string"
+  )
+    throw Error("PAYMENT_VERIFICATION_INVALID_RESPONSE");
+  return payload.access_token;
+}
+
+export async function verifiedPayPalOrder(id: string, total: number) {
+  const merchant = process.env.PAYPAL_MERCHANT_ID;
+  if (!merchant)
+    throw Error("PAYMENT_VERIFICATION_NOT_CONFIGURED");
+  const base = paypalApiBase();
+  const token = await paypalAccessToken(base);
   const response = await fetch(
     base + "/v2/checkout/orders/" + encodeURIComponent(id),
     {
-      headers: { Authorization: "Bearer " + token.access_token },
+      headers: { Authorization: "Bearer " + token },
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
     },
@@ -183,5 +203,49 @@ export async function verifiedPayPalOrder(id: string, total: number) {
   }
   if (captured !== Math.round(total * 100))
     throw Error("PAYMENT_AMOUNT_MISMATCH");
+  return true;
+}
+
+export async function verifyPayPalWebhook(
+  headers: {
+    authAlgo: string;
+    certUrl: string;
+    transmissionId: string;
+    transmissionSignature: string;
+    transmissionTime: string;
+  },
+  event: Record<string, unknown>,
+) {
+  const webhookId = process.env.PAYPAL_WEBHOOK_ID;
+  if (!webhookId) throw Error("PAYPAL_WEBHOOK_NOT_CONFIGURED");
+  const base = paypalApiBase();
+  const token = await paypalAccessToken(base);
+  const response = await fetch(
+    base + "/v1/notifications/verify-webhook-signature",
+    {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        auth_algo: headers.authAlgo,
+        cert_url: headers.certUrl,
+        transmission_id: headers.transmissionId,
+        transmission_sig: headers.transmissionSignature,
+        transmission_time: headers.transmissionTime,
+        webhook_id: webhookId,
+        webhook_event: event,
+      }),
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+  if (!response.ok) throw Error("PAYPAL_WEBHOOK_VERIFICATION_UNAVAILABLE");
+  const result: unknown = await response.json();
+  if (!result || typeof result !== "object" || !("verification_status" in result))
+    throw Error("PAYPAL_WEBHOOK_VERIFICATION_INVALID_RESPONSE");
+  if (result.verification_status !== "SUCCESS")
+    throw Error("PAYPAL_WEBHOOK_SIGNATURE_INVALID");
   return true;
 }

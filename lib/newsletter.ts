@@ -5,7 +5,7 @@ import { processCartReminders } from "./abandonedCarts";
 import { reconcileDelivery } from "./deliveryEvents";
 import { createHash, randomBytes, randomUUID } from "crypto";
 import { database, transaction } from "./newsletterDb";
-import { getEmailFrom, getResendClient } from "./email";
+import { getAdminEmail, getEmailFrom, getResendClient } from "./email";
 import { getBrandSettings, type BrandSettings } from "./brandSettings";
 
 export const CONSENT_VERSION = "launch-marketing-v1-2026-11-15";
@@ -46,6 +46,34 @@ export function emailReady() {
     process.env.NEWSLETTER_HASH_SECRET &&
     process.env.NEWSLETTER_WORKER_SECRET,
   );
+}
+export async function sendCampaignTest(id: string) {
+  if (!emailReady()) throw new Error("EMAIL_DISABLED");
+  const recipient = getAdminEmail();
+  if (!recipient) throw new Error("TEST_RECIPIENT_DISABLED");
+  const c = (
+    await database().query("SELECT * FROM mm_campaigns WHERE id=$1", [id])
+  ).rows[0];
+  if (!c) throw new Error("CAMPAIGN_NOT_FOUND");
+  const brandSettings = await getBrandSettings();
+  const unsubscribeUrl = `${siteUrl()}/newsletter/desinscription?token=test-only`;
+  const rendered = campaignEmail(
+    { ...c, ...campaignBrandSettings(brandSettings) },
+    unsubscribeUrl,
+  );
+  const resend = getResendClient();
+  if (!resend) throw new Error("EMAIL_DISABLED");
+  const result = await resend.emails.send({
+    from: getEmailFrom(),
+    to: [recipient],
+    subject: `[Test] ${c.subject}`,
+    html: rendered.html,
+    text: rendered.text,
+  });
+  if (result.error) throw new Error("EMAIL_PROVIDER_ERROR");
+  const providerId = result.data?.id;
+  if (!providerId) throw new Error("EMAIL_PROVIDER_UNCONFIRMED");
+  return { providerId, recipient };
 }
 export async function subscribe(email: string, ip: string) {
   if (!emailReady()) throw new Error("Newsletter unavailable");
@@ -335,7 +363,7 @@ function campaignEmail(c: CampaignContent, unsubscribeUrl: string) {
   });
 }
 export async function approveCampaign(id: string, scheduledAt?: string) {
-  if (process.env.SHOP_OPEN !== "true") throw new Error("SHOP_CLOSED");
+  if (!emailReady()) throw new Error("EMAIL_DISABLED");
   const brandSettings = await getBrandSettings();
   return transaction(async (db) => {
     const c = (
@@ -345,8 +373,6 @@ export async function approveCampaign(id: string, scheduledAt?: string) {
       )
     ).rows[0];
     if (!c) throw new Error("Campagne déjà validée ou introuvable");
-    if (process.env.SHOP_OPEN !== "true" && c.products?.length)
-      throw new Error("SHOP_CLOSED");
     const subscribers = (
       await db.query(
         `SELECT id,unsubscribe_token FROM mm_subscribers WHERE status='active'`,
@@ -406,7 +432,7 @@ export async function processQueue() {
         );
         return (
           await db.query(
-            `UPDATE mm_jobs SET status='processing',lease_id=gen_random_uuid(),leased_at=now(),first_attempt_at=COALESCE(first_attempt_at,now()),attempts=attempts+1 WHERE id=(SELECT id FROM mm_jobs WHERE (kind IN ('confirmation','welcome','unsubscribe_confirmation') OR $1::boolean) AND ((status IN ('pending','retry') AND next_attempt<=now()) OR (status='processing' AND leased_at<now()-interval '5 minutes')) ORDER BY next_attempt FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`,
+            `UPDATE mm_jobs SET status='processing',lease_id=gen_random_uuid(),leased_at=now(),first_attempt_at=COALESCE(first_attempt_at,now()),attempts=attempts+1 WHERE id=(SELECT id FROM mm_jobs WHERE (kind IN ('confirmation','welcome','unsubscribe_confirmation','campaign') OR $1::boolean) AND ((status IN ('pending','retry') AND next_attempt<=now()) OR (status='processing' AND leased_at<now()-interval '5 minutes')) ORDER BY next_attempt FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`,
             [process.env.SHOP_OPEN === "true"],
           )
         ).rows[0];

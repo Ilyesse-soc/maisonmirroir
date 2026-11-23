@@ -101,7 +101,7 @@ function buildSection(title: string, rows: Array<[string, string]>): string {
   return `
     <div style="border:1px solid #f3e4b8;padding:18px 18px 10px;margin:0 0 14px;background:#fff">
       <div style="font-size:11px;letter-spacing:0.28em;text-transform:uppercase;color:#c9a227;margin:0 0 10px">${safeTitle}</div>
-      <table style="width:100%;border-collapse:collapse">${rowsHtml || '<tr><td style="font-size:13px;color:#999">—</td></tr>'}</table>
+      <table style="width:100%;border-collapse:collapse">${rowsHtml || '<tr><td style="font-size:13px;color:#999">-</td></tr>'}</table>
     </div>
   `;
 }
@@ -139,6 +139,8 @@ export async function POST(req: NextRequest) {
   try {
     const denied = mutationAllowed(req);
     if (denied) return denied;
+    if (process.env.SHOP_OPEN !== "true")
+      return NextResponse.json({ error: "SHOP_CLOSED" }, { status: 403 });
     const rawBody = (await readJson(
       req,
       incomingOrderSchema,
@@ -368,7 +370,7 @@ export async function POST(req: NextRequest) {
         return approxBytes > 0 && approxBytes <= 2 * 1024 * 1024;
       });
 
-    const subject = `Nouvelle commande reçue – #${orderId}`;
+    const subject = `Nouvelle commande reçue - #${orderId}`;
     const orderDate = new Date().toLocaleString("fr-FR", {
       dateStyle: "short",
       timeStyle: "short",

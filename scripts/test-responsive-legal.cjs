@@ -1,11 +1,9 @@
-// Browser-only local QA. No production configuration, database or provider calls.
-const fs = require("node:fs"),
-  path = require("node:path"),
-  assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
+const assert = require("node:assert/strict");
 const { spawn } = require("node:child_process");
 const { chromium, firefox } = require("@playwright/test");
 const firefoxRun = process.env.QA_ENGINE === "firefox";
-const before = process.argv.includes("--before");
 const directory = path.resolve(
   ".qa/responsive-legal",
   firefoxRun ? "firefox" : ".",
@@ -25,6 +23,11 @@ const env = {
   NEWSLETTER_DATABASE_URL: "",
   RESEND_API_KEY: "",
   NEWSLETTER_SEND_ENABLED: "false",
+  PAYPAL_ENV: "",
+  PAYPAL_CLIENT_ID: "",
+  PAYPAL_CLIENT_SECRET: "",
+  PAYPAL_MERCHANT_ID: "",
+  PAYPAL_WEBHOOK_ID: "",
   NEXT_TELEMETRY_DISABLED: "1",
 };
 const log = fs.openSync(path.join(directory, "local-server.log"), "w");
@@ -33,6 +36,7 @@ const server = spawn(process.execPath, [".next/standalone/server.js"], {
   stdio: ["ignore", log, log],
   windowsHide: true,
 });
+
 async function main() {
   let browser;
   try {
@@ -44,18 +48,18 @@ async function main() {
           break;
         }
       } catch {}
-      await new Promise((r) => setTimeout(r, 250));
+      await new Promise((resolve) => setTimeout(resolve, 250));
     }
     assert(ready, "Local server ready");
     browser = await (firefoxRun ? firefox : chromium).launch({
       headless: true,
       executablePath: firefoxRun ? undefined : process.env.QA_BROWSER_PATH,
     });
-    const context = await browser.newContext(),
-      page = await context.newPage(),
-      errors = [],
-      thirdParties = [];
-    page.on("pageerror", (e) => errors.push(e.message));
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const errors = [];
+    const thirdParties = [];
+    page.on("pageerror", (error) => errors.push(error.message));
     await context.route("**/*", (route) => {
       const url = new URL(route.request().url());
       if (url.hostname !== "127.0.0.1") {
@@ -64,169 +68,194 @@ async function main() {
       }
       return route.continue();
     });
-    const sizes = before
-      ? [
-          [390, 844],
-          [1440, 900],
-        ]
-      : [
-          [320, 568],
-          [360, 800],
-          [375, 812],
-          [390, 844],
-          [393, 852],
-          [430, 932],
-          [768, 1024],
-          [820, 1180],
-          [1024, 1366],
-          [1280, 720],
-          [1366, 768],
-          [1440, 900],
-          [1920, 1080],
-          [2560, 1440],
-        ];
+
+    const viewportSizes = [
+      [320, 568],
+      [360, 800],
+      [375, 812],
+      [390, 844],
+      [393, 852],
+      [430, 932],
+      [768, 1024],
+      [820, 1180],
+      [1024, 1366],
+      [1280, 720],
+      [1366, 768],
+      [1440, 900],
+      [1920, 1080],
+      [2560, 1440],
+    ];
     const results = [];
-    for (const [width, height] of sizes) {
-      for (const [w, h] of before
-        ? [[width, height]]
-        : [
-            [width, height],
-            [height, width],
-          ]) {
-        await page.setViewportSize({ width: w, height: h });
-        await page.goto("http://127.0.0.1:43819", { waitUntil: "networkidle" });
+    for (const [width, height] of viewportSizes) {
+      for (const [viewportWidth, viewportHeight] of [
+        [width, height],
+        [height, width],
+      ]) {
+        await page.setViewportSize({
+          width: viewportWidth,
+          height: viewportHeight,
+        });
+        const response = await page.goto("http://127.0.0.1:43819", {
+          waitUntil: "networkidle",
+        });
+        assert.equal(response.status(), 200);
         await page.evaluate(() => document.fonts.ready);
-        if (!before) {
-          assert(
-            await page
-              .locator(".illustration img")
-              .evaluate((i) => i.complete && i.naturalWidth > 0),
-          );
-          const overflow = await page.evaluate(() =>
-            Array.from(document.querySelectorAll("main *"))
-              .filter((e) => {
-                const r = e.getBoundingClientRect(),
-                  s = getComputedStyle(e);
-                return (
-                  r.width > 1 &&
-                  s.position !== "absolute" &&
-                  !e.closest(".honeypot, .sr-only") &&
-                  (r.right > innerWidth + 1 || r.left < -1)
-                );
-              })
-              .map((e) => e.tagName + "." + e.className),
-          );
-          assert.deepEqual(overflow, [], `Element overflow at ${w}x${h}`);
-          assert.equal(
-            await page.locator("input[name=consent]").isChecked(),
-            false,
-          );
-          assert.equal(
-            await page.locator(".social-links a").first().getAttribute("href"),
-            "https://www.instagram.com/maison_miroir.fr/",
-          );
-          assert.equal(
-            await page.locator(".social-links a").nth(1).getAttribute("href"),
-            "https://www.tiktok.com/@maison.miroir.fr",
-          );
-        }
-        results.push({ width: w, height: h, passed: true });
-        if (w === width && [390, 430, 768, 1440].includes(w))
+        assert.equal(
+          await page.locator(".storefront-showcase-title").textContent(),
+          "Maison Miroir",
+        );
+        assert.equal(await page.locator(".storefront-product-card").count(), 2);
+        assert.equal(await page.locator("form").count(), 0);
+        assert(
+          await page
+            .locator(".storefront-showcase-slide.is-active video")
+            .evaluate((video) => video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA),
+        );
+        const overflow = await page.evaluate(() =>
+          Array.from(document.querySelectorAll("main *"))
+            .filter((element) => {
+              const rect = element.getBoundingClientRect();
+              const style = getComputedStyle(element);
+              return (
+                rect.width > 1 &&
+                style.position !== "absolute" &&
+                !element.closest(".honeypot, .sr-only") &&
+                !element.closest(".storefront-showcase-frame") &&
+                (rect.right > innerWidth + 1 || rect.left < -1)
+              );
+            })
+            .map((element) => {
+              const rect = element.getBoundingClientRect();
+              return {
+                element: element.tagName + "." + element.className,
+                left: rect.left,
+                right: rect.right,
+                width: rect.width,
+                position: getComputedStyle(element).position,
+              };
+            }),
+        );
+        assert.deepEqual(
+          overflow,
+          [],
+          `Element overflow at ${viewportWidth}x${viewportHeight}`,
+        );
+        assert.equal(
+          await page.locator(".home-order-status").textContent(),
+          "Pas encore ouverte",
+        );
+        assert.equal(
+          await page.locator(".home-order-notice").count(),
+          1,
+        );
+        results.push({
+          width: viewportWidth,
+          height: viewportHeight,
+          passed: true,
+        });
+        if ([390, 430, 768, 1440].includes(viewportWidth))
           await page.screenshot({
             path: path.join(
               directory,
-              `${before ? "avant" : "apres"}-accueil-${w}.png`,
+              `storefront-${viewportWidth}-${viewportHeight}.png`,
             ),
             fullPage: true,
             animations: "disabled",
           });
       }
     }
-    if (!before) {
-      for (const route of [
-        "mentions-legales",
-        "politique-de-confidentialite",
-        "politique-de-cookies",
-      ]) {
-        await page.setViewportSize({ width: 390, height: 844 });
-        assert.equal(
-          (
-            await page.goto("http://127.0.0.1:43819/" + route, {
-              waitUntil: "networkidle",
-            })
-          ).status(),
-          200,
-        );
-        assert(await page.getByRole("heading", { level: 1 }).isVisible());
-        assert(
-          await page.evaluate(
-            () => document.documentElement.scrollWidth <= innerWidth,
-          ),
-        );
-        await page.screenshot({
-          path: path.join(directory, `${route}.png`),
-          fullPage: true,
-          animations: "disabled",
-        });
-      }
-      for (const route of [
-        "catalogue",
-        "panier",
-        "checkout",
-        "product/test",
-        "category/test",
-      ]) {
-        await page.goto("http://127.0.0.1:43819/" + route);
-        assert.equal(new URL(page.url()).pathname, "/");
-      }
-      await page.goto("http://127.0.0.1:43819/confidentialite");
-      assert.equal(
-        new URL(page.url()).pathname,
-        "/politique-de-confidentialite",
+
+    const publicRoutes = [
+      "catalogue",
+      "notre-histoire",
+      "faq",
+      "contact",
+      "category/sacs",
+      "product/modest-era",
+      "product/paradise-way",
+    ];
+    for (const route of publicRoutes) {
+      const response = await page.goto(
+        `http://127.0.0.1:43819/${route}`,
+        { waitUntil: "networkidle" },
       );
-      await page.goto("http://127.0.0.1:43819");
-      await page
-        .getByRole("button", { name: "REJOINDRE LA LISTE PRIVÉE" })
-        .click();
+      assert.equal(response.status(), 200, route);
       assert(
-        await page
-          .locator("input[name=email]")
-          .evaluate((i) => i.validity.valueMissing),
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+        `${route} has horizontal overflow`,
       );
-      await page.locator("input[name=email]").fill("qa@example.test");
-      await page.locator("input[name=consent]").check();
-      await page.route("**/api/newsletter", (route) =>
-        route.fulfill({
-          status: 503,
-          contentType: "application/json",
-          body: JSON.stringify({
-            error: "Service temporairement indisponible.",
-          }),
-        }),
-      );
-      await page
-        .getByRole("button", { name: "REJOINDRE LA LISTE PRIVÉE" })
-        .click();
-      await page
-        .getByRole("status")
-        .filter({ hasText: "Service temporairement indisponible." })
-        .waitFor();
-      assert.equal(await page.locator(".form-message.success").count(), 0);
-      assert.deepEqual(await context.cookies(), [], "No public cookies");
-      assert.equal(
-        await page.evaluate(() => localStorage.length),
-        0,
-        "No launch-page local storage",
-      );
-      assert.deepEqual(
-        thirdParties,
-        [],
-        "No third-party resources or trackers",
-      );
-      assert.deepEqual(errors, []);
     }
+
+    const legalRoutes = [
+      "mentions-legales",
+      "conditions-de-vente",
+      "livraison",
+      "retours",
+      "politique-de-confidentialite",
+      "politique-de-cookies",
+    ];
+    for (const route of legalRoutes) {
+      const response = await page.goto(
+        `http://127.0.0.1:43819/${route}`,
+        { waitUntil: "networkidle" },
+      );
+      assert.equal(response.status(), 200, route);
+      assert(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth <= innerWidth,
+        ),
+        `${route} has horizontal overflow`,
+      );
+      assert.equal(
+        await page.locator('meta[name="robots"]').getAttribute("content"),
+        "noindex, follow",
+        `${route} has noindex metadata`,
+      );
+    }
+
+    await page.goto("http://127.0.0.1:43819/product/modest-era");
+    assert.equal(await page.locator(".product-coming-soon").count(), 1);
+    assert.equal(await page.locator("form").count(), 0);
+    assert.equal(await page.locator("iframe").count(), 0);
+    for (const route of ["panier", "checkout"]) {
+      await page.goto(`http://127.0.0.1:43819/${route}`);
+      assert.equal(new URL(page.url()).pathname, "/");
+    }
+    await page.goto("http://127.0.0.1:43819/confidentialite");
+    assert.equal(
+      new URL(page.url()).pathname,
+      "/politique-de-confidentialite",
+    );
+
+    const api = page.request;
+    assert.equal(
+      (
+        await api.post("http://127.0.0.1:43819/api/newsletter", {
+          data: { email: "qa@example.test", consent: true },
+        })
+      ).status(),
+      410,
+    );
+    assert.equal(
+      (
+        await api.post("http://127.0.0.1:43819/api/order", {
+          headers: { origin: "http://127.0.0.1:43819" },
+          data: {},
+        })
+      ).status(),
+      403,
+    );
+    assert.deepEqual(await context.cookies(), [], "No public cookies");
+    assert.deepEqual(
+      thirdParties,
+      [],
+      "No third-party resources or trackers",
+    );
+    assert.deepEqual(errors, []);
     fs.writeFileSync(
-      path.join(directory, before ? "avant-resultats.json" : "resultats.json"),
+      path.join(directory, "resultats.json"),
       JSON.stringify(
         {
           browser: firefoxRun ? "Firefox" : "Chromium",
@@ -240,7 +269,7 @@ async function main() {
       ),
     );
     console.log(
-      `PASS: ${results.length} actual viewport checks; ${before ? "before screenshots" : "legal routes, closed shop, consent, error state, cookies and third-party audit"}. No email or database request.`,
+      `PASS: ${results.length} responsive viewport checks, storefront pages, legal placeholders, disabled newsletter and order APIs, no third-party requests, no emails or payments.`,
     );
   } finally {
     if (browser) await browser.close();
@@ -248,7 +277,8 @@ async function main() {
     fs.closeSync(log);
   }
 }
-main().catch((e) => {
-  console.error(e);
+
+main().catch((error) => {
+  console.error(error);
   process.exitCode = 1;
 });

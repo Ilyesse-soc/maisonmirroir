@@ -205,6 +205,29 @@ async function main() {
     415,
   );
   const schemas = load("lib/newsletterSchemas.ts");
+  const campaignId = "11111111-1111-4111-8111-111111111111";
+  assert.equal(
+    schemas.campaignSchema.safeParse({
+      action: "duplicate",
+      id: campaignId,
+    }).success,
+    true,
+  );
+  assert.equal(
+    schemas.campaignSchema.safeParse({
+      action: "send-test",
+      id: campaignId,
+    }).success,
+    true,
+  );
+  assert.equal(
+    schemas.campaignSchema.safeParse({
+      action: "send-test",
+      id: campaignId,
+      to: "attacker@example.test",
+    }).success,
+    false,
+  );
   assert.equal(
     schemas.signupSchema.safeParse({
       email: "valid@example.test",
@@ -236,8 +259,7 @@ async function main() {
   assert(csp.includes("frame-ancestors 'none'"));
   assert.equal(response.headers.get("x-content-type-options"), "nosniff");
   const commerce = load("lib/commerceSecurity.ts");
-  const catalogue = require("typescript"); // ensure tests execute actual canonical product module through the loader
-  void catalogue;
+  const catalogue = load("lib/products.ts");
   assert.throws(() =>
     commerce.canonicalItems([
       {
@@ -253,23 +275,41 @@ async function main() {
     commerce.canonicalItems([
       {
         id: "tote-bag-premium",
-        name: "Forged",
+        name: "Tote Bag Premium",
         category: "fake",
         unitPrice: 35,
-        quantity: 1.1,
+        quantity: 1,
       },
     ]),
   );
+  assert.throws(() =>
+    commerce.canonicalItems([
+      {
+        id: "modest-era",
+        name: "Forged",
+        category: "fake",
+        unitPrice: 29.69,
+        quantity: 1,
+      },
+    ]),
+  );
+  const modestEra = catalogue.products.find(
+    (product) => product.id === "modest-era",
+  );
+  assert(modestEra);
+  modestEra.availableForSale = true;
   const canonical = commerce.canonicalItems([
     {
-      id: "tote-bag-premium",
+      id: "modest-era",
       name: "Forged",
       category: "fake",
-      unitPrice: 35,
+      unitPrice: 29.69,
       quantity: 1,
     },
   ])[0];
-  assert.equal(canonical.name, "Tote Bag Premium");
+  assert.equal(canonical.name, "Modest Era");
+  assert.equal(canonical.category, "sacs");
+  modestEra.availableForSale = false;
   console.log(
     "PASS: persistent carts across refresh, consent, 48-hour eligibility, deduplication, private-recipient reminder with mocked provider, delivery events, cancellation after order, CSRF, content type, strict schemas, streamed size bounds, production CSP, canonical prices and quantities. No real email or payment.",
   );

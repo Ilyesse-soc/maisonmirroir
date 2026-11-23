@@ -1,0 +1,75 @@
+name: Security maintenance
+on:
+  schedule:
+    - cron: "0 3,4,8,9,13,14,18,19,22,23 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: security-maintenance
+  cancel-in-progress: false
+jobs:
+  slot:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.slot.outputs.run }}
+    steps:
+      - id: slot
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            echo run=true >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          now="$(TZ=Europe/Paris date +%H:%M)"
+          case "$now" in
+            00:0[0-2]|05:0[0-2]|10:0[0-2]|15:0[0-2]|20:0[0-2]) echo run=true >> "$GITHUB_OUTPUT" ;;
+            *) echo run=false >> "$GITHUB_OUTPUT" ;;
+          esac
+  monitor:
+    needs: slot
+    if: needs.slot.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with: {node-version: 24, cache: npm}
+      - run: npm ci
+      - run: npm audit --audit-level=low
+      - run: npm run lint && npm test && npm run test:security && npm run typecheck
+      - name: Build all pinned production images
+        env:
+          IMAGE: maison-miroir-maintenance
+        run: |
+          set -eu
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$IMAGE:$GITHUB_SHA" .
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$IMAGE-backup:$GITHUB_SHA" -f ops/backup/Dockerfile .
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$IMAGE-postgres:$GITHUB_SHA" -f ops/postgres/Dockerfile .
+      - name: Exercise the isolated stack and proxy
+        env:
+          IMAGE: maison-miroir-maintenance
+        run: bash ops/test-runtime.sh
+      - name: Scan configuration and all production images
+        env:
+          IMAGE: maison-miroir-maintenance
+          TRIVY: aquasec/trivy@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+          NGINX_IMAGE: nginx:stable-alpine-slim@sha256:8c950211a641ec5b23f265450517001f6bcca533666120ebe36cb4cff3d00a55
+        run: |
+          set -eu
+          docker run --rm -v "$GITHUB_WORKSPACE:/src:ro" "$TRIVY" config --exit-code 1 --severity HIGH,CRITICAL /src
+          for target in "$IMAGE:$GITHUB_SHA" "$IMAGE-backup:$GITHUB_SHA" "$IMAGE-postgres:$GITHUB_SHA" "$NGINX_IMAGE"; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image --exit-code 1 --severity HIGH,CRITICAL "$target"
+          done
+      - name: Check public HTTPS, security headers, health, and certificate expiry
+        run: |
+          set -eu
+          curl --fail --silent --show-error --max-time 20 https://maison-miroir.fr/api/health | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{if(JSON.parse(s).status!=='ok')process.exit(1)})"
+          headers="$(curl --fail --silent --show-error --head --max-time 20 https://maison-miroir.fr/)"
+          printf '%s\n' "$headers" | grep -iq '^strict-transport-security:'
+          printf '%s\n' "$headers" | grep -iq '^x-content-type-options: nosniff'
+          printf '%s\n' "$headers" | grep -iq '^x-frame-options: DENY'
+          echo | openssl s_client -connect maison-miroir.fr:443 -servername maison-miroir.fr 2>/dev/null | openssl x509 -noout -checkend 1209600

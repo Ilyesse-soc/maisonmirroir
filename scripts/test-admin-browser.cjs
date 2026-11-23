@@ -37,12 +37,25 @@ async function main() {
             campaigns,
             subscribers: [],
             products: [{ id: "bag", name: "Notre sac" }],
+            emailEnabled: true,
+            emailTestEnabled: true,
           },
         });
       const data = request.postDataJSON();
       calls.push(data);
       if (data.action === "preview")
         return route.fulfill({ json: { html: "<h1>Bienvenue.</h1>" } });
+      if (data.action === "send-test")
+        return route.fulfill({
+          json: { providerId: "fake-test-1", recipient: "admin@example.test" },
+        });
+      if (data.action === "duplicate") {
+        const source = campaigns.find((campaign) => campaign.id === data.id);
+        campaigns = [
+          { ...source, id: "22222222-2222-4222-8222-222222222222", title: `${source.title} - Copie` },
+          ...campaigns,
+        ];
+      }
       if (data.action === "update")
         campaigns = campaigns.map((c) => ({
           ...c,
@@ -74,6 +87,14 @@ async function main() {
       .getByRole("heading", { name: "Bienvenue." })
       .waitFor();
     page.on("dialog", (dialog) => dialog.accept());
+    await page.getByRole("button", { name: "Envoyer un e-mail de test" }).click();
+    await page
+      .getByText(/Le fournisseur a accepté le test \(fake-test-1\)/)
+      .waitFor();
+    assert.equal(calls.at(-1).action, "send-test");
+    await page.getByRole("button", { name: "Dupliquer" }).click();
+    await page.getByRole("cell", { name: "Notre lancement - Copie" }).waitFor();
+    assert.equal(calls.at(-1).action, "duplicate");
     await page.getByRole("button", { name: "Valider l’envoi" }).click();
     await page.getByRole("cell", { name: "scheduled" }).waitFor();
     assert.equal(calls.at(-1).action, "approve");
@@ -93,7 +114,7 @@ async function main() {
     );
     assert.equal(bypass.status(), 401);
     console.log(
-      "PASS: authenticated admin page, edit draft, preview, approval UI (mocked campaign API), explicit unconfigured database, unauthenticated API denial including middleware bypass header. No email sent.",
+      "PASS: authenticated admin page, edit draft, preview, test-email and duplicate UI (mocked API), approval UI, explicit unconfigured database, unauthenticated API denial including middleware bypass header. No email sent.",
     );
   } finally {
     await browser.close();

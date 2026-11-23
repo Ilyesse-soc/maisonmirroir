@@ -24,6 +24,7 @@ jobs:
       - run: node scripts/test-ops.cjs
   images:
     needs: verify
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -41,9 +42,9 @@ jobs:
           IMAGE: ghcr.io/ilyesse-soc/maisonmirroir
         run: |
           set -eu
-          docker build -t "$IMAGE:$GITHUB_SHA" .
-          docker build -t "$IMAGE-backup:$GITHUB_SHA" -f ops/backup/Dockerfile .
-          docker build -t "$IMAGE-postgres:$GITHUB_SHA" -f ops/postgres/Dockerfile .
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$IMAGE:$GITHUB_SHA" .
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$IMAGE-backup:$GITHUB_SHA" -f ops/backup/Dockerfile .
+          docker build --label "org.opencontainers.image.revision=$GITHUB_SHA" -t "$IMAGE-postgres:$GITHUB_SHA" -f ops/postgres/Dockerfile .
       - name: Reject high and critical image vulnerabilities
         env:
           IMAGE: ghcr.io/ilyesse-soc/maisonmirroir

@@ -4,9 +4,11 @@ import { database } from "@/lib/newsletterDb";
 import {
   approveCampaign,
   campaignHtml,
+  emailReady,
   safeUrl,
   siteUrl,
   launchAnnouncementTemplate,
+  sendCampaignTest,
 } from "@/lib/newsletter";
 import { products } from "@/lib/products";
 import { adminDenied } from "@/lib/adminAuth";
@@ -20,6 +22,7 @@ import {
 } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
 import { getBrandSettings } from "@/lib/brandSettings";
+import { getAdminEmail } from "@/lib/email";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET() {
@@ -43,6 +46,8 @@ export async function GET() {
           body: brandSettings.launch_copy,
         },
         shopOpen: process.env.SHOP_OPEN === "true",
+        emailEnabled: emailReady(),
+        emailTestEnabled: emailReady() && Boolean(getAdminEmail()),
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -67,6 +72,27 @@ export async function POST(request: NextRequest) {
       await adminAudit("CAMPAIGN_APPROVAL_REQUESTED", data.id);
       const recipients = await approveCampaign(data.id, data.scheduledAt);
       return NextResponse.json({ recipients });
+    }
+    if (data.action === "duplicate") {
+      const id = randomUUID();
+      const result = await database().query(
+        `INSERT INTO mm_campaigns(id,title,subject,preheader,body,image_url,link_url,promo_code,ends_at,products,status)
+         SELECT $2,left(title || ' - Copie',200),subject,preheader,body,image_url,link_url,promo_code,ends_at,products,'draft'
+         FROM mm_campaigns WHERE id=$1 RETURNING id`,
+        [data.id, id],
+      );
+      if (!result.rowCount)
+        return NextResponse.json(
+          { error: "Campagne introuvable." },
+          { status: 404 },
+        );
+      await adminAudit("CAMPAIGN_DUPLICATED", id);
+      return NextResponse.json({ id });
+    }
+    if (data.action === "send-test") {
+      await adminAudit("CAMPAIGN_TEST_REQUESTED", data.id);
+      const result = await sendCampaignTest(data.id);
+      return NextResponse.json(result);
     }
     if (data.action === "preview") {
       const c = (
@@ -143,13 +169,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ id });
   } catch (error) {
     if (error instanceof InputError) return inputResponse(error);
-    if (error instanceof Error && error.message === "SHOP_CLOSED")
+    if (error instanceof Error && error.message === "EMAIL_DISABLED")
       return NextResponse.json(
         {
-          error:
-            "Les campagnes ne peuvent être envoyées qu’après l’ouverture de la boutique.",
+          error: "L’envoi réel est désactivé dans cet environnement.",
         },
         { status: 409 },
+      );
+    if (
+      error instanceof Error &&
+      error.message === "TEST_RECIPIENT_DISABLED"
+    )
+      return NextResponse.json(
+        { error: "Configurez EMAIL_ADMIN ou OWNER_EMAIL pour recevoir le test." },
+        { status: 409 },
+      );
+    if (error instanceof Error && error.message === "CAMPAIGN_NOT_FOUND")
+      return NextResponse.json(
+        { error: "Campagne introuvable." },
+        { status: 404 },
+      );
+    if (
+      error instanceof Error &&
+      error.message === "EMAIL_PROVIDER_UNCONFIRMED"
+    )
+      return NextResponse.json(
+        { error: "Le fournisseur n’a pas confirmé la prise en charge du test." },
+        { status: 502 },
       );
     securityEvent("ADMIN_CAMPAIGN_WRITE_FAILED");
     return NextResponse.json(

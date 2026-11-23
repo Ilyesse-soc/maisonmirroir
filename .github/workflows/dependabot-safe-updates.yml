@@ -1,0 +1,38 @@
+name: Dependabot low-risk updates
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+jobs:
+  enable-auto-merge:
+    if: github.actor == 'dependabot[bot]' && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        id: metadata
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Mark and queue only semver-patch npm updates
+        if: steps.metadata.outputs.update-type == 'version-update:semver-patch' && steps.metadata.outputs.package-ecosystem == 'npm'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -eu
+          files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')"
+          test -n "$files"
+          while IFS= read -r file; do
+            case "$file" in
+              package.json|package-lock.json) ;;
+              *) echo "UPDATE_SCOPE_REQUIRES_HUMAN_REVIEW"; exit 1 ;;
+            esac
+          done <<EOF
+          $files
+          EOF
+          gh pr edit "$PR_URL" --add-label 'auto-merge:patch'
+          gh pr edit "$PR_URL" --add-label 'auto-deploy:patch'
+          gh pr merge "$PR_URL" --auto --squash

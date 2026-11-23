@@ -1,5 +1,6 @@
 import "./globals.css";
 import "./launch-fonts.css";
+import "./storefront.css";
 import SiteEffects from "@/components/SiteEffects";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
@@ -11,20 +12,20 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEWSLETTER_SITE_URL || "http://localhost:3000",
   ),
-  title: "Maison Miroir — Modesty, Identity, Lifestyle",
+  title: "Maison Miroir - Première collection",
   description:
-    "For the girls with haya and big dreams. Rejoignez la liste privée Maison Miroir et découvrez notre première collection en avant-première.",
+    "Découvrez Modest Era et Paradise Way, les deux tote bags de la première collection Maison Miroir.",
   openGraph: {
-    title: "Maison Miroir — A new chapter begins",
-    description: "Une nouvelle vision de la mode, avec élégance et pudeur.",
+    title: "Maison Miroir - Plus qu’un sac, une identité",
+    description: "Deux tote bags, un même désir : porter un message qui nous ressemble.",
     locale: "fr_FR",
     type: "website",
     images: [
       {
-        url: "/launch/reference.jpg",
-        width: 1024,
-        height: 1536,
-        alt: "Maison Miroir — nouvelle collection",
+        url: "/collection/collection-hero.webp",
+        width: 941,
+        height: 1672,
+        alt: "Une femme portant un tote bag Maison Miroir",
       },
     ],
   },
@@ -66,7 +67,9 @@ export default async function RootLayout({
           letterSpacing: "0.02em",
         }}
       >
-        <SiteShell>{children}</SiteShell>
+        <SiteShell shopOpen={process.env.SHOP_OPEN === "true"}>
+          {children}
+        </SiteShell>
         <SiteEffects />
       </body>
     </html>

@@ -8,7 +8,7 @@ export default async function UnsubscribePage({
 }) {
   const query = await searchParams;
   return (
-    <main className="newsletter-page">
+    <div className="newsletter-page">
       <p>MAISON MIROIR</p>
       <h1>À votre rythme.</h1>
       <p>Vous pouvez quitter notre liste privée à tout moment.</p>
@@ -18,6 +18,6 @@ export default async function UnsubscribePage({
         label="Me désinscrire"
       />
       <Link href="/">Revenir à Maison Miroir</Link>
-    </main>
+    </div>
   );
 }

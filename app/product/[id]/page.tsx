@@ -1,10 +1,14 @@
 "use client";
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getProductById, type OptionChoice } from "@/lib/products";
+import {
+  getProductById,
+  type OptionChoice,
+  type Product,
+} from "@/lib/products";
 import PayPalButton from "@/components/PayPalButton";
+import ProductImageGallery from "@/components/ProductImageGallery";
 import { useCart } from "@/components/CartProvider";
 import { SHIPPING_METHODS, getShippingMethodById } from "@/lib/shipping";
 import {
@@ -23,6 +27,47 @@ export default function ProductPage() {
     <ProductDetails key={String(params.id)} productId={String(params.id)} />
   );
 }
+
+function UnavailableProduct({ product }: { product: Product }) {
+  return (
+    <div className="storefront">
+      <section className="storefront-wrap product-coming-soon">
+        <ProductImageGallery
+          productName={product.name}
+          images={product.images}
+          mode="detail"
+          interactive
+          priority
+        />
+        <div className="product-detail-copy">
+          <p className="storefront-eyebrow">{product.categoryLabel}</p>
+          <h1>{product.name}</h1>
+          <p className="product-availability" role="status">
+            Bientôt disponible - les commandes ne sont pas encore ouvertes.
+          </p>
+          <p className="storefront-lede">{product.description}</p>
+          <p className="storefront-product-price">
+            {product.price.toFixed(2).replace(".", ",")} €
+          </p>
+          <ul className="product-feature-list">
+            {product.features.map((feature) => (
+              <li key={feature}>{feature}</li>
+            ))}
+          </ul>
+          <p className="storefront-note product-detail-note">
+            Le stock et les modalités de vente seront confirmés avant
+            l’ouverture. Aucun paiement ne peut être effectué pour ce produit
+            pour le moment.
+          </p>
+          <Link className="storefront-cta" href="/catalogue">
+            Retour à la collection
+          </Link>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ProductDetails({ productId }: { productId: string }) {
   const product = getProductById(productId);
   const { addItem } = useCart();
@@ -79,6 +124,8 @@ function ProductDetails({ productId }: { productId: string }) {
         </Link>
       </div>
     );
+  if (product.availableForSale !== true)
+    return <UnavailableProduct product={product} />;
 
   const handleCustomChange = (field: string, value: string) => {
     setCustomValues((prev) => ({ ...prev, [field]: value }));
@@ -141,8 +188,8 @@ function ProductDetails({ productId }: { productId: string }) {
   const subtotal = qty ? unitPrice * qty : 0;
   const shippingPrice = selectedShipping?.price ?? 0;
   const total = qty ? subtotal + shippingPrice : 0;
-  const subtotalDisplayAmount = qty ? subtotal.toFixed(2) : "—";
-  const displayAmount = qty ? total.toFixed(2) : "—";
+  const subtotalDisplayAmount = qty ? subtotal.toFixed(2) : "-";
+  const displayAmount = qty ? total.toFixed(2) : "-";
 
   const optionLabels: Record<string, string> = {
     boxColor: "Couleur des boîtes",
@@ -185,6 +232,10 @@ function ProductDetails({ productId }: { productId: string }) {
   };
 
   const handleAddToCart = () => {
+    if (product.availableForSale !== true) {
+      setError("Cette collection n’est pas encore ouverte à la commande.");
+      return;
+    }
     const q = parseQuantity(quantity);
     if (optionEntries.length > 0 && !optionsComplete) {
       setError("Veuillez sélectionner toutes les options de personnalisation.");
@@ -227,6 +278,10 @@ function ProductDetails({ productId }: { productId: string }) {
   };
 
   const validateStep = () => {
+    if (product.availableForSale !== true) {
+      setError("Cette collection n’est pas encore ouverte à la commande.");
+      return;
+    }
     if (step === "customize") {
       if (optionEntries.length > 0 && !optionsComplete) {
         setError(
@@ -275,7 +330,7 @@ function ProductDetails({ productId }: { productId: string }) {
 
   return (
     <div
-      style={{ paddingTop: 80, minHeight: "100vh", background: theme.marble }}
+      style={{ paddingTop: 80, background: theme.marble }}
     >
       <div
         style={{
@@ -325,67 +380,15 @@ function ProductDetails({ productId }: { productId: string }) {
         >
           {/* LEFT: Image gallery */}
           <div>
-            <div
-              style={{
-                position: "relative",
-                aspectRatio: "1 / 1",
-                background: "white",
-                overflow: "hidden",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-              }}
-            >
-              <Image
-                src={
-                  product.images[
-                    Math.min(
-                      Math.max(selectedImageIndex, 0),
-                      product.images.length - 1,
-                    )
-                  ]
-                }
-                alt={product.name}
-                fill
-                style={{ objectFit: "cover" }}
-                priority
-              />
-            </div>
-            {product.images.length > 1 && (
-              <div
-                style={{
-                  display: "flex",
-                  gap: 8,
-                  marginTop: 12,
-                  overflowX: "auto",
-                  paddingBottom: 4,
-                }}
-              >
-                {product.images.map((img, i) => (
-                  <div
-                    key={i}
-                    onClick={() => setSelectedImageIndex(i)}
-                    style={{
-                      position: "relative",
-                      aspectRatio: "1 / 1",
-                      background: "white",
-                      overflow: "hidden",
-                      width: 88,
-                      flex: "0 0 auto",
-                      cursor: "pointer",
-                      border: `1px solid ${i === selectedImageIndex ? theme.gold : theme.creamDark}`,
-                    }}
-                    role="button"
-                    aria-label={`Voir l'image ${i + 1}`}
-                  >
-                    <Image
-                      src={img}
-                      alt={`${product.name} ${i + 1}`}
-                      fill
-                      style={{ objectFit: "cover" }}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            <ProductImageGallery
+              productName={product.name}
+              images={product.images}
+              mode="detail"
+              interactive
+              selectedIndex={selectedImageIndex}
+              onSelectedIndexChange={setSelectedImageIndex}
+              priority
+            />
 
             {/* Features */}
             <div
@@ -464,6 +467,11 @@ function ProductDetails({ productId }: { productId: string }) {
             >
               {product.name}
             </h1>
+            {product.availableForSale !== true && (
+              <p className="product-availability" role="status">
+                Bientôt disponible - les commandes ne sont pas encore ouvertes.
+              </p>
+            )}
             {typeof product.originalPrice === "number" &&
             product.originalPrice > unitPrice ? (
               <div
@@ -531,9 +539,9 @@ function ProductDetails({ productId }: { productId: string }) {
                 marginBottom: 20,
               }}
             >
-              Sous-total produits ({qty ?? "—"} × {unitPrice.toFixed(2)} €) :{" "}
+              Sous-total produits ({qty ?? "-"} × {unitPrice.toFixed(2)} €) :{" "}
               <strong style={{ color: theme.textDark }}>
-                {qty ? `${subtotalDisplayAmount} €` : "—"}
+                {qty ? `${subtotalDisplayAmount} €` : "-"}
               </strong>
             </p>
             <div style={{ ...dividerStyle(120), margin: "0 0 24px" }} />
@@ -803,8 +811,8 @@ function ProductDetails({ productId }: { productId: string }) {
                       }}
                     >
                       Prix unitaire : <strong>{unitPrice.toFixed(2)} €</strong>{" "}
-                      — Total :{" "}
-                      <strong>{qty ? `${displayAmount} €` : "—"}</strong>
+                      - Total :{" "}
+                      <strong>{qty ? `${displayAmount} €` : "-"}</strong>
                     </p>
                   </div>
                 </div>
@@ -851,19 +859,33 @@ function ProductDetails({ productId }: { productId: string }) {
                 <button
                   className="btn-gold"
                   onClick={validateStep}
+                  disabled={product.availableForSale !== true}
                   style={{
                     ...buttonGoldStyle({ fullWidth: true }),
                     marginTop: 16,
+                    opacity: product.availableForSale === true ? 1 : 0.55,
+                    cursor:
+                      product.availableForSale === true
+                        ? "pointer"
+                        : "not-allowed",
                   }}
                 >
-                  Continuer →
+                  {product.availableForSale === true
+                    ? "Continuer →"
+                    : "Bientôt disponible"}
                 </button>
                 <button
                   onClick={handleAddToCart}
+                  disabled={product.availableForSale !== true}
                   style={{
                     ...buttonOutlineGoldStyle({ fullWidth: true }),
                     marginTop: 4,
                     display: "block",
+                    opacity: product.availableForSale === true ? 1 : 0.55,
+                    cursor:
+                      product.availableForSale === true
+                        ? "pointer"
+                        : "not-allowed",
                   }}
                 >
                   Ajouter au panier
@@ -1346,7 +1368,7 @@ function ProductDetails({ productId }: { productId: string }) {
                         fontStyle: "italic",
                       }}
                     >
-                      {qty ?? "—"}
+                      {qty ?? "-"}
                     </span>
                   </div>
 

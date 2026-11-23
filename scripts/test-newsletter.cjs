@@ -56,12 +56,14 @@ async function main() {
   };
   const email = {
     getEmailFrom: () => "test@example.test",
+    getAdminEmail: () => "admin@example.test",
     getResendClient: () => ({ emails: { send } }),
   };
   process.env.NEWSLETTER_DATABASE_URL = "test-only";
   process.env.NEWSLETTER_HASH_SECRET = "test-secret";
   process.env.NEWSLETTER_WORKER_SECRET = "test-worker";
   process.env.NEWSLETTER_SITE_URL = "https://example.test";
+  process.env.NEWSLETTER_SEND_ENABLED = "true";
   process.env.NODE_ENV = "test";
   const filename = path.resolve("lib/newsletter.ts"),
     mod = new Module(filename, module);
@@ -166,13 +168,27 @@ async function main() {
       "Bonjour <script>bad()</script>",
     ],
   );
-  await assert.rejects(() => n.approveCampaign(campaignId), /SHOP_CLOSED/);
+  const testResult = await n.sendCampaignTest(campaignId);
+  assert.deepEqual(testResult, {
+    providerId: "fake-2",
+    recipient: "admin@example.test",
+  });
+  assert.deepEqual(calls[0].payload.to, ["admin@example.test"]);
+  assert.equal(calls[0].payload.subject, "[Test] Bienvenue");
+  calls = [];
+  fail = true;
+  await assert.rejects(() => n.sendCampaignTest(campaignId), /EMAIL_PROVIDER_ERROR/);
+  assert.equal(calls.at(-1).payload.to[0], "admin@example.test");
+  calls = [];
+  fail = false;
+  process.env.NEWSLETTER_SEND_ENABLED = "false";
+  await assert.rejects(() => n.approveCampaign(campaignId), /EMAIL_DISABLED/);
   assert.equal(
     (await query("SELECT status FROM mm_campaigns WHERE id=$1", [campaignId]))
       .rows[0].status,
     "draft",
   );
-  process.env.SHOP_OPEN = "true";
+  process.env.NEWSLETTER_SEND_ENABLED = "true";
   assert.equal(await n.approveCampaign(campaignId), 1);
   await assert.rejects(() => n.approveCampaign(campaignId));
   assert.equal(
@@ -180,16 +196,17 @@ async function main() {
     1,
   );
   process.env.SHOP_OPEN = "false";
-  await n.processQueue();
-  assert.equal(calls.length, 0, "Pre-launch campaign must remain unsent");
+  process.env.NEWSLETTER_SEND_ENABLED = "false";
+  await assert.rejects(() => n.processQueue(), /Newsletter unavailable/);
+  assert.equal(calls.length, 0, "Disabled email delivery must not call the provider");
   assert.equal(
     (await query("SELECT status FROM mm_jobs WHERE kind='campaign'")).rows[0]
       .status,
     "pending",
   );
-  process.env.SHOP_OPEN = "true";
+  process.env.NEWSLETTER_SEND_ENABLED = "true";
   await n.processQueue();
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 1, "Campaigns can be processed while the shop is closed");
   assert(
     calls[0].payload.headers["List-Unsubscribe"].includes(
       "/api/newsletter/desinscription",
@@ -230,7 +247,7 @@ async function main() {
   assert.equal(calls.length, beforeReceipt + 1);
   assert.equal(
     calls.at(-1).payload.subject,
-    "Votre désinscription — Maison Miroir",
+    "Votre désinscription - Maison Miroir",
   );
   assert(calls.at(-1).payload.text.includes("ne recevrez plus"));
   await n.processQueue();
@@ -352,7 +369,7 @@ async function main() {
     "PASS: publication drafts, edit/import filtering, event deduplication, persistent rate limiting.",
   );
   console.log(
-    "PASS: consent, double opt-in, unique welcome after confirmation, no duplicate welcome, pre-launch campaign block, unsubscribe, retries and provider idempotency. No real emails sent.",
+    "PASS: consent, double opt-in, unique welcome after confirmation, pre-launch campaigns, approval and delivery guards, unsubscribe, retries and provider idempotency. No real emails sent.",
   );
   await db.close();
 }

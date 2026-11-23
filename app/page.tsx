@@ -1,61 +1,102 @@
-import Image from "next/image";
-import NewsletterForm from "@/components/NewsletterForm";
-import LaunchFooter from "@/components/LaunchFooter";
-import "./launch.css";
-import "./launch-fonts.css";
+import Link from "next/link";
+import HomeVideoCarousel from "@/components/HomeVideoCarousel";
+import ProductImageGallery from "@/components/ProductImageGallery";
+import { launchCollectionProducts } from "@/lib/products";
+
 export default function HomePage() {
   return (
-    <main className="launch">
-      <header className="launch-header">
-        <div className="brand-line">
-          <span />
-          <p>MAISON MIROIR</p>
-          <span />
+    <div className="storefront">
+      <HomeVideoCarousel />
+
+      <section
+        id="collection"
+        className="home-collection"
+        aria-labelledby="collection-title"
+      >
+        <div className="storefront-wrap">
+          <header className="home-section-heading">
+            <p className="storefront-eyebrow">Première collection</p>
+            <h2 id="collection-title">For Modest Girls</h2>
+          </header>
+
+          <div className="home-product-grid">
+            {launchCollectionProducts.map((product, index) => {
+              const [featureType, productMessage = ""] =
+                product.features[0].split(" - ");
+              const productType = featureType.replace("chocolat", "marron");
+              const message = productMessage.replace(/[«»]/g, "").trim();
+              const collectionImage = product.images[0];
+
+              return (
+                <article
+                  className="storefront-product-card home-product-card"
+                  key={product.id}
+                >
+                  <ProductImageGallery
+                    productName={product.name}
+                    images={[collectionImage]}
+                    mode="home"
+                    interactive={false}
+                    number={String(index + 1).padStart(2, "0")}
+                  />
+                  <div className="home-product-copy">
+                    <div>
+                      <p className="home-product-type">{productType}</p>
+                      <h2>{product.name}</h2>
+                      <p className="home-product-message">« {message} »</p>
+                      <p className="home-product-description">
+                        {product.description}
+                      </p>
+                    </div>
+                    <Link
+                      className="home-text-link"
+                      href={`/product/${product.id}`}
+                    >
+                      Découvrir <span aria-hidden="true">→</span>
+                    </Link>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="home-collection-footer">
+            <div className="home-order-notice" role="status">
+              <p className="storefront-eyebrow">Ouverture des commandes</p>
+              <p className="home-order-status">Pas encore ouverte</p>
+              <p>
+                Le stock et les modalités de vente seront confirmés avant
+                l’ouverture.
+              </p>
+            </div>
+            <Link className="home-outline-link" href="/catalogue">
+              Voir la collection <span aria-hidden="true">→</span>
+            </Link>
+          </div>
         </div>
-        <p className="tagline">MODESTY – IDENTITY – LIFESTYLE</p>
-      </header>
-      <section className="launch-hero" aria-label="La nouvelle Maison Miroir">
-        <p className="coming sr-only">Something beautiful is coming...</p>
-        <div className="illustration">
-          <Image
-            width={1024}
-            height={1536}
-            src="/launch/reference.jpg"
-            alt="Deux femmes en tenues pudiques noires portant les sacs Maison Miroir : Just a girl training for Jannah et Modesty is the mood."
-            preload
-          />
+      </section>
+
+      <section className="home-story" aria-labelledby="home-story-title">
+        <div className="storefront-wrap home-story-inner">
+          <div>
+            <p className="storefront-eyebrow">Modesty, identity, lifestyle</p>
+            <h2 id="home-story-title">Notre histoire</h2>
+          </div>
+          <div className="home-story-copy">
+            <p>
+              Maison Miroir explore la modestie, l’identité et le lifestyle à
+              travers des pièces qui portent un message personnel.
+            </p>
+            <p>
+              Modest Era et Paradise Way ouvrent ce premier chapitre avec deux
+              tote bags et deux messages distincts.
+            </p>
+            <Link className="home-text-link" href="/notre-histoire">
+              Découvrir notre histoire <span aria-hidden="true">→</span>
+            </Link>
+          </div>
         </div>
       </section>
-      <section className="brand-message">
-        <p className="chapter">
-          <span />A NEW CHAPTER BEGINS
-          <span />
-        </p>
-        <h1>
-          For the girls with
-          <br />
-          haya and big dreams
-        </h1>
-        <p className="intro">
-          Une nouvelle vision de la mode, pensée pour les femmes
-          <br className="desktop-break" /> qui souhaitent exprimer leur identité
-          avec élégance et pudeur.
-        </p>
-      </section>
-      <section className="private-list" aria-labelledby="newsletter-title">
-        <h2 id="newsletter-title">Soyez les premières informées.</h2>
-        <p>
-          Inscrivez-vous à notre liste privée pour recevoir la date du lancement
-          <br className="desktop-break" /> et accéder à notre première
-          collection en avant-première.
-        </p>
-        <NewsletterForm />
-        <p className="quiet">
-          Aucune actualité inutile. Seulement les informations concernant notre
-          lancement.
-        </p>
-      </section>
-      <LaunchFooter />
-    </main>
+    </div>
   );
 }

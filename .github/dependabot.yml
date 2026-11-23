@@ -2,11 +2,25 @@ version: 2
 updates:
   - package-ecosystem: npm
     directory: /
-    schedule: {interval: weekly}
-    open-pull-requests-limit: 5
+    schedule: {interval: daily, time: "03:30", timezone: Europe/Paris}
+    open-pull-requests-limit: 8
   - package-ecosystem: docker
     directory: /
-    schedule: {interval: weekly}
+    schedule: {interval: daily, time: "03:45", timezone: Europe/Paris}
+    open-pull-requests-limit: 5
+  - package-ecosystem: docker
+    directory: /ops
+    schedule: {interval: daily, time: "04:00", timezone: Europe/Paris}
+    open-pull-requests-limit: 5
   - package-ecosystem: docker
     directory: /ops/backup
-    schedule: {interval: weekly}
+    schedule: {interval: daily, time: "04:15", timezone: Europe/Paris}
+    open-pull-requests-limit: 5
+  - package-ecosystem: docker
+    directory: /ops/postgres
+    schedule: {interval: daily, time: "04:30", timezone: Europe/Paris}
+    open-pull-requests-limit: 5
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: daily, time: "04:45", timezone: Europe/Paris}
+    open-pull-requests-limit: 8

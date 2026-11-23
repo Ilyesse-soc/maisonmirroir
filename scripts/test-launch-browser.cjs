@@ -322,7 +322,7 @@ async function main() {
         true,
         `Carousel controls should stay bottom-left without covering text at ${width}px`,
       );
-      assert.equal(await page.locator(".storefront-showcase video").count(), 2);
+      assert.equal(await page.locator(".storefront-showcase video").count(), 3);
       assert.deepEqual(
         await page.locator(".storefront-showcase source").evaluateAll((sources) =>
           sources.map((source) => source.getAttribute("src")),
@@ -330,7 +330,12 @@ async function main() {
         [
           "/collection/IMG_7244.mov",
           "/collection/IMG_7199.mov",
+          "/collection/IMG_7197.mov",
         ],
+      );
+      assert.equal(
+        await page.getByRole("button", { name: "Afficher le deuxième film de Modest Era" }).count(),
+        1,
       );
       assert.equal(
         await page
@@ -665,6 +670,25 @@ async function main() {
       { timeout: 10000 },
     );
     await activeVideo.evaluate((video) =>
+      video.dispatchEvent(new Event("ended")),
+    );
+    await page.waitForFunction(() =>
+      document
+        .querySelector(".storefront-showcase-slide.is-active source")
+        ?.getAttribute("src")
+        ?.includes("IMG_7197.mov"),
+    );
+    await page.waitForFunction(() => {
+      const video = document.querySelector(
+        ".storefront-showcase-slide.is-active video",
+      );
+      return (
+        video instanceof HTMLVideoElement &&
+        !video.paused &&
+        video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA
+      );
+    }, { timeout: 10000 });
+    await page.locator(".storefront-showcase-slide.is-active video").evaluate((video) =>
       video.dispatchEvent(new Event("ended")),
     );
     await page.waitForFunction(() =>

@@ -163,7 +163,7 @@ async function main() {
     await page.locator("input[name=password]").fill(password);
     await page.getByRole("button", { name: "Entrer dans mon espace" }).click();
     await page
-      .getByRole("heading", { name: "La correspondance Maison Miroir" })
+      .getByRole("heading", { name: "La correspondance MAISON MIROIR" })
       .waitFor();
     const session = (await context.cookies()).find((c) =>
       c.name.includes("session_token"),
@@ -268,7 +268,7 @@ async function main() {
     );
     await page.reload({ waitUntil: "networkidle" });
     await page
-      .getByRole("heading", { name: "La correspondance Maison Miroir" })
+      .getByRole("heading", { name: "La correspondance MAISON MIROIR" })
       .waitFor();
     assert.equal(
       await page

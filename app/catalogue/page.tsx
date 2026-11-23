@@ -3,9 +3,9 @@ import ProductImageGallery from "@/components/ProductImageGallery";
 import { launchCollectionProducts } from "@/lib/products";
 
 export const metadata = {
-  title: "La collection - Maison Miroir",
+  title: "La collection - MAISON MIROIR",
   description:
-    "Découvrez Modest Era et Paradise Way, les deux tote bags de la première collection Maison Miroir.",
+    "Découvrez Modest Era et Paradise Way, les deux tote bags de la première collection MAISON MIROIR.",
 };
 
 export default function CataloguePage() {

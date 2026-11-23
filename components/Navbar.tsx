@@ -11,6 +11,7 @@ const links = [
   { href: "/notre-histoire", label: "Notre histoire" },
   { href: "/faq", label: "FAQ" },
   { href: "/contact", label: "Contact" },
+  { href: "/#newsletter", label: "Newsletter" },
 ];
 
 export default function Navbar({ homeOverlay = false }: { homeOverlay?: boolean }) {
@@ -97,7 +98,7 @@ export default function Navbar({ homeOverlay = false }: { homeOverlay?: boolean 
           <Link
             href="/"
             className="mm-navbar-brand"
-            aria-label="Maison Miroir, accueil"
+            aria-label="MAISON MIROIR, accueil"
           >
             <span className="mm-navbar-wordmark">MAISON MIROIR</span>
           </Link>

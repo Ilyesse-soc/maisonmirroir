@@ -12,7 +12,7 @@ export default function LegalPage({
     <div className="launch legal-shell">
       <div className="legal-content">
         <Link className="legal-back" href="/">
-          ← Retour à Maison Miroir
+          ← Retour à MAISON MIROIR
         </Link>
         <p className="legal-eyebrow">MAISON MIROIR</p>
         <h1>{title}</h1>

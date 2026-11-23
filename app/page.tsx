@@ -1,5 +1,6 @@
 import Link from "next/link";
 import HomeVideoCarousel from "@/components/HomeVideoCarousel";
+import NewsletterForm from "@/components/NewsletterForm";
 import ProductImageGallery from "@/components/ProductImageGallery";
 import { launchCollectionProducts } from "@/lib/products";
 
@@ -84,7 +85,7 @@ export default function HomePage() {
           </div>
           <div className="home-story-copy">
             <p>
-              Maison Miroir explore la modestie, l’identité et le lifestyle à
+              MAISON MIROIR explore la modestie, l’identité et le lifestyle à
               travers des pièces qui portent un message personnel.
             </p>
             <p>
@@ -95,6 +96,24 @@ export default function HomePage() {
               Découvrir notre histoire <span aria-hidden="true">→</span>
             </Link>
           </div>
+        </div>
+      </section>
+
+      <section
+        id="newsletter"
+        className="home-newsletter"
+        aria-labelledby="home-newsletter-title"
+      >
+        <div className="storefront-wrap home-newsletter-inner">
+          <div className="home-newsletter-copy">
+            <p className="storefront-eyebrow">La liste privée</p>
+            <h2 id="home-newsletter-title">Une nouvelle à vous partager ?</h2>
+            <p>
+              Recevez en avant-première la date de lancement et les nouvelles de
+              MAISON MIROIR.
+            </p>
+          </div>
+          <NewsletterForm />
         </div>
       </section>
     </div>

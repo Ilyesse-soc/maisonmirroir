@@ -494,6 +494,166 @@
   margin-top: 10px;
 }
 
+.home-newsletter {
+  scroll-margin-top: 96px;
+  padding: clamp(52px, 8vw, 104px) 0;
+  color: #fffaf3;
+  background: #38261f;
+}
+
+.home-newsletter-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: center;
+  gap: clamp(28px, 7vw, 96px);
+}
+
+.home-newsletter .storefront-eyebrow {
+  color: #d3b792;
+}
+
+.home-newsletter h2 {
+  max-width: 520px;
+  margin: 0;
+  font-size: clamp(2.4rem, 5vw, 4.5rem);
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.home-newsletter-copy > p:last-child {
+  max-width: 440px;
+  margin: 20px 0 0;
+  color: #e2d5c6;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.home-newsletter .newsletter-form {
+  min-width: 0;
+}
+
+.home-newsletter .signup-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.home-newsletter .email-field {
+  display: flex;
+  min-width: 0;
+  min-height: 54px;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  border-bottom: 1px solid rgb(225 194 147 / 60%);
+}
+
+.home-newsletter .email-field > span:first-child {
+  color: #d3b792;
+}
+
+.home-newsletter .email-field input {
+  width: 100%;
+  min-width: 0;
+  min-height: 52px;
+  border: 0;
+  outline: 0;
+  color: #fffaf3;
+  background: transparent;
+  font: inherit;
+}
+
+.home-newsletter .email-field input::placeholder {
+  color: #d2c3b4;
+  opacity: 1;
+}
+
+.home-newsletter .email-field:focus-within {
+  border-bottom-color: #f0c77e;
+  box-shadow: 0 1px 0 #f0c77e;
+}
+
+.home-newsletter .signup-row button {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+  border: 1px solid #d3b792;
+  color: #fffaf3;
+  background: transparent;
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.home-newsletter .signup-row button:focus-visible,
+.home-newsletter .consent a:focus-visible {
+  outline: 2px solid #f0c77e;
+  outline-offset: 3px;
+}
+
+.home-newsletter .signup-row button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.home-newsletter .consent {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 18px 0 0;
+  color: #e2d5c6;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.home-newsletter .consent label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+}
+
+.home-newsletter .consent input {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  margin: 2px 0 0;
+  accent-color: #d3b792;
+}
+
+.home-newsletter .consent a {
+  margin-left: 27px;
+  color: #f0c77e;
+  text-underline-offset: 3px;
+}
+
+.home-newsletter .form-message {
+  min-height: 24px;
+  margin: 12px 0 0;
+  color: #f4d8bd;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.home-newsletter .form-message.success {
+  color: #d7e8d2;
+}
+
+.home-newsletter .honeypot {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .home-immersive {
   display: grid;
   grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.18fr);
@@ -1277,6 +1437,19 @@
 @media (max-width: 760px) {
   .storefront-wrap {
     width: min(100% - 36px, 560px);
+  }
+
+  .home-newsletter-inner {
+    grid-template-columns: 1fr;
+    gap: 26px;
+  }
+
+  .home-newsletter .signup-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .home-newsletter .signup-row button {
+    width: 100%;
   }
 
   .storefront .home-section-heading h2 {

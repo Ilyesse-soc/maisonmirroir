@@ -72,7 +72,7 @@ export default function AdminDashboard() {
   return (
     <main className="admin-page">
       <h1>Tableau de bord</h1>
-      <p className="admin-muted">Vue d’ensemble des données réelles de Maison Miroir.</p>
+      <p className="admin-muted">Vue d’ensemble des données réelles de MAISON MIROIR.</p>
       {loading && <p role="status">Chargement des données…</p>}
       {error && <p className="admin-error" role="alert">{error}</p>}
       {data && (

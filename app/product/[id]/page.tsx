@@ -1289,7 +1289,7 @@ function ProductDetails({ productId }: { productId: string }) {
                         color: "rgba(255,255,255,0.4)",
                       }}
                     >
-                      Maison Miroir
+                      MAISON MIROIR
                     </span>
                   </div>
 

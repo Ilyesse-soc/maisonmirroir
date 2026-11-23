@@ -1,5 +1,5 @@
 export const brandInfo = {
-  name: "MAISON MIROIRS",
+  name: "MAISON MIROIR",
   status: "Micro-entreprise",
   siret: "103 982 576 000 13",
   address: "65 Rue d’Aigremont, 78300 Poissy, France",

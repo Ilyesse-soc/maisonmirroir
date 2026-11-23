@@ -181,7 +181,7 @@ export default function NewsletterAdmin() {
   return (
     <main className="newsletter-page" style={{ paddingTop: 35 }}>
       <a href="/77774555474447777554555/commandes">← Commandes</a>
-      <h1>La correspondance Maison Miroir</h1>
+      <h1>La correspondance MAISON MIROIR</h1>
       <p>
         Préparez votre campagne, prévisualisez-la, puis validez son envoi. Les
         destinataires sont les abonnées confirmées au moment de la validation.

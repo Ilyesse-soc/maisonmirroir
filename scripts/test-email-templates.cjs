@@ -112,7 +112,7 @@ async function main() {
       assert(
         await page
           .getByRole("link", {
-            name: /Confirmer mon inscription|Découvrir Maison Miroir|Découvrir la collection|Retour sur le site/,
+            name: /Confirmer mon inscription|Découvrir MAISON MIROIR|Découvrir la collection|Retour sur le site/,
           })
           .first()
           .isVisible(),

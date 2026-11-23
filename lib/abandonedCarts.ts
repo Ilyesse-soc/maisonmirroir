@@ -142,7 +142,7 @@ export async function processCartReminders(deadline = Date.now() + 30000) {
         {
           from: getEmailFrom(),
           to: cart.email,
-          subject: "Vos découvertes Maison Miroir vous attendent",
+          subject: "Vos découvertes MAISON MIROIR vous attendent",
           html,
           headers: {
             "List-Unsubscribe":

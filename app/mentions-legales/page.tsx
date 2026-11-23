@@ -1,6 +1,6 @@
 import LegalPage from "@/components/LegalPage";
 export const metadata = {
-  title: "Mentions légales - Maison Miroir",
+  title: "Mentions légales - MAISON MIROIR",
   robots: { index: false, follow: true },
 };
 

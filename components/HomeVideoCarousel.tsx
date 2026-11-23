@@ -96,7 +96,7 @@ export default function HomeVideoCarousel() {
   return (
     <section
       className="storefront-showcase"
-      aria-label="Films de la première collection Maison Miroir"
+      aria-label="Films de la première collection MAISON MIROIR"
     >
       <div
         className="storefront-showcase-frame"
@@ -137,7 +137,7 @@ export default function HomeVideoCarousel() {
         <div className="storefront-showcase-shade" aria-hidden="true" />
         <div className="storefront-showcase-overlay">
           <div className="storefront-showcase-copy" aria-live="polite">
-            <h1 className="storefront-showcase-title">Maison Miroir</h1>
+            <h1 className="storefront-showcase-title">MAISON MIROIR</h1>
             <p className="storefront-showcase-subtitle">
               {films[activeIndex].title} - {films[activeIndex].subtitle}
             </p>

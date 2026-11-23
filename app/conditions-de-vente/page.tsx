@@ -1,7 +1,7 @@
 import LegalPage from "@/components/LegalPage";
 
 export const metadata = {
-  title: "Conditions de vente - Maison Miroir",
+  title: "Conditions de vente - MAISON MIROIR",
   robots: { index: false, follow: true },
 };
 

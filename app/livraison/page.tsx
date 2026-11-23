@@ -1,7 +1,7 @@
 import LegalPage from "@/components/LegalPage";
 
 export const metadata = {
-  title: "Livraison - Maison Miroir",
+  title: "Livraison - MAISON MIROIR",
   robots: { index: false, follow: true },
 };
 

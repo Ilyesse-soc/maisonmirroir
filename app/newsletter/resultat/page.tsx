@@ -7,7 +7,7 @@ export default async function ResultPage({
 }) {
   const messages: Record<string, string> = {
     confirmed:
-      "Votre inscription est confirmée. Bienvenue dans la liste privée Maison Miroir.",
+      "Votre inscription est confirmée. Bienvenue dans la liste privée MAISON MIROIR.",
     unsubscribed: "Votre désinscription a bien été enregistrée.",
     invalid:
       "Ce lien est invalide, expiré ou déjà utilisé. Vous pouvez renouveler votre demande depuis la page d’accueil.",
@@ -26,7 +26,7 @@ export default async function ResultPage({
       <p role="status">
         {messages[query.status || "invalid"] || messages.invalid}
       </p>
-      <Link href="/">Revenir à Maison Miroir</Link>
+      <Link href="/">Revenir à MAISON MIROIR</Link>
     </div>
   );
 }

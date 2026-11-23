@@ -12,7 +12,7 @@ export function makeAuth(pool: Pool, bootstrap = false) {
   )
     throw new Error("AUTH_HTTPS_REQUIRED");
   return betterAuth({
-    appName: "Maison Miroir",
+    appName: "MAISON MIROIR",
     database: pool,
     baseURL,
     secret,

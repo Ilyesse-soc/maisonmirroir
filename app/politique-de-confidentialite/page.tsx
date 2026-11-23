@@ -1,6 +1,6 @@
 import LegalPage from "@/components/LegalPage";
 export const metadata = {
-  title: "Politique de confidentialité - Maison Miroir",
+  title: "Politique de confidentialité - MAISON MIROIR",
   robots: { index: false, follow: true },
 };
 

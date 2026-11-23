@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       .toLowerCase();
     if (!email) throw Error("ADMIN_NOT_CONFIGURED");
     await makeAuth(database(), true).api.signUpEmail({
-      body: { name: "Maison Miroir", email, password: data.password },
+      body: { name: "MAISON MIROIR", email, password: data.password },
     });
     await client.query(
       "UPDATE mm_admin_setup SET claimed_at=now(),token_hash=NULL WHERE singleton=true",

@@ -2,15 +2,15 @@ import Link from "next/link";
 import { brandInfo } from "@/lib/brandInfo";
 
 export const metadata = {
-  title: "Contact - Maison Miroir",
-  description: "Contactez Maison Miroir pour toute question sur la collection.",
+  title: "Contact - MAISON MIROIR",
+  description: "Contactez MAISON MIROIR pour toute question sur la collection.",
 };
 
 export default function ContactPage() {
   return (
     <div className="editorial-page">
       <div className="storefront-wrap">
-        <p className="storefront-eyebrow">Maison Miroir</p>
+        <p className="storefront-eyebrow">MAISON MIROIR</p>
         <h1>Contact</h1>
         <p className="editorial-intro">
           Une question sur la première collection ou notre univers ? Écris-nous,

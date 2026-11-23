@@ -12,11 +12,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.NEWSLETTER_SITE_URL || "http://localhost:3000",
   ),
-  title: "Maison Miroir - Première collection",
+  title: "MAISON MIROIR - Première collection",
   description:
-    "Découvrez Modest Era et Paradise Way, les deux tote bags de la première collection Maison Miroir.",
+    "Découvrez Modest Era et Paradise Way, les deux tote bags de la première collection MAISON MIROIR.",
   openGraph: {
-    title: "Maison Miroir - Plus qu’un sac, une identité",
+    title: "MAISON MIROIR - Plus qu’un sac, une identité",
     description: "Deux tote bags, un même désir : porter un message qui nous ressemble.",
     locale: "fr_FR",
     type: "website",
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
         url: "/collection/collection-hero.webp",
         width: 941,
         height: 1672,
-        alt: "Une femme portant un tote bag Maison Miroir",
+        alt: "Une femme portant un tote bag MAISON MIROIR",
       },
     ],
   },

@@ -32,6 +32,8 @@ async function main() {
     }
   };
   let authorized = true;
+  const newsletterSubscriptions = [];
+  let newsletterSubscribeError = null;
   const session = { user: { id: "admin-test" } };
   const cache = new Map();
   const requestSecurity = load("lib/requestSecurity.ts");
@@ -62,6 +64,10 @@ async function main() {
       if (id === "@/lib/newsletter")
         return {
           emailReady: () => true,
+          subscribe: async (email, ip) => {
+            if (newsletterSubscribeError) throw newsletterSubscribeError;
+            newsletterSubscriptions.push({ email, ip });
+          },
           siteUrl: () => "https://example.test",
           safeUrl: (value) => value || "",
           campaignHtml: () => "<html>preview</html>",
@@ -80,10 +86,18 @@ async function main() {
         return { getAdminEmail: () => "admin@example.test" };
       if (id === "@/lib/products") return load("lib/products.ts");
       if (id === "@/lib/brandSettings") {
+        const normalizeBrandText = (value) =>
+          value.replace(/\bMAISON MIROIRS?\b/gi, "MAISON MIROIR");
         return {
+          normalizeBrandText,
           getBrandSettings: async () => {
             const result = await query("SELECT key,value FROM mm_brand_settings");
-            return Object.fromEntries(result.rows.map((row) => [row.key, row.value]));
+            return Object.fromEntries(
+              result.rows.map((row) => [
+                row.key,
+                normalizeBrandText(row.value),
+              ]),
+            );
           },
         };
       }
@@ -121,6 +135,47 @@ async function main() {
       [id, email, status, day, randomUUID().replaceAll("-", "")],
     );
   }
+
+  const publicNewsletter = load("app/api/newsletter/route.ts");
+  const invalidNewsletterSignup = await publicNewsletter.POST(
+    req("https://example.test/api/newsletter", "POST", {
+      email: "reader@example.test",
+      consent: false,
+      website: "",
+    }),
+  );
+  assert.equal(invalidNewsletterSignup.status, 400);
+  const spamSignup = await publicNewsletter.POST(
+    req("https://example.test/api/newsletter", "POST", {
+      email: "bot@example.test",
+      consent: true,
+      website: "filled-by-bot",
+    }),
+  );
+  assert.equal(spamSignup.status, 202);
+  assert.equal(newsletterSubscriptions.length, 0);
+  const publicSignup = await publicNewsletter.POST(
+    req("https://example.test/api/newsletter", "POST", {
+      email: " Reader@Example.Test ",
+      consent: true,
+      website: "",
+    }),
+  );
+  assert.equal(publicSignup.status, 200);
+  assert.deepEqual(newsletterSubscriptions[0], {
+    email: "reader@example.test",
+    ip: "unknown",
+  });
+  newsletterSubscribeError = new Error("RATE_LIMIT");
+  const rateLimitedSignup = await publicNewsletter.POST(
+    req("https://example.test/api/newsletter", "POST", {
+      email: "another@example.test",
+      consent: true,
+      website: "",
+    }),
+  );
+  assert.equal(rateLimitedSignup.status, 429);
+  newsletterSubscribeError = null;
 
   const activeId = "10000000-0000-4000-8000-000000000001";
   const pendingId = "10000000-0000-4000-8000-000000000002";
@@ -191,13 +246,28 @@ async function main() {
 
   const settings = load("app/api/admin/settings/route.ts");
   const settingsData = await (await settings.GET()).json();
-  assert.equal(settingsData.settings.brand_name, "Maison Miroir");
+  assert.equal(settingsData.settings.brand_name, "MAISON MIROIR");
   assert.equal(Object.hasOwn(settingsData, "resendApiKey"), false);
   const updatedSettings = await settings.PUT(req("https://example.test/api/admin/settings", "PUT", {
     ...settingsData.settings,
+    brand_name: "Maison Miroir",
+    confirmation_copy: "Merci pour Maison Miroir.",
     instagram_url: "https://www.instagram.com/maison-miroir-test/",
   }));
   assert.equal(updatedSettings.status, 200);
+  const updatedSettingsData = await updatedSettings.json();
+  assert.equal(updatedSettingsData.settings.brand_name, "MAISON MIROIR");
+  assert.equal(updatedSettingsData.settings.confirmation_copy, "Merci pour MAISON MIROIR.");
+  assert.equal(
+    (await query("SELECT value FROM mm_brand_settings WHERE key='brand_name'")).rows[0].value,
+    "MAISON MIROIR",
+  );
+  await query(
+    "UPDATE mm_brand_settings SET value=$1 WHERE key='confirmation_copy'",
+    ["Merci pour Maison Miroir."],
+  );
+  const legacySettings = await (await settings.GET()).json();
+  assert.equal(legacySettings.settings.confirmation_copy, "Merci pour MAISON MIROIR.");
   assert.equal(
     (await query("SELECT value FROM mm_brand_settings WHERE key='instagram_url'")).rows[0].value,
     "https://www.instagram.com/maison-miroir-test/",
@@ -220,6 +290,8 @@ async function main() {
   let transientGeminiStatuses = [];
   let forceGeminiCredentialsError = false;
   let forceGroqUnavailable = false;
+  let rejectGroqParameter = "";
+  let adaptedGroqRequestSeen = false;
   let testNow = Date.now();
   const originalDateNow = Date.now;
   Date.now = () => testNow;
@@ -260,15 +332,27 @@ async function main() {
       assert.equal(options.headers.Authorization, "Bearer local-groq-test-key");
       const requestBody = JSON.parse(options.body);
       assert.equal(requestBody.model, "openai/gpt-oss-120b");
-      assert.equal(requestBody.max_completion_tokens, 700);
-      assert.equal("max_tokens" in requestBody, false);
-      assert.equal(requestBody.response_format.type, "json_object");
+      assert.equal(requestBody.max_completion_tokens ?? requestBody.max_tokens, 700);
+      if (requestBody.response_format)
+        assert.equal(requestBody.response_format.type, "json_object");
       assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
       const requestData = JSON.parse(requestBody.messages[1].content);
       if (requestData.campaignProducts) {
         assert.ok(requestData.campaignProducts.some((product) => product.id === "modest-era"));
         assert.ok(requestData.campaignProducts.some((product) => product.id === "paradise-way"));
         assert.ok(requestData.campaignProducts.every((product) => product.availableForSale === false));
+      }
+      if (!("temperature" in requestBody)) adaptedGroqRequestSeen = true;
+      if (rejectGroqParameter) {
+        const parameter = rejectGroqParameter;
+        rejectGroqParameter = "";
+        return {
+          ok: false,
+          status: 400,
+          json: async () => ({
+            error: { code: "unsupported_parameter", param: parameter },
+          }),
+        };
       }
       const reply = /(?:prépare|rédige|crée)/i.test(requestData.question)
         ? draftReply
@@ -483,6 +567,7 @@ async function main() {
     process.env.GEMINI_API_KEY = "local-test-key";
 
     forceGeminiCredentialsError = true;
+    rejectGroqParameter = "temperature";
     await query("DELETE FROM mm_rate_limits");
     const callsBeforeCredentialFallback = aiCalls;
     const credentialFallback = await ai.POST(req("https://example.test/api/admin/miroir-ai", "POST", {
@@ -491,7 +576,8 @@ async function main() {
     const credentialFallbackResult = await credentialFallback.json();
     assert.equal(credentialFallback.status, 200);
     assert.equal(credentialFallbackResult.provider, "groq");
-    assert.equal(aiCalls - callsBeforeCredentialFallback, 2);
+    assert.equal(aiCalls - callsBeforeCredentialFallback, 3);
+    assert.equal(adaptedGroqRequestSeen, true);
     forceGeminiCredentialsError = false;
     testNow += 60001;
 
@@ -568,10 +654,10 @@ async function main() {
 
   const newsletter = load("app/api/admin/newsletter/route.ts");
   const campaignFields = {
-    title: "Launch",
-    subject: "A subject",
-    preheader: "Preview",
-    body: "Body",
+    title: "Launch MAISON MIROIR",
+    subject: "Maison Miroir subject",
+    preheader: "Maison Miroir preview",
+    body: "Maison Miroir body",
     imageUrl: "",
     linkUrl: "",
     promoCode: "",
@@ -591,8 +677,8 @@ async function main() {
       action: "update",
       id: sourceCampaignId,
       ...campaignFields,
-      title: "Updated launch",
-      body: "Updated body",
+      title: "Updated launch Maison Miroir",
+      body: "Updated body Maison Miroir",
     }),
   );
   assert.equal(updatedResponse.status, 200);
@@ -602,8 +688,8 @@ async function main() {
     ])
   ).rows[0];
   assert.deepEqual(updatedRow, {
-    title: "Updated launch",
-    body: "Updated body",
+    title: "Updated launch MAISON MIROIR",
+    body: "Updated body MAISON MIROIR",
     status: "draft",
   });
   const previewResponse = await newsletter.POST(
@@ -625,9 +711,27 @@ async function main() {
   const duplicateRow = (
     await query("SELECT * FROM mm_campaigns WHERE id=$1", [duplicated.id])
   ).rows[0];
-  assert.equal(duplicateRow.title, "Updated launch - Copie");
-  assert.equal(duplicateRow.subject, "A subject");
+  assert.equal(duplicateRow.title, "Updated launch MAISON MIROIR - Copie");
+  assert.equal(duplicateRow.subject, "MAISON MIROIR subject");
   assert.equal(duplicateRow.status, "draft");
+  await query(
+    "UPDATE mm_campaigns SET title=$1,subject=$2,preheader=$3,body=$4 WHERE id=$5",
+    [
+      "Legacy Maison Miroir title",
+      "Legacy Maison Miroir subject",
+      "Legacy Maison Miroir preview",
+      "Legacy Maison Miroir body",
+      sourceCampaignId,
+    ],
+  );
+  const campaignList = await (await newsletter.GET()).json();
+  const listedCampaign = campaignList.campaigns.find(
+    (campaign) => campaign.id === sourceCampaignId,
+  );
+  assert.equal(listedCampaign.title, "Legacy MAISON MIROIR title");
+  assert.equal(listedCampaign.subject, "Legacy MAISON MIROIR subject");
+  assert.equal(listedCampaign.preheader, "Legacy MAISON MIROIR preview");
+  assert.equal(listedCampaign.body, "Legacy MAISON MIROIR body");
   const testResponse = await newsletter.POST(
     req("https://example.test/api/admin/newsletter", "POST", {
       action: "send-test",

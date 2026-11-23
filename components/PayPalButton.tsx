@@ -260,7 +260,7 @@ export default function PayPalButton({
                 );
                 setStatus("error");
                 setErrorMessage(
-                  "PayPal a confirmé la capture, mais la commande n’a pas pu être confirmée. Ne relancez pas le paiement et contactez Maison Miroir.",
+                  "PayPal a confirmé la capture, mais la commande n’a pas pu être confirmée. Ne relancez pas le paiement et contactez MAISON MIROIR.",
                 );
                 return;
               }

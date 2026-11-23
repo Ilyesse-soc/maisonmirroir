@@ -69,7 +69,8 @@ jobs:
           HEAD_SHA: ${{ steps.source.outputs.head_sha }}
         run: |
           set -eu
-          image="ghcr.io/$GITHUB_REPOSITORY:$HEAD_SHA"
+          repository="$(printf '%s' "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          image="ghcr.io/$repository:$HEAD_SHA"
           printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
           docker pull "$image"
           revision="$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"

@@ -8,6 +8,7 @@
   text-align: center;
   overflow: hidden;
   min-height: 100vh;
+  padding-top: 76px;
 }
 .launch * {
   box-sizing: border-box;
@@ -310,6 +311,9 @@
   }
 }
 @media (max-width: 700px) {
+  .launch {
+    padding-top: 66px;
+  }
   .launch-header {
     padding: 23px 18px 18px;
   }

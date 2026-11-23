@@ -108,6 +108,11 @@ for (const value of [
   assert(releaseWorkflow.includes(value), "release provenance validation is missing " + value);
 }
 assert(
+  releaseWorkflow.includes("tr '[:upper:]' '[:lower:]'") &&
+    releaseWorkflow.includes('image="ghcr.io/$repository:$HEAD_SHA"'),
+  "release image references must normalize repository casing for OCI registries",
+);
+assert(
   maintenanceWorkflow.includes("Europe/Paris") &&
     maintenanceWorkflow.includes("npm audit --audit-level=low") &&
     maintenanceWorkflow.includes("ops/test-runtime.sh") &&

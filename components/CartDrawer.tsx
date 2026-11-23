@@ -3,6 +3,7 @@ import Image from "next/image";
 
 import Link from "next/link";
 import { useMemo } from "react";
+import { usePathname } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { getCartItemSubtotal, getCartSubtotal, getCartTotal } from "@/lib/cart";
 import { SHIPPING_METHODS } from "@/lib/shipping";
@@ -29,6 +30,19 @@ function CartIcon() {
 }
 
 export default function CartDrawer() {
+  const isNewsletterPage = usePathname() === "/newsletter";
+  const drawerTheme = isNewsletterPage
+    ? {
+        ...theme,
+        gold: "#6b3e2a",
+        goldLight: "#e5cdb5",
+        goldDark: "#4f3012",
+        cream: "#f3e4d1",
+        creamDark: "#d8b99a",
+        textDark: "#4f3012",
+        textMid: "#6b513c",
+      }
+    : theme;
   const {
     items,
     isDrawerOpen,
@@ -50,6 +64,7 @@ export default function CartDrawer() {
 
   const subtotal = getCartSubtotal(items);
   const total = getCartTotal(items, shippingMethodId);
+  const shippingPrice = items.length > 0 ? selectedShippingPrice : 0;
 
   return (
     <div
@@ -73,14 +88,16 @@ export default function CartDrawer() {
       />
 
       <aside
-        className="mm-drawer-panel"
+        className={`mm-drawer-panel${isNewsletterPage ? " mm-drawer-panel--launch" : ""}`}
         style={{
           position: "absolute",
           top: 0,
           right: 0,
           width: "min(100vw, 420px)",
           height: "100%",
-          background: "#fffdfa",
+          background: isNewsletterPage
+            ? "linear-gradient(120deg, #f3e4d1, #ead3b9 48%, #f3e4d1)"
+            : "#fffdfa",
           boxShadow: "0 24px 60px rgba(0,0,0,0.18)",
           transform: isDrawerOpen ? "translateX(0)" : "translateX(100%)",
           transition: "transform 220ms ease",
@@ -91,7 +108,7 @@ export default function CartDrawer() {
         <div
           style={{
             padding: "18px 20px",
-            borderBottom: `1px solid ${theme.creamDark}`,
+            borderBottom: `1px solid ${drawerTheme.creamDark}`,
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -104,7 +121,7 @@ export default function CartDrawer() {
                 fontSize: 11,
                 letterSpacing: "0.28em",
                 textTransform: "uppercase",
-                color: theme.gold,
+                color: drawerTheme.gold,
               }}
             >
               Panier
@@ -113,7 +130,7 @@ export default function CartDrawer() {
               style={{
                 fontFamily: fonts.display,
                 fontSize: 18,
-                color: theme.textDark,
+                color: drawerTheme.textDark,
                 marginTop: 4,
               }}
             >
@@ -128,7 +145,7 @@ export default function CartDrawer() {
               background: "transparent",
               cursor: "pointer",
               fontSize: 26,
-              color: theme.textMid,
+              color: drawerTheme.textMid,
               lineHeight: 1,
             }}
           >
@@ -141,9 +158,9 @@ export default function CartDrawer() {
             style={{
               margin: "14px 18px 0",
               padding: "10px 12px",
-              border: `1px solid ${theme.gold}`,
-              color: theme.goldDark,
-              background: "#fff8e8",
+              border: `1px solid ${drawerTheme.gold}`,
+              color: drawerTheme.goldDark,
+              background: isNewsletterPage ? "#f5e6d4" : "#fff8e8",
               fontFamily: fonts.body,
               fontSize: 12,
             }}
@@ -160,7 +177,7 @@ export default function CartDrawer() {
                 display: "grid",
                 placeItems: "center",
                 textAlign: "center",
-                color: theme.textMid,
+                color: drawerTheme.textMid,
               }}
             >
               <div>
@@ -170,10 +187,10 @@ export default function CartDrawer() {
                     width: 56,
                     height: 56,
                     borderRadius: 999,
-                    border: `1px solid ${theme.creamDark}`,
+                    border: `1px solid ${drawerTheme.creamDark}`,
                     display: "grid",
                     placeItems: "center",
-                    color: theme.gold,
+                    color: drawerTheme.gold,
                   }}
                 >
                   <CartIcon />
@@ -182,7 +199,7 @@ export default function CartDrawer() {
                   style={{
                     fontFamily: fonts.display,
                     fontSize: 18,
-                    color: theme.textDark,
+                    color: drawerTheme.textDark,
                   }}
                 >
                   Votre panier est vide
@@ -212,7 +229,7 @@ export default function CartDrawer() {
                       gridTemplateColumns: "72px 1fr",
                       gap: 12,
                       paddingBottom: 14,
-                      borderBottom: `1px solid ${theme.creamDark}`,
+                      borderBottom: `1px solid ${drawerTheme.creamDark}`,
                     }}
                   >
                     <div
@@ -221,8 +238,8 @@ export default function CartDrawer() {
                         width: 72,
                         height: 72,
                         overflow: "hidden",
-                        background: "white",
-                        border: `1px solid ${theme.creamDark}`,
+                        background: drawerTheme.cream,
+                        border: `1px solid ${drawerTheme.creamDark}`,
                       }}
                     >
                       {item.image ? (
@@ -244,7 +261,7 @@ export default function CartDrawer() {
                             height: "100%",
                             display: "grid",
                             placeItems: "center",
-                            color: theme.gold,
+                            color: drawerTheme.gold,
                           }}
                         >
                           ◈
@@ -264,7 +281,7 @@ export default function CartDrawer() {
                             style={{
                               fontFamily: fonts.display,
                               fontSize: 15,
-                              color: theme.textDark,
+                              color: drawerTheme.textDark,
                               whiteSpace: "nowrap",
                               overflow: "hidden",
                               textOverflow: "ellipsis",
@@ -277,7 +294,7 @@ export default function CartDrawer() {
                               style={{
                                 fontFamily: fonts.body,
                                 fontSize: 11,
-                                color: theme.textMid,
+                                color: drawerTheme.textMid,
                                 letterSpacing: "0.04em",
                                 marginTop: 4,
                               }}
@@ -303,7 +320,7 @@ export default function CartDrawer() {
                             display: "flex",
                             alignItems: "center",
                             gap: 6,
-                            border: `1px solid ${theme.creamDark}`,
+                            border: `1px solid ${drawerTheme.creamDark}`,
                             padding: "6px 8px",
                           }}
                         >
@@ -321,7 +338,7 @@ export default function CartDrawer() {
                               cursor: "pointer",
                               width: 22,
                               height: 22,
-                              color: theme.textDark,
+                              color: drawerTheme.textDark,
                             }}
                           >
                             -
@@ -332,7 +349,7 @@ export default function CartDrawer() {
                               textAlign: "center",
                               fontFamily: fonts.body,
                               fontSize: 13,
-                              color: theme.textDark,
+                              color: drawerTheme.textDark,
                             }}
                           >
                             {item.quantity}
@@ -347,7 +364,7 @@ export default function CartDrawer() {
                               cursor: "pointer",
                               width: 22,
                               height: 22,
-                              color: theme.textDark,
+                              color: drawerTheme.textDark,
                             }}
                           >
                             +
@@ -359,7 +376,7 @@ export default function CartDrawer() {
                             border: "none",
                             background: "transparent",
                             cursor: "pointer",
-                            color: theme.textMid,
+                            color: drawerTheme.textMid,
                             fontFamily: fonts.body,
                             fontSize: 12,
                           }}
@@ -370,7 +387,7 @@ export default function CartDrawer() {
                           style={{
                             fontFamily: fonts.body,
                             fontSize: 13,
-                            color: theme.textDark,
+                            color: drawerTheme.textDark,
                           }}
                         >
                           {subtotalLine.toFixed(2)} €
@@ -385,10 +402,11 @@ export default function CartDrawer() {
         </div>
 
         <div
+          className="mm-drawer-summary"
           style={{
-            borderTop: `1px solid ${theme.creamDark}`,
+            borderTop: `1px solid ${drawerTheme.creamDark}`,
             padding: 18,
-            background: "#fff",
+            background: isNewsletterPage ? "#f3e4d1" : "#fff",
           }}
         >
           <div
@@ -398,7 +416,7 @@ export default function CartDrawer() {
               marginBottom: 16,
               fontFamily: fonts.body,
               fontSize: 13,
-              color: theme.textMid,
+              color: drawerTheme.textMid,
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -407,7 +425,7 @@ export default function CartDrawer() {
             </div>
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <span>Livraison</span>
-              <span>{selectedShippingPrice.toFixed(2)} €</span>
+              <span>{shippingPrice.toFixed(2)} €</span>
             </div>
             <div
               style={{
@@ -415,15 +433,17 @@ export default function CartDrawer() {
                 justifyContent: "space-between",
                 fontFamily: fonts.display,
                 fontSize: 16,
-                color: theme.textDark,
+                color: drawerTheme.textDark,
               }}
             >
               <span>Total</span>
               <span>{total.toFixed(2)} €</span>
             </div>
-            <div style={{ fontSize: 11, letterSpacing: "0.08em" }}>
-              Mode: {shippingLabel}
-            </div>
+            {items.length > 0 && (
+              <div style={{ fontSize: 11, letterSpacing: "0.08em" }}>
+                Mode: {shippingLabel}
+              </div>
+            )}
           </div>
 
           <div
@@ -437,9 +457,9 @@ export default function CartDrawer() {
                 display: "block",
                 textAlign: "center",
                 textDecoration: "none",
-                border: `1px solid ${theme.gold}`,
+                border: `1px solid ${drawerTheme.gold}`,
                 padding: "12px 14px",
-                color: theme.goldDark,
+                color: drawerTheme.goldDark,
                 fontFamily: fonts.body,
                 letterSpacing: "0.12em",
                 textTransform: "uppercase",
@@ -456,6 +476,10 @@ export default function CartDrawer() {
                 display: "block",
                 textAlign: "center",
                 textDecoration: "none",
+                color: isNewsletterPage ? "#f3ece1" : "#fff",
+                background: isNewsletterPage
+                  ? "linear-gradient(110deg, #542806, #472106)"
+                  : undefined,
               }}
             >
               Passer au paiement

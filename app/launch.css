@@ -434,6 +434,9 @@
   padding: 0;
   margin: 0;
 }
+.launch-hero .coming.sr-only {
+  position: absolute;
+}
 .illustration {
   aspect-ratio: 1024 / 532;
 }

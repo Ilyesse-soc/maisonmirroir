@@ -28,9 +28,6 @@ export default function LaunchFooter() {
       </div>
       <nav aria-label="Informations légales">
         <Link href="/mentions-legales">Mentions légales</Link>
-        <Link href="/conditions-de-vente">Conditions de vente</Link>
-        <Link href="/livraison">Livraison</Link>
-        <Link href="/retours">Retours et remboursements</Link>
         <Link href="/politique-de-confidentialite">
           Politique de confidentialité
         </Link>

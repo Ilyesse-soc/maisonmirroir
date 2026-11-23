@@ -20,6 +20,9 @@ export default function SiteShell({
   if (isPrivateRoute)
     return <>{children}</>;
 
+  if (pathname === "/newsletter")
+    return <>{children}</>;
+
   const showNavigation = !(
     pathname === "/connexion" ||
     pathname.startsWith("/newsletter/") ||

@@ -177,25 +177,37 @@ async function main() {
         waitUntil: "networkidle",
       });
       assert.equal(response.status(), 200);
-      assert.equal(await page.locator(".newsletter-landing .newsletter-form").count(), 1);
+      assert.equal(await page.locator(".launch").count(), 1);
+      assert.equal(await page.locator(".launch-header").count(), 1);
+      assert.equal(await page.locator(".launch-footer").count(), 1);
+      assert.equal(await page.locator(".newsletter-form").count(), 1);
       assert.equal(await page.locator('input[type="email"]').count(), 1);
       assert.equal(await page.getByLabel("Votre adresse e-mail").count(), 1);
       assert.equal(await page.locator('input[name="consent"][required]').count(), 1);
       assert.equal(
-        await page.locator(".newsletter-landing .sr-only").evaluate(
+        await page.locator(".coming.sr-only").evaluate(
           (element) => getComputedStyle(element).position,
         ),
         "absolute",
       );
-      assert.equal(await page.locator(".mm-navbar").count(), 1);
-      assert.equal(await page.locator(".storefront-footer").count(), 1);
-      const navbarBottom = await page
-        .locator(".mm-navbar")
-        .evaluate((element) => element.getBoundingClientRect().bottom);
-      const headingTop = (await page
-        .locator("#newsletter-landing-title")
-        .boundingBox()).y;
-      assert(headingTop > navbarBottom, `newsletter heading overlaps navigation at ${width}px`);
+      assert.equal(await page.locator(".mm-navbar").count(), 0);
+      assert.equal(await page.locator(".storefront-footer").count(), 0);
+      assert.equal(
+        await page.locator(".brand-message h1").innerText(),
+        "For the girls with\nhaya and big dreams",
+      );
+      assert(
+        await page
+          .locator(".illustration img")
+          .evaluate((image) => image.complete && image.naturalWidth > 0),
+        "original launch illustration loads",
+      );
+      assert.equal(
+        await page.locator(".signup-row").evaluate(
+          (element) => getComputedStyle(element).flexDirection,
+        ),
+        width <= 700 ? "column" : "row",
+      );
       assert(
         await page.evaluate(
           () => document.documentElement.scrollWidth <= innerWidth,
@@ -209,6 +221,24 @@ async function main() {
           animations: "disabled",
         });
     }
+
+    await page.route("**/api/newsletter", async (route) => {
+      assert.equal(route.request().method(), "POST");
+      assert.deepEqual(route.request().postDataJSON(), {
+        email: "preview@example.test",
+        consent: true,
+        website: "",
+      });
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true }),
+      });
+    });
+    await page.getByLabel("Votre adresse e-mail").fill("preview@example.test");
+    await page.locator('input[name="consent"]').check();
+    await page.locator(".signup-row button").click();
+    await page.getByRole("status").getByText(/confirmez votre inscription/i).waitFor();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("http://127.0.0.1:43819", { waitUntil: "networkidle" });
@@ -325,7 +355,7 @@ async function main() {
       ),
     );
     console.log(
-      `PASS: ${results.length} responsive viewport checks, storefront pages, legal placeholders, safely disabled newsletter delivery and order APIs, no third-party requests, no emails or payments.`,
+      `PASS: ${results.length} responsive viewport checks, storefront and restored newsletter pages, legal placeholders, safely disabled newsletter delivery and order APIs, no third-party requests, no emails or payments.`,
     );
   } finally {
     if (browser) await browser.close();

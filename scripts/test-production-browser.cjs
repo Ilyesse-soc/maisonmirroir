@@ -78,7 +78,7 @@ async function main() {
     },
   );
   await new Promise((resolve) => proxy.listen(3000, "127.0.0.1", resolve));
-  let browser, testUserId, draftId;
+  let browser, testUserId, draftId, duplicateId;
   try {
     for (let i = 0; i < 60; i++) {
       try {
@@ -224,6 +224,30 @@ async function main() {
     );
     assert.equal(created.status(), 200);
     draftId = (await created.json()).id;
+    const duplicated = await context.request.post(
+      "https://localhost:3000/api/admin/newsletter",
+      { data: { action: "duplicate", id: draftId } },
+    );
+    assert.equal(duplicated.status(), 200);
+    duplicateId = (await duplicated.json()).id;
+    assert.equal(
+      (
+        await db.query("SELECT status FROM mm_campaigns WHERE id=$1", [
+          duplicateId,
+        ])
+      ).rows[0].status,
+      "draft",
+    );
+    assert.equal(
+      (
+        await context.request.post(
+          "https://localhost:3000/api/admin/newsletter",
+          { data: { action: "send-test", id: draftId } },
+        )
+      ).status(),
+      409,
+      "Preview credentials must never send a test email",
+    );
     assert.equal(
       (
         await context.request.post(
@@ -246,6 +270,17 @@ async function main() {
     await page
       .getByRole("heading", { name: "La correspondance Maison Miroir" })
       .waitFor();
+    assert.equal(
+      await page
+        .getByRole("button", { name: "Envoyer un e-mail de test" })
+        .first()
+        .isDisabled(),
+      true,
+    );
+    assert.equal(
+      await page.getByRole("button", { name: "Dupliquer" }).count(),
+      await page.locator("tbody tr").count(),
+    );
     await page.getByRole("button", { name: "Se déconnecter" }).click();
     await page.locator("input[name=password]").waitFor();
     assert.equal(
@@ -295,6 +330,11 @@ async function main() {
       await db.query(
         "DELETE FROM mm_campaigns WHERE id=$1 AND title='QA isolated draft'",
         [draftId],
+      );
+    if (duplicateId)
+      await db.query(
+        "DELETE FROM mm_campaigns WHERE id=$1 AND title='QA isolated draft - Copie'",
+        [duplicateId],
       );
     await db.query("DELETE FROM mm_auth_rate_limit WHERE key LIKE $1", [
       ip + "%",

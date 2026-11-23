@@ -1,14 +1,25 @@
 "use client";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { buttonGoldStyle, fonts, theme } from "@/lib/uiStyles";
+import { usePathname } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 
-export default function Navbar() {
+const links = [
+  { href: "/", label: "Accueil" },
+  { href: "/catalogue", label: "Boutique" },
+  { href: "/notre-histoire", label: "Notre histoire" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/contact", label: "Contact" },
+];
+
+export default function Navbar({ homeOverlay = false }: { homeOverlay?: boolean }) {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [footerInView, setFooterInView] = useState(false);
   const [isDesktop, setIsDesktop] = useState(false);
   const { itemCount, openDrawer } = useCart();
+  const pathname = usePathname();
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50);
@@ -17,222 +28,172 @@ export default function Navbar() {
   }, []);
 
   useEffect(() => {
+    const nav = document.getElementById("mm-navbar");
+    const footer = document.querySelector(".storefront-footer");
+    if (!nav || !footer) return;
+
+    let frame = 0;
+    const updateFooterOverlap = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const footerRect = footer.getBoundingClientRect();
+        const footerIsVisible =
+          window.innerWidth < 1024 &&
+          footerRect.top < window.innerHeight &&
+          footerRect.bottom > 0;
+        setFooterInView((current) =>
+          current === footerIsVisible ? current : footerIsVisible,
+        );
+        if (footerIsVisible) {
+          setMenuOpen(false);
+          if (
+            nav.contains(document.activeElement) &&
+            document.activeElement instanceof HTMLElement
+          ) {
+            document.activeElement.blur();
+          }
+        }
+      });
+    };
+
+    updateFooterOverlap();
+    window.addEventListener("scroll", updateFooterOverlap, { passive: true });
+    window.addEventListener("resize", updateFooterOverlap);
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", updateFooterOverlap);
+      window.removeEventListener("resize", updateFooterOverlap);
+    };
+  }, [pathname]);
+
+  useEffect(() => {
     const update = () => {
-      const desktop = window.innerWidth >= 768;
+      const desktop = window.innerWidth >= 1024;
       setIsDesktop(desktop);
-      if (desktop) setMenuOpen(false);
+      if (desktop) {
+        setMenuOpen(false);
+      }
     };
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
   }, []);
 
-  return (
-    <nav
-      id="mm-navbar"
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 50,
-        padding: scrolled ? "12px 0" : "20px 0",
-        backgroundColor: scrolled ? "rgba(255,255,255,0.95)" : "transparent",
-        backdropFilter: scrolled ? "blur(12px)" : undefined,
-        boxShadow: scrolled ? "0 2px 12px rgba(0,0,0,0.06)" : undefined,
-      }}
-    >
-      <div
-        style={{
-          maxWidth: 1152,
-          margin: "0 auto",
-          padding: "0 24px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        {/* Logo */}
-        <Link
-          href="/"
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            textDecoration: "none",
-          }}
-        >
-          <span
-            style={{
-              fontFamily: fonts.display,
-              fontSize: 20,
-              textTransform: "uppercase",
-              letterSpacing: "0.3em",
-              color: theme.gold,
-              lineHeight: 1.1,
-            }}
-          >
-            Maison
-          </span>
-          <span
-            style={{
-              fontFamily: fonts.script,
-              fontSize: 28,
-              marginTop: -4,
-              color: theme.textDark,
-              lineHeight: 1.1,
-            }}
-          >
-            Miroir
-          </span>
-        </Link>
+  const openCart = () => {
+    setMenuOpen(false);
+    openDrawer();
+  };
 
-        {/* Desktop nav */}
-        {isDesktop && (
-          <div
-            className="mm-nav-links"
-            style={{ display: "flex", alignItems: "center", gap: 40 }}
+  return (
+    <>
+      <nav
+        id="mm-navbar"
+        className={`mm-navbar${homeOverlay ? " mm-navbar--home" : ""}${scrolled ? " is-scrolled" : ""}${footerInView ? " is-footer-visible" : ""}`}
+        aria-label="Navigation principale"
+        aria-hidden={footerInView || undefined}
+      >
+        <div className="mm-navbar-inner">
+          <Link
+            href="/"
+            className="mm-navbar-brand"
+            aria-label="Maison Miroir, accueil"
           >
-            {[
-              { href: "/", label: "Accueil" },
-              { href: "/catalogue", label: "Catalogue" },
-              { href: "/category/sacs", label: "Sacs" },
-              { href: "/category/gourmandises", label: "Gourmandises" },
-            ].map(({ href, label }) => (
-              <Link
-                key={href}
-                href={href}
-                style={{
-                  fontFamily: fonts.body,
-                  fontSize: 12,
-                  letterSpacing: "0.20em",
-                  textTransform: "uppercase",
-                  color: theme.textMid,
-                  textDecoration: "none",
-                }}
+            <span className="mm-navbar-wordmark">MAISON MIROIR</span>
+          </Link>
+
+          {isDesktop ? (
+            <div className="mm-navbar-actions">
+              <div className="mm-navbar-links">
+                {links.map(({ href, label }) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    aria-current={pathname === href ? "page" : undefined}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+              <button
+                type="button"
+                onClick={openCart}
+                className="mm-navbar-cart"
+                aria-label={`Ouvrir le panier, ${itemCount} article${itemCount === 1 ? "" : "s"}`}
               >
-                {label}
-              </Link>
-            ))}
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M5.5 8.5h13l1 12h-15l1-12Z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.25"
+                  />
+                  <path
+                    d="M9 9V6a3 3 0 0 1 6 0v3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.25"
+                  />
+                </svg>
+                <span>Panier</span>
+                <span className="mm-navbar-cart-count">{itemCount}</span>
+              </button>
+            </div>
+          ) : (
             <button
-              onClick={openDrawer}
-              className="btn-gold"
-              style={{
-                ...buttonGoldStyle({ fontSize: 12 }),
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 10,
-              }}
+              type="button"
+              className={`mm-navbar-menu${menuOpen ? " is-open" : ""}`}
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"}
+              aria-expanded={menuOpen}
+              aria-controls="mm-mobile-menu"
             >
-              <span>Panier ({itemCount})</span>
+              <span />
+              <span />
+            </button>
+          )}
+        </div>
+
+        {!isDesktop && menuOpen && (
+          <div className="mm-mobile-menu" id="mm-mobile-menu">
+            <div className="mm-mobile-menu-links">
+              {links.map(({ href, label }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  aria-current={pathname === href ? "page" : undefined}
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {label}
+                </Link>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="mm-navbar-cart"
+              onClick={openCart}
+              aria-label={`Ouvrir le panier, ${itemCount} article${itemCount === 1 ? "" : "s"}`}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M5.5 8.5h13l1 12h-15l1-12Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.25"
+                />
+                <path
+                  d="M9 9V6a3 3 0 0 1 6 0v3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.25"
+                />
+              </svg>
+              <span>Panier</span>
+              <span className="mm-navbar-cart-count">{itemCount}</span>
             </button>
           </div>
         )}
-
-        {/* Mobile menu button */}
-        {!isDesktop && (
-          <button
-            onClick={() => setMenuOpen(!menuOpen)}
-            aria-label="Menu"
-            style={{
-              background: "transparent",
-              border: "none",
-              padding: 8,
-              cursor: "pointer",
-              display: "flex",
-              flexDirection: "column",
-              gap: 6,
-            }}
-          >
-            <span
-              style={{
-                width: 24,
-                height: 1,
-                background: theme.goldDark,
-                transform: menuOpen
-                  ? "rotate(45deg) translateY(6px)"
-                  : undefined,
-                transition: "transform 180ms ease",
-              }}
-            />
-            <span
-              style={{
-                width: 24,
-                height: 1,
-                background: theme.goldDark,
-                opacity: menuOpen ? 0 : 1,
-                transition: "opacity 180ms ease",
-              }}
-            />
-            <span
-              style={{
-                width: 24,
-                height: 1,
-                background: theme.goldDark,
-                transform: menuOpen
-                  ? "rotate(-45deg) translateY(-6px)"
-                  : undefined,
-                transition: "transform 180ms ease",
-              }}
-            />
-          </button>
-        )}
-      </div>
-
-      {/* Mobile menu */}
-      {!isDesktop && menuOpen && (
-        <div
-          className="mm-nav-links"
-          style={{
-            backgroundColor: "rgba(255,255,255,0.98)",
-            backdropFilter: "blur(12px)",
-            borderTop: `1px solid ${theme.creamDark}`,
-            padding: "24px 24px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 18,
-          }}
-        >
-          {[
-            { href: "/", label: "Accueil" },
-            { href: "/catalogue", label: "Catalogue" },
-            { href: "/category/sacs", label: "Sacs personnalisés" },
-            { href: "/category/gourmandises", label: "Gourmandises" },
-          ].map(({ href, label }) => (
-            <Link
-              key={href}
-              href={href}
-              style={{
-                fontFamily: fonts.body,
-                fontSize: 14,
-                letterSpacing: "0.20em",
-                textTransform: "uppercase",
-                color: theme.textMid,
-                textDecoration: "none",
-              }}
-              onClick={() => setMenuOpen(false)}
-            >
-              {label}
-            </Link>
-          ))}
-          <button
-            onClick={() => {
-              setMenuOpen(false);
-              openDrawer();
-            }}
-            className="btn-gold"
-            style={{
-              ...buttonGoldStyle({ fullWidth: true, fontSize: 12 }),
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-            }}
-          >
-            Panier ({itemCount})
-          </button>
-        </div>
-      )}
-    </nav>
+      </nav>
+    </>
   );
 }

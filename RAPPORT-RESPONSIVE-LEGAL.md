@@ -1,4 +1,4 @@
-# Livraison ciblée Maison Miroir — 15 novembre 2026
+# Livraison ciblée Maison Miroir - 15 novembre 2026
 
 Branche : `fix/responsive-legal`, créée depuis `625a8fc`. Cette intervention concerne uniquement la présentation de la préouverture, ses liens et ses pages légales. Aucun déploiement, accès SSH, changement DNS, e-mail, secret ou donnée de production n'a été modifié. Les changements d'infrastructure de la branche précédente ne sont pas réexécutés par cette livraison.
 

@@ -21,9 +21,64 @@ export interface Product {
   features: string[];
   customFields: string[];
   options?: ProductOptions;
+  publiclyListed?: boolean;
+  availableForSale?: boolean;
 }
 
 export const products: Product[] = [
+  {
+    id: "modest-era",
+    name: "Modest Era",
+    category: "sacs",
+    categoryLabel: "Première collection - For Modest Girls",
+    price: 29.69,
+    images: [
+      "/collection/modest-era-feature.jpeg",
+      "/collection/modest-era-product.webp",
+      "/collection/modest-era-lifestyle-01.webp",
+      "/collection/modest-era-lifestyle-02.webp",
+      "/collection/modest-era-dimensions.webp",
+      "/collection/modest-era-material.webp",
+    ],
+    description:
+      "Un sac pensé pour accompagner tes journées, avec un message qui reflète ton style et tes valeurs.",
+    features: [
+      "Tote bag noir - « MODESTY IS THE MOOD »",
+      "Toile 100 % coton, 340 GSM / 12 OZ",
+      "Dimensions : 38 × 42 × 15 cm",
+      "Anses : 3 cm de large, 60 cm de longueur apparente",
+      "Édition limitée",
+    ],
+    customFields: [],
+    publiclyListed: true,
+    availableForSale: false,
+  },
+  {
+    id: "paradise-way",
+    name: "Paradise Way",
+    category: "sacs",
+    categoryLabel: "Première collection - For Modest Girls",
+    price: 31.69,
+    images: [
+      "/collection/paradise-way-product.webp",
+      "/collection/paradise-way-lifestyle-01.webp",
+      "/collection/paradise-way-lifestyle-02.webp",
+      "/collection/paradise-way-dimensions.webp",
+      "/collection/paradise-way-material.webp",
+    ],
+    description:
+      "Un sac pensé pour accompagner tes journées, avec un message qui reflète ton style et tes valeurs.",
+    features: [
+      "Tote bag chocolat - « JUST A GIRL TRAINING FOR JANNAH »",
+      "Toile 100 % coton, 340 GSM / 12 OZ",
+      "Dimensions : 38 × 42 × 15 cm",
+      "Anses : 3 cm de large, 60 cm de longueur apparente",
+      "Édition limitée",
+    ],
+    customFields: [],
+    publiclyListed: true,
+    availableForSale: false,
+  },
   {
     id: "tote-bag-premium",
     name: "Tote Bag Premium",
@@ -32,7 +87,7 @@ export const products: Product[] = [
     price: 35,
     images: ["/images/tote-bag-premium1.png", "/images/tote-bag-premium2.jpg"],
     description:
-      "Sac en jute personnalisable – 35 x 32 cm. Élégant et pratique, idéal pour les entreprises, marques et créateurs de contenu souhaitant mettre en avant leur identité visuelle. Personnalisable avec votre logo, texte ou design selon votre demande.",
+      "Sac en jute personnalisable - 35 x 32 cm. Élégant et pratique, idéal pour les entreprises, marques et créateurs de contenu souhaitant mettre en avant leur identité visuelle. Personnalisable avec votre logo, texte ou design selon votre demande.",
     features: [
       "Dimensions : 35 x 32 cm",
       "Matière : toile de jute",
@@ -59,7 +114,7 @@ export const products: Product[] = [
       "/images/collection-signature3.jpg",
     ],
     description:
-      "Sac en jute personnalisé en vinyle thermocollant – 22 x 32 cm. Élégant et tendance, avec une finition soignée et moderne. Personnalisation possible avec une initiale + prénom, uniquement le prénom, ou une petite phrase selon vos envies.",
+      "Sac en jute personnalisé en vinyle thermocollant - 22 x 32 cm. Élégant et tendance, avec une finition soignée et moderne. Personnalisation possible avec une initiale + prénom, uniquement le prénom, ou une petite phrase selon vos envies.",
     features: [
       "Dimensions : 22 x 32 cm",
       "Matière : toile de jute",
@@ -82,7 +137,7 @@ export const products: Product[] = [
     price: 45,
     images: ["/images/welcome-signature.jpg", "/images/welcome-signature2.jpg"],
     description:
-      "Panneau de bienvenue personnalisé en plexiglas givré. Forme arrondie en haut, finition moderne et épurée — idéal pour mariages, fiançailles, anniversaires et autres événements. Personnalisation réalisée en vinyle, avec plusieurs couleurs d’écriture disponibles.",
+      "Panneau de bienvenue personnalisé en plexiglas givré. Forme arrondie en haut, finition moderne et épurée - idéal pour mariages, fiançailles, anniversaires et autres événements. Personnalisation réalisée en vinyle, avec plusieurs couleurs d’écriture disponibles.",
     features: [
       "Matière : plexiglas givré",
       "Finition : haut arrondi / bas plat",
@@ -165,7 +220,7 @@ export const products: Product[] = [
       "/images/rituel-henne3.jpg",
     ],
     description:
-      "Rituel de Henné – Cadeaux invités personnalisés. Une collection inspirée du rituel du henné, pensée pour sublimer vos cérémonies et offrir un souvenir unique et raffiné. Personnalisation possible selon le modèle choisi (texte, prénom, design, couleur).",
+      "Rituel de Henné - Cadeaux invités personnalisés. Une collection inspirée du rituel du henné, pensée pour sublimer vos cérémonies et offrir un souvenir unique et raffiné. Personnalisation possible selon le modèle choisi (texte, prénom, design, couleur).",
     features: [
       "Occasion : fête du henné, mariage, fiançailles",
       "Personnalisation : texte / prénom / design / couleurs",
@@ -209,7 +264,7 @@ export const products: Product[] = [
     price: 15,
     images: ["/images/ruban-elegance.jpg", "/images/ruban-elegance2.jpg"],
     description:
-      "Rubans personnalisés – Bouquet de la mariée. Apportez une touche élégante et unique au bouquet avec des rubans délicats et raffinés. Personnalisation possible avec prénom, date ou petit texte selon vos envies.",
+      "Rubans personnalisés - Bouquet de la mariée. Apportez une touche élégante et unique au bouquet avec des rubans délicats et raffinés. Personnalisation possible avec prénom, date ou petit texte selon vos envies.",
     features: [
       "Idéal pour mariage, fiançailles et cérémonies élégantes",
       "Personnalisation : prénom / date / petit texte",
@@ -236,7 +291,7 @@ export const products: Product[] = [
       "/images/certificat-mariage3.jpg",
     ],
     description:
-      "Certificat de mariage religieux – Certificat d’Union Sacrée. Une touche symbolique, élégante et spirituelle à votre union. Personnalisation possible avec les prénoms des mariés, la date du mariage et le modèle souhaité.",
+      "Certificat de mariage religieux - Certificat d’Union Sacrée. Une touche symbolique, élégante et spirituelle à votre union. Personnalisation possible avec les prénoms des mariés, la date du mariage et le modèle souhaité.",
     features: [
       "Souvenir unique et raffiné",
       "Occasion : mariage religieux",
@@ -280,42 +335,22 @@ export const products: Product[] = [
 export const categories = [
   {
     slug: "sacs",
-    label: "Sacs personnalisés",
-    description:
-      "Tote bags et sacs en jute personnalisés pour votre marque ou événement",
-    image: "/images/tote-bag-premium2.jpg",
-  },
-  {
-    slug: "welcome",
-    label: "Panneaux & welcome",
-    description: "Panneaux de bienvenue élégants, modernes et sur mesure",
-    image: "/images/welcome-signature.jpg",
-  },
-  {
-    slug: "gourmandises",
-    label: "Gourmandises personnalisées",
-    description: "Chocolats, dragées et attentions raffinées pour vos invités",
-    image: "/images/delices-mariage.jpg",
-  },
-  {
-    slug: "rituels",
-    label: "Rituels & cadeaux invités",
-    description:
-      "Cadeaux invités inspirés du rituel du henné, personnalisables",
-    image: "/images/rituel-henne.jpg",
-  },
-  {
-    slug: "certificats",
-    label: "Certificats",
-    description: "Certificats religieux personnalisés, élégants et symboliques",
-    image: "/images/certificat-mariage.jpg",
+    label: "Première collection - For Modest Girls",
+    description: "Deux tote bags, un même désir : porter un message qui nous ressemble.",
+    image: "/collection/modest-era-product.webp",
   },
 ];
 
 export function getProductById(id: string): Product | undefined {
-  return products.find((p) => p.id === id);
+  return products.find((p) => p.id === id && p.publiclyListed === true);
 }
 
 export function getProductsByCategory(category: string): Product[] {
-  return products.filter((p) => p.category === category);
+  return products.filter(
+    (p) => p.category === category && p.publiclyListed === true,
+  );
 }
+
+export const launchCollectionProducts = products.filter(
+  (product) => product.publiclyListed === true,
+);

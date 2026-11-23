@@ -9,6 +9,9 @@ node_modules
 archive
 ops/secrets
 ops/bootstrap
+ops/preview/secrets
+ops/preview/bootstrap
+ops/preview/tls
 data
 *.pdf
 *.log

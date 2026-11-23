@@ -1,4 +1,4 @@
-# Point de restauration — 15 novembre 2026
+# Point de restauration - 15 novembre 2026
 
 Tag Git : `archive/pre-launch-2026-11-15`.
 Commit d'origine : `3b677340587209e982bfecf71b2de9dccac0138d`.

@@ -1,4 +1,4 @@
-# Maison Miroir — exploitation sur OVHcloud
+# Maison Miroir - exploitation sur OVHcloud
 
 Préparation du 15 novembre 2026. Cible désormais fournie : VPS-2 2027, 4 vCPU, 8 Go de RAM, 75 Go NVMe, Ubuntu 26.04 annoncé par OVH, Beauharnois Canada. Hôte `vps-5485bc25.vps.ovh.ca`, IPv4 `15.235.62.124`, IPv6 `2607:5300:205:200::8c95`. La résolution IPv4 a été vérifiée ; le système et les accès SSH restent à vérifier sur la machine. Aucun déploiement OVH, import de commandes ou changement DNS n'a encore été effectué. Ce guide remplace les instructions d'hébergement antérieures. Render et Vercel ne font pas partie de cette architecture.
 

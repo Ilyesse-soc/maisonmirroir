@@ -1,4 +1,4 @@
-# État technique — 15 novembre 2026
+# État technique - 15 novembre 2026
 
 ## Résultat et périmètre
 

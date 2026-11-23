@@ -43,7 +43,6 @@ export default function CheckoutPage() {
       <div
         style={{
           paddingTop: 110,
-          minHeight: "100vh",
           background: theme.marble,
         }}
       >
@@ -97,7 +96,7 @@ export default function CheckoutPage() {
   return (
     <div
       className="mm-checkout-shell"
-      style={{ paddingTop: 88, minHeight: "100vh", background: theme.marble }}
+      style={{ paddingTop: 88, background: theme.marble }}
     >
       <div
         style={{

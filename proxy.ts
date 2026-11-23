@@ -29,7 +29,7 @@ export function proxy(request: NextRequest) {
   let response: NextResponse;
   if (
     process.env.SHOP_OPEN !== "true" &&
-    /^\/(catalogue|category|product|panier|checkout)(\/|$)/.test(path)
+    /^\/(panier|checkout)(\/|$)/.test(path)
   )
     response = NextResponse.redirect(new URL("/", request.url));
   else response = NextResponse.next({ request: { headers: forwarded } });

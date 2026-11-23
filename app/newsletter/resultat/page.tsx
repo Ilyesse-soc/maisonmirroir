@@ -16,7 +16,7 @@ export default async function ResultPage({
   };
   const query = await searchParams;
   return (
-    <main className="newsletter-page">
+    <div className="newsletter-page">
       <p>MAISON MIROIR</p>
       <h1>
         {query.status === "confirmed"
@@ -27,6 +27,6 @@ export default async function ResultPage({
         {messages[query.status || "invalid"] || messages.invalid}
       </p>
       <Link href="/">Revenir à Maison Miroir</Link>
-    </main>
+    </div>
   );
 }

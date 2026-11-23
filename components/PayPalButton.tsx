@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 
 import { useMemo, useState } from "react";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
+import { getProductById } from "@/lib/products";
 
 type CustomerInfo = {
   firstName: string;
@@ -51,6 +52,7 @@ export default function PayPalButton({
   order: OrderPayload;
 }) {
   const router = useRouter();
+  const product = getProductById(order.product.id);
   const clientId = (process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "").trim();
 
   const safeAmount = useMemo(() => {
@@ -62,6 +64,14 @@ export default function PayPalButton({
 
   const [status, setStatus] = useState<"idle" | "processing" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
+
+  if (!product || product.availableForSale !== true) {
+    return (
+      <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
+        Cette collection n’est pas encore ouverte à la commande.
+      </p>
+    );
+  }
 
   if (!clientId) {
     return (
@@ -152,6 +162,11 @@ export default function PayPalButton({
               typeof window !== "undefined" &&
               sessionStorage.getItem(sentKey) === "1";
 
+            if (alreadySent) {
+              router.push("/success");
+              return;
+            }
+
             if (!alreadySent) {
               try {
                 const unitPrice = order.product.unitPrice;
@@ -181,73 +196,73 @@ export default function PayPalButton({
                   body: JSON.stringify(payload),
                 });
 
-                if (!res.ok) {
-                  console.error(
-                    "[checkout] order api returned non-ok after payment",
-                    { status: res.status, paypalOrderId: data.orderID },
+                if (!res.ok)
+                  throw new Error(`ORDER_API_FAILED_${res.status}`);
+                const apiData = (await res.json()) as {
+                  orderId?: string;
+                  total?: string;
+                  paymentMethod?: string;
+                  subtotal?: string;
+                  shipping?: string;
+                };
+
+                const orderId = apiData.orderId || "";
+                const total = apiData.total || displayAmount;
+                const subtotal =
+                  apiData.subtotal ||
+                  (order.product.unitPrice * order.product.quantity).toFixed(
+                    2,
                   );
-                } else {
-                  const apiData = (await res.json().catch(() => null)) as {
-                    orderId?: string;
-                    total?: string;
-                    paymentMethod?: string;
-                    subtotal?: string;
-                    shipping?: string;
-                  } | null;
+                const shippingTotal =
+                  apiData.shipping || order.shipping.price.toFixed(2);
+                const paymentMethod = apiData.paymentMethod || "PAYPAL";
 
-                  const orderId = apiData?.orderId || "";
-                  const total = apiData?.total || displayAmount;
-                  const subtotal =
-                    apiData?.subtotal ||
-                    (order.product.unitPrice * order.product.quantity).toFixed(
-                      2,
-                    );
-                  const shippingTotal =
-                    apiData?.shipping || order.shipping.price.toFixed(2);
-                  const paymentMethod = apiData?.paymentMethod || "PAYPAL";
+                if (!orderId) throw new Error("Missing orderId from API");
 
-                  if (!orderId) throw new Error("Missing orderId from API");
-
-                  try {
-                    if (typeof window !== "undefined")
-                      sessionStorage.setItem(sentKey, "1");
-                  } catch {
-                    // ignore
-                  }
-
-                  try {
-                    if (typeof window !== "undefined") {
-                      sessionStorage.setItem(
-                        "mm:lastOrder",
-                        JSON.stringify({
-                          orderId,
-                          paymentMethod,
-                          paypalOrderId: data.orderID,
-                          product: {
-                            id: order.product.id,
-                            name: order.product.name,
-                            categoryLabel: order.product.categoryLabel,
-                            unitPrice: unitPrice.toFixed(2),
-                            quantity,
-                            subtotal,
-                            shipping: shippingTotal,
-                            total,
-                          },
-                          shipping: order.shipping,
-                          customValues: order.customValues || {},
-                          address: order.customer,
-                        }),
-                      );
-                    }
-                  } catch {
-                    // ignore
-                  }
+                try {
+                  if (typeof window !== "undefined")
+                    sessionStorage.setItem(sentKey, "1");
+                } catch {
+                  // ignore
                 }
-              } catch (e) {
+
+                try {
+                  if (typeof window !== "undefined") {
+                    sessionStorage.setItem(
+                      "mm:lastOrder",
+                      JSON.stringify({
+                        orderId,
+                        paymentMethod,
+                        paypalOrderId: data.orderID,
+                        product: {
+                          id: order.product.id,
+                          name: order.product.name,
+                          categoryLabel: order.product.categoryLabel,
+                          unitPrice: unitPrice.toFixed(2),
+                          quantity,
+                          subtotal,
+                          shipping: shippingTotal,
+                          total,
+                        },
+                        shipping: order.shipping,
+                        customValues: order.customValues || {},
+                        address: order.customer,
+                      }),
+                    );
+                  }
+                } catch {
+                  // ignore
+                }
+              } catch {
                 console.error(
-                  "[checkout] order post-payment processing warning",
-                  { paypalOrderId: data.orderID, error: e },
+                  "[checkout] order confirmation failed after PayPal capture",
+                  { paypalOrderId: data.orderID },
                 );
+                setStatus("error");
+                setErrorMessage(
+                  "PayPal a confirmé la capture, mais la commande n’a pas pu être confirmée. Ne relancez pas le paiement et contactez Maison Miroir.",
+                );
+                return;
               }
             }
 

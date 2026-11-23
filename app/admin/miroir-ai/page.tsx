@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 
-type Message = { role: "user" | "assistant"; text: string };
+type Message = { role: "user" | "assistant"; text: string; draftId?: string };
 type ProviderHealth = {
   configured: boolean;
   verified: boolean;
@@ -106,11 +106,8 @@ export default function MiroirAiPage() {
         throw new Error("Miroir AI a renvoyé une réponse illisible. Réessayez.");
       setMessages((items) => [...items, {
         role: "assistant",
-        text: `${data.reply}${data.fallbackUsed ? "\n\nGemini indisponible : réponse fournie par Groq." : ""}${data.createdDraft ? "\n\nBrouillon créé — aucune campagne envoyée ni programmée." : ""}`,
-      }]);
-      if (data.draftId) setMessages((items) => [...items, {
-        role: "assistant",
-        text: "Le brouillon est disponible dans la page Campagnes.",
+        text: `${data.reply}${data.fallbackUsed ? "\n\nGemini indisponible : réponse fournie par Groq." : ""}${data.createdDraft ? "\n\nBrouillon créé - aucune campagne envoyée ni programmée." : ""}`,
+        draftId: data.draftId,
       }]);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Miroir AI n’a pas pu répondre.");
@@ -132,7 +129,7 @@ export default function MiroirAiPage() {
         />
         <div>
           <h1>Miroir AI</h1>
-          <p className="admin-muted">Assistante marketing Maison Miroir — elle peut proposer et créer des brouillons, jamais envoyer ou programmer une campagne.</p>
+          <p className="admin-muted">Assistante marketing Maison Miroir - elle peut préparer des brouillons avec les produits du catalogue. Vous gardez la main sur leur vérification et leur validation, aucun envoi ni programmation n’est automatique.</p>
         </div>
       </header>
       <section className="admin-card">
@@ -153,7 +150,7 @@ export default function MiroirAiPage() {
             </p>
           </>
         )}
-        <p className="admin-muted">Les requêtes sont limitées. Seules des statistiques agrégées lui sont transmises ; n’incluez aucune donnée personnelle, adresse e-mail ni secret.</p>
+        <p className="admin-muted">Les requêtes sont limitées. Miroir AI reçoit des statistiques agrégées et, pour les brouillons, des informations sur les produits publics. Aucune donnée personnelle n’est transmise ; n’incluez pas d’adresse e-mail ni de secret.</p>
         {error && <p className="admin-error" role="alert">{error}</p>}
         <div className="admin-chat" ref={chatRef} aria-live="polite">
           {!messages.length && <p className="admin-muted">Vous pourrez demander des idées de campagne, des objets d’e-mail ou des statistiques agrégées.</p>}
@@ -168,7 +165,16 @@ export default function MiroirAiPage() {
                   height={36}
                 />
               )}
-              <div className="admin-chat-message" data-role={message.role}>{message.text}</div>
+              <div className="admin-chat-message" data-role={message.role}>
+                {message.text}
+                {message.draftId && (
+                  <p>
+                    <a className="admin-button" href={`/admin/newsletter?draft=${encodeURIComponent(message.draftId)}`}>
+                      Relire et modifier le brouillon
+                    </a>
+                  </p>
+                )}
+              </div>
             </div>
           ))}
           {busy && (
@@ -189,6 +195,8 @@ export default function MiroirAiPage() {
             "Propose-moi trois objets d’email élégants.",
             "Combien de nouvelles abonnées avons-nous cette semaine ?",
             "Prépare une campagne de lancement pour notre collection.",
+            "Crée un brouillon de campagne Modest Era et sélectionne le produit.",
+            "Prépare une campagne avec Paradise Way en précisant que les commandes ne sont pas encore ouvertes.",
             "Rédige une newsletter professionnelle.",
             "Crée un brouillon de campagne marketing.",
           ].map((prompt) => <button key={prompt} disabled={!status?.enabled || busy} type="button" onClick={() => void send(undefined, prompt)}>{prompt}</button>)}

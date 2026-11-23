@@ -1,156 +1,146 @@
 import Link from "next/link";
-import { dividerStyle, fonts, theme } from "@/lib/uiStyles";
+import { brandInfo } from "@/lib/brandInfo";
 
-export default function Footer() {
+const discoveryLinks = [
+  { href: "/catalogue", label: "La collection" },
+  { href: "/notre-histoire", label: "Notre histoire" },
+  { href: "/faq", label: "FAQ" },
+  { href: "/contact", label: "Contact" },
+];
+
+const informationLinks = [
+  { href: "/mentions-legales", label: "Mentions légales" },
+  { href: "/conditions-de-vente", label: "Conditions de vente" },
+  { href: "/livraison", label: "Livraison" },
+  { href: "/retours", label: "Retours et remboursements" },
+  { href: "/politique-de-confidentialite", label: "Confidentialité" },
+  { href: "/politique-de-cookies", label: "Cookies" },
+];
+
+function SocialLink({
+  href,
+  label,
+  children,
+}: {
+  href: string;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={`${label}, ouvre dans un nouvel onglet`}
+    >
+      {children}
+      <span>{label}</span>
+    </a>
+  );
+}
+
+export default function Footer({
+  withNavigation,
+}: {
+  withNavigation: boolean;
+}) {
   return (
     <footer
-      style={{
-        backgroundColor: "#1c1917",
-        color: "#d6d3d1",
-        padding: "64px 24px",
-        marginTop: 0,
-      }}
+      className={`storefront-footer${withNavigation ? " storefront-footer--with-nav" : ""}`}
     >
-      <div style={{ maxWidth: 1152, margin: "0 auto" }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-            gap: 48,
-            marginBottom: 48,
-          }}
-        >
-          {/* Brand */}
-          <div>
-            <div style={{ marginBottom: 16 }}>
-              <span
-                style={{
-                  fontFamily: fonts.display,
-                  fontSize: 18,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.25em",
-                  color: theme.goldLight,
-                }}
+      <div className="storefront-footer-main">
+        <div className="storefront-footer-brand">
+          <a
+            href="https://preview.maison-miroir.fr:9443/"
+            className="storefront-footer-wordmark"
+            aria-label="Maison Miroir, accueil"
+          >
+            <span>MAISON MIROIR</span>
+          </a>
+          <p>Une marque autour de la modestie, de l’identité et du lifestyle.</p>
+          <div className="storefront-footer-social">
+            <SocialLink href={brandInfo.instagram} label="Instagram">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
               >
-                Maison
-              </span>
-              <span
-                style={{
-                  fontFamily: fonts.script,
-                  fontSize: 26,
-                  marginLeft: 8,
-                  color: "white",
-                }}
+                <rect
+                  x="3"
+                  y="3"
+                  width="18"
+                  height="18"
+                  rx="5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                />
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.7"
+                />
+                <circle cx="17.5" cy="6.8" r="1" fill="currentColor" />
+              </svg>
+            </SocialLink>
+            <SocialLink href={brandInfo.tiktok} label="TikTok">
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                focusable="false"
               >
-                Miroir
-              </span>
-            </div>
-            <p
-              style={{
-                fontFamily: fonts.body,
-                fontSize: 12,
-                lineHeight: 1.8,
-                letterSpacing: "0.04em",
-                color: "#a8a29e",
-              }}
-            >
-              Des créations uniques pour les plus beaux jours de votre vie.
-              Chaque pièce est fabriquée à la main avec amour et précision.
-            </p>
-          </div>
-
-          {/* Navigation */}
-          <div>
-            <h4
-              style={{
-                fontFamily: fonts.display,
-                fontSize: 14,
-                letterSpacing: "0.25em",
-                textTransform: "uppercase",
-                marginBottom: 20,
-                color: theme.goldLight,
-              }}
-            >
-              Collections
-            </h4>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[
-                { href: "/category/sacs", label: "Sacs personnalisés" },
-                {
-                  href: "/category/gourmandises",
-                  label: "Gourmandises personnalisées",
-                },
-                { href: "/category/welcome", label: "Panneaux & welcome" },
-              ].map(({ href, label }) => (
-                <Link
-                  key={href}
-                  href={href}
-                  style={{
-                    fontFamily: fonts.body,
-                    fontSize: 12,
-                    letterSpacing: "0.04em",
-                    color: "#d6d3d1",
-                    textDecoration: "none",
-                  }}
-                >
-                  {label}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Contact */}
-          <div>
-            <h4
-              style={{
-                fontFamily: fonts.display,
-                fontSize: 14,
-                letterSpacing: "0.25em",
-                textTransform: "uppercase",
-                marginBottom: 20,
-                color: theme.goldLight,
-              }}
-            >
-              Contact
-            </h4>
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
-                fontFamily: fonts.body,
-                fontSize: 12,
-                letterSpacing: "0.04em",
-                color: "#a8a29e",
-              }}
-            >
-              <p>maison.miroirs@gmail.com</p>
-              <p>Livraison France & International</p>
-              <p>Délai de création : 7–14 jours</p>
-            </div>
+                <path
+                  fill="currentColor"
+                  d="M19.6 7.1a6.3 6.3 0 0 1-3.8-1.3v8.4a5.8 5.8 0 1 1-5-5.7v3.2a2.7 2.7 0 1 0 1.8 2.5V2.5h3.2a6.3 6.3 0 0 0 3.8 4.1v.5Z"
+                />
+              </svg>
+            </SocialLink>
           </div>
         </div>
 
-        <div style={{ ...dividerStyle(120), marginBottom: 32 }} />
+        <div className="storefront-footer-column">
+          <h2>Découvrir</h2>
+          <nav aria-label="Découvrir">
+            {discoveryLinks.map(({ href, label }) => (
+              <Link key={href} href={href}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </div>
 
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            fontFamily: fonts.body,
-            fontSize: 12,
-            letterSpacing: "0.20em",
-            color: "#78716c",
-          }}
-        >
-          <p>© 2026 Maison Miroir. Tous droits réservés.</p>
-          <p style={{ color: "var(--gold-light)", opacity: 0.6 }}>
-            Créé avec amour ✦
+        <div className="storefront-footer-column">
+          <h2>Informations</h2>
+          <nav aria-label="Informations">
+            {informationLinks.map(({ href, label }) => (
+              <Link key={href} href={href}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+
+        <div className="storefront-footer-column storefront-footer-contact">
+          <h2>Nous écrire</h2>
+          <a
+            className="storefront-footer-email"
+            href={`mailto:${brandInfo.email}`}
+          >
+            {brandInfo.email}
+          </a>
+          <p className="storefront-footer-notice">
+            Les commandes de la première collection ne sont pas encore
+            ouvertes.
           </p>
         </div>
+      </div>
+
+      <div className="storefront-footer-bottom">
+        <p>© 2026 Maison Miroir. Tous droits réservés.</p>
+        <p className="storefront-footer-tagline">For Modest Girls</p>
       </div>
     </footer>
   );

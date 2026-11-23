@@ -1,4 +1,4 @@
-# Maison Miroir — Site e-commerce luxe
+# Maison Miroir - Site e-commerce luxe
 
 Production préparée pour OVH VPS-2 2027 : Next.js 16 standalone, PostgreSQL, worker et Nginx via Docker Compose. Consulter [le guide OVH](DEPLOIEMENT-OVH.md) et [le rapport de sécurité](RAPPORT-SECURITE-OVH.md) avant toute migration. Les instructions historiques ci-dessous ne décrivent plus l'hébergement cible. Aucun changement DNS ni import définitif n'a été effectué.
 

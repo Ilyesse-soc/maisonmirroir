@@ -1,4 +1,4 @@
-# Opérations prévues sur le VPS — validation avant modification
+# Opérations prévues sur le VPS - validation avant modification
 
 Serveur fourni : `ubuntu@15.235.62.124`, `vps-5485bc25.vps.ovh.ca`. Ce plan ne signifie pas que les opérations ont été exécutées. L'accès par la clé préparée est actuellement refusé. Aucun changement SSH ou pare-feu n'a été réalisé.
 

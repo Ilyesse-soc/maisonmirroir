@@ -289,9 +289,12 @@
   .admin-sidebar nav {
     display: flex;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-inline: contain;
   }
   .admin-sidebar nav a {
     flex: 0 0 auto;
+    min-height: 44px;
     padding: 9px 10px;
   }
   .admin-page {

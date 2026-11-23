@@ -59,7 +59,26 @@ async function main() {
         };
       if (id === "@/lib/newsletterDb") return { database: () => pool, transaction };
       if (id === "@/lib/observability") return { securityEvent() {} };
-      if (id === "@/lib/newsletter") return { emailReady: () => true };
+      if (id === "@/lib/newsletter")
+        return {
+          emailReady: () => true,
+          siteUrl: () => "https://example.test",
+          safeUrl: (value) => value || "",
+          campaignHtml: () => "<html>preview</html>",
+          launchAnnouncementTemplate: () => ({
+            title: "Lancement",
+            subject: "Lancement",
+            body: "Lancement",
+            linkUrl: "https://example.test",
+          }),
+          sendCampaignTest: async () => ({
+            providerId: "fake-test-1",
+            recipient: "admin@example.test",
+          }),
+        };
+      if (id === "@/lib/email")
+        return { getAdminEmail: () => "admin@example.test" };
+      if (id === "@/lib/products") return load("lib/products.ts");
       if (id === "@/lib/brandSettings") {
         return {
           getBrandSettings: async () => {
@@ -69,6 +88,8 @@ async function main() {
         };
       }
       if (id === "@/lib/requestSecurity") return requestSecurity;
+      if (id === "@/lib/newsletterSchemas")
+        return load("lib/newsletterSchemas.ts");
       if (id.startsWith("@/"))
         throw new Error(`Unexpected admin-test import: ${id}`);
       return require(id);
@@ -210,7 +231,7 @@ async function main() {
   const draftReply = {
     reply: "Voici un brouillon.",
     intent: "create_draft",
-    draft: { title: "Lancement", subject: "Une nouvelle collection", preheader: "Découvrir", body: "Notre collection arrive." },
+    draft: { title: "Lancement", subject: "Une nouvelle collection", preheader: "Découvrir", body: "Notre collection arrive.", productIds: ["modest-era"] },
   };
   global.fetch = async (url, options) => {
     aiCalls++;
@@ -244,6 +265,11 @@ async function main() {
       assert.equal(requestBody.response_format.type, "json_object");
       assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
       const requestData = JSON.parse(requestBody.messages[1].content);
+      if (requestData.campaignProducts) {
+        assert.ok(requestData.campaignProducts.some((product) => product.id === "modest-era"));
+        assert.ok(requestData.campaignProducts.some((product) => product.id === "paradise-way"));
+        assert.ok(requestData.campaignProducts.every((product) => product.availableForSale === false));
+      }
       const reply = /(?:prépare|rédige|crée)/i.test(requestData.question)
         ? draftReply
         : normalReply;
@@ -263,6 +289,11 @@ async function main() {
     const requestBody = JSON.parse(options.body);
     assert.equal(JSON.stringify(requestBody).includes("active@example.test"), false);
     const requestData = JSON.parse(requestBody.contents[0].parts[0].text);
+    if (requestData.campaignProducts) {
+      assert.ok(requestData.campaignProducts.some((product) => product.id === "modest-era"));
+      assert.ok(requestData.campaignProducts.some((product) => product.id === "paradise-way"));
+      assert.ok(requestData.campaignProducts.every((product) => product.availableForSale === false));
+    }
     const reply = /(?:prépare|rédige|crée)/i.test(requestData.question)
       ? draftReply
       : normalReply;
@@ -357,6 +388,11 @@ async function main() {
         (await query("SELECT count(*)::int AS count FROM mm_jobs WHERE campaign_id=$1", [draftResultForPrompt.draftId])).rows[0].count,
         0,
       );
+      const savedProducts = (await query("SELECT products FROM mm_campaigns WHERE id=$1", [draftResultForPrompt.draftId])).rows[0].products;
+      assert.equal(savedProducts.length, 1);
+      assert.equal(savedProducts[0].id, "modest-era");
+      assert.equal(savedProducts[0].url, "https://example.test/product/modest-era");
+      assert.ok(savedProducts[0].image.startsWith("https://example.test/"));
     }
 
     testNow += 60001;
@@ -530,6 +566,79 @@ async function main() {
     1,
   );
 
+  const newsletter = load("app/api/admin/newsletter/route.ts");
+  const campaignFields = {
+    title: "Launch",
+    subject: "A subject",
+    preheader: "Preview",
+    body: "Body",
+    imageUrl: "",
+    linkUrl: "",
+    promoCode: "",
+    endsAt: "",
+    productIds: [],
+  };
+  const createdResponse = await newsletter.POST(
+    req("https://example.test/api/admin/newsletter", "POST", {
+      action: "create",
+      ...campaignFields,
+    }),
+  );
+  assert.equal(createdResponse.status, 200);
+  const sourceCampaignId = (await createdResponse.json()).id;
+  const updatedResponse = await newsletter.POST(
+    req("https://example.test/api/admin/newsletter", "POST", {
+      action: "update",
+      id: sourceCampaignId,
+      ...campaignFields,
+      title: "Updated launch",
+      body: "Updated body",
+    }),
+  );
+  assert.equal(updatedResponse.status, 200);
+  const updatedRow = (
+    await query("SELECT title,body,status FROM mm_campaigns WHERE id=$1", [
+      sourceCampaignId,
+    ])
+  ).rows[0];
+  assert.deepEqual(updatedRow, {
+    title: "Updated launch",
+    body: "Updated body",
+    status: "draft",
+  });
+  const previewResponse = await newsletter.POST(
+    req("https://example.test/api/admin/newsletter", "POST", {
+      action: "preview",
+      id: sourceCampaignId,
+    }),
+  );
+  assert.equal(previewResponse.status, 200);
+  assert.equal((await previewResponse.json()).html, "<html>preview</html>");
+  const duplicatedResponse = await newsletter.POST(
+    req("https://example.test/api/admin/newsletter", "POST", {
+      action: "duplicate",
+      id: sourceCampaignId,
+    }),
+  );
+  assert.equal(duplicatedResponse.status, 200);
+  const duplicated = await duplicatedResponse.json();
+  const duplicateRow = (
+    await query("SELECT * FROM mm_campaigns WHERE id=$1", [duplicated.id])
+  ).rows[0];
+  assert.equal(duplicateRow.title, "Updated launch - Copie");
+  assert.equal(duplicateRow.subject, "A subject");
+  assert.equal(duplicateRow.status, "draft");
+  const testResponse = await newsletter.POST(
+    req("https://example.test/api/admin/newsletter", "POST", {
+      action: "send-test",
+      id: sourceCampaignId,
+    }),
+  );
+  assert.deepEqual(await testResponse.json(), {
+    providerId: "fake-test-1",
+    recipient: "admin@example.test",
+  });
+
   authorized = false;
   assert.equal((await dashboard.GET()).status, 401);
   assert.equal((await subscribers.GET(req("https://example.test/api/admin/subscribers"))).status, 401);
@@ -537,7 +646,18 @@ async function main() {
   assert.equal((await calendar.GET()).status, 401);
   assert.equal((await settings.GET()).status, 401);
   assert.equal((await ai.GET()).status, 401);
-  console.log("PASS: authenticated admin dashboard aggregates, subscriber filters/history/export/erasure, persisted calendar and allowlisted settings, Miroir AI draft-only flow, PII rejection, Gemini, Groq, transient retry/fallback, provider error reporting and rate limits. No campaign or email sent.");
+  assert.equal(
+    (
+      await newsletter.POST(
+        req("https://example.test/api/admin/newsletter", "POST", {
+          action: "duplicate",
+          id: sourceCampaignId,
+        }),
+      )
+    ).status,
+    401,
+  );
+  console.log("PASS: authenticated admin dashboard aggregates, subscriber filters/history/export/erasure, campaign duplication and test-email routing, persisted calendar and allowlisted settings, Miroir AI draft-only flow, PII rejection, Gemini, Groq, transient retry/fallback, provider error reporting and rate limits. All campaign and email operations used isolated fixtures.");
   await db.close();
 }
 

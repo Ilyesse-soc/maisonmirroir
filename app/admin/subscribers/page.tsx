@@ -150,8 +150,8 @@ export default function SubscribersPage() {
                   <td>{row.email}<br /><small>Consentement : {new Date(row.consent_at).toLocaleDateString("fr-FR")} ({row.consent_version})</small></td>
                   <td><span className="admin-status">{statusNames[row.status]}</span></td>
                   <td>{new Date(row.created_at).toLocaleDateString("fr-FR")}</td>
-                  <td>{row.confirmed_at ? new Date(row.confirmed_at).toLocaleDateString("fr-FR") : row.last_confirmation_at ? "En attente d’action" : "—"}</td>
-                  <td>{row.last_delivery_error || "—"}</td>
+                  <td>{row.confirmed_at ? new Date(row.confirmed_at).toLocaleDateString("fr-FR") : row.last_confirmation_at ? "En attente d’action" : "-"}</td>
+                  <td>{row.last_delivery_error || "-"}</td>
                   <td><div className="admin-actions">
                     <button type="button" onClick={() => void showHistory(row.id)}>Historique</button>
                     <button type="button" disabled={busy === row.id} onClick={() => void erase(row)}>Effacer</button>
@@ -164,7 +164,7 @@ export default function SubscribersPage() {
         </div>
       )}
       <div className="admin-actions" style={{ justifyContent: "space-between", marginTop: 16 }}>
-        <span>{total.toLocaleString("fr-FR")} résultat(s) — page {page} / {Math.max(1, Math.ceil(total / 25))}</span>
+        <span>{total.toLocaleString("fr-FR")} résultat(s) - page {page} / {Math.max(1, Math.ceil(total / 25))}</span>
         <div className="admin-actions">
           <button type="button" disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Précédente</button>
           <button type="button" disabled={page >= Math.ceil(total / 25)} onClick={() => setPage((value) => value + 1)}>Suivante</button>
@@ -175,7 +175,7 @@ export default function SubscribersPage() {
           <h2>Historique du consentement</h2>
           <button type="button" onClick={() => setHistory(null)}>Fermer</button>
         </div>
-        {history.length ? <ul>{history.map((item, index) => <li key={`${item.event}-${item.created_at}-${index}`}>{item.event} — {new Date(item.created_at).toLocaleString("fr-FR")} ({item.consent_version})</li>)}</ul> : <p>Aucun événement enregistré.</p>}
+        {history.length ? <ul>{history.map((item, index) => <li key={`${item.event}-${item.created_at}-${index}`}>{item.event} - {new Date(item.created_at).toLocaleString("fr-FR")} ({item.consent_version})</li>)}</ul> : <p>Aucun événement enregistré.</p>}
       </section>}
     </main>
   );

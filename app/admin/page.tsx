@@ -96,7 +96,7 @@ export default function AdminDashboard() {
           </section>
 
           <section className="admin-card" style={{ marginTop: 18 }}>
-            <h2>Inscriptions — 30 derniers jours</h2>
+            <h2>Inscriptions - 30 derniers jours</h2>
             <SignupChart data={data.signups} />
           </section>
 
@@ -115,7 +115,7 @@ export default function AdminDashboard() {
               <h2>Service newsletter</h2>
               <p>Envois transactionnels : {data.service.newsletterSendEnabled ? "activés" : "désactivés"}</p>
               <p>Configuration d’envoi : {data.service.emailReady ? "complète" : "incomplète"}</p>
-              <p>Worker : {data.service.worker ? `${data.service.worker.status} — ${data.service.worker.processed} traités, dernier passage ${new Date(data.service.worker.started_at).toLocaleString("fr-FR")}` : "aucune exécution enregistrée"}</p>
+              <p>Worker : {data.service.worker ? `${data.service.worker.status} - ${data.service.worker.processed} traités, dernier passage ${new Date(data.service.worker.started_at).toLocaleString("fr-FR")}` : "aucune exécution enregistrée"}</p>
               <p>Dernier événement Resend : {data.service.lastResendEventAt ? new Date(data.service.lastResendEventAt).toLocaleString("fr-FR") : "aucun événement reçu"}</p>
               <p>Boutique : {data.service.shopOpen ? "ouverte" : "fermée"}</p>
               <p>Publication automatique des campagnes : {data.service.autoPublish ? "activée" : "désactivée"}</p>
@@ -128,7 +128,7 @@ export default function AdminDashboard() {
               <ul>
                 {data.activity.map((item, index) => (
                   <li key={`${item.action}-${item.created_at}-${index}`}>
-                    {item.action.replaceAll("_", " ")} — {new Date(item.created_at).toLocaleString("fr-FR")}
+                    {item.action.replaceAll("_", " ")} - {new Date(item.created_at).toLocaleString("fr-FR")}
                   </li>
                 ))}
               </ul>

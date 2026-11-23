@@ -6,7 +6,7 @@ import { database } from "@/lib/newsletterDb";
 import "../newsletter/newsletter.css";
 export const dynamic = "force-dynamic";
 export const metadata = {
-  title: "Espace privé — Maison Miroir",
+  title: "Espace privé - Maison Miroir",
   robots: { index: false, follow: false },
 };
 export default async function AdminEntry() {

@@ -56,6 +56,8 @@ export const campaignSchema = z.discriminatedUnion("action", [
     })
     .strict(),
   z.object({ action: z.literal("preview"), id: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("duplicate"), id: z.string().uuid() }).strict(),
+  z.object({ action: z.literal("send-test"), id: z.string().uuid() }).strict(),
 ]);
 export const orderPatchSchema = z
   .object({

@@ -38,7 +38,7 @@ export default function CartPage() {
   return (
     <div
       className="mm-cart-shell"
-      style={{ paddingTop: 88, minHeight: "100vh", background: theme.marble }}
+      style={{ paddingTop: 88, background: theme.marble }}
     >
       <div
         style={{
@@ -251,7 +251,7 @@ export default function CartPage() {
                               height: 26,
                             }}
                           >
-                            −
+                            -
                           </button>
                           <span
                             style={{

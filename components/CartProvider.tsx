@@ -39,7 +39,13 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | null>(null);
 const ready = () => true,
   notReady = () => false;
-export function CartProvider({ children }: { children: React.ReactNode }) {
+export function CartProvider({
+  children,
+  syncEnabled = true,
+}: {
+  children: React.ReactNode;
+  syncEnabled?: boolean;
+}) {
   const { items, shippingMethodId } = useSyncExternalStore(
     subscribeCart,
     readCart,
@@ -47,7 +53,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
   const isReady = useSyncExternalStore(subscribeCart, ready, notReady);
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !syncEnabled) return;
     const controller = new AbortController();
     void fetch("/api/cart", {
       method: "POST",
@@ -62,7 +68,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       signal: controller.signal,
     }).catch(() => {});
     return () => controller.abort();
-  }, [items, isReady]);
+  }, [items, isReady, syncEnabled]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false),
     [flashMessage, setFlashMessage] = useState("");
   useEffect(() => {

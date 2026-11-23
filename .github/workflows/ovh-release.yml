@@ -2,15 +2,84 @@ name: Release a verified image on OVH
 on:
   workflow_dispatch:
     inputs:
-      app_digest:
-        description: Verified application sha256 digest from the image workflow
-        type: string
+      image_run_id:
+        description: Successful image workflow run ID from main
+        type: number
         required: true
+  workflow_run:
+    workflows: ["Build and scan OVH production images"]
+    types: [completed]
+    branches: [main]
 permissions:
   contents: read
 jobs:
+  validate-image:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      pull-requests: read
+    outputs:
+      should_deploy: ${{ steps.source.outputs.should_deploy }}
+      app_digest: ${{ steps.image.outputs.app_digest }}
+      head_sha: ${{ steps.source.outputs.head_sha }}
+      auto_deploy: ${{ steps.source.outputs.auto_deploy }}
+    steps:
+      - name: Verify the successful main image workflow and classify its source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.id || inputs.image_run_id }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+        run: |
+          set -eu
+          if [ "$EVENT_NAME" = workflow_dispatch ]; then
+            test "$REF" = refs/heads/main
+          fi
+          printf '%s' "$RUN_ID" | grep -Eq '^[0-9]+$'
+          expected_workflow="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ovh-images.yml" --jq .id)"
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          test "$(printf '%s' "$run" | jq -r .workflow_id)" = "$expected_workflow"
+          test "$(printf '%s' "$run" | jq -r .head_branch)" = main
+          test "$(printf '%s' "$run" | jq -r .status)" = completed
+          test "$(printf '%s' "$run" | jq -r .conclusion)" = success
+          head_sha="$(printf '%s' "$run" | jq -r .head_sha)"
+          printf 'head_sha=%s\n' "$head_sha" >> "$GITHUB_OUTPUT"
+          should_deploy=true
+          auto_deploy=false
+          if [ "$EVENT_NAME" = workflow_run ]; then
+            prs="$(gh api "repos/$GITHUB_REPOSITORY/commits/$head_sha/pulls")"
+            pr_number="$(printf '%s' "$prs" | jq -r '[.[] | select(.merged_at != null and .base.ref == "main" and .user.login == "dependabot[bot]" and any(.labels[]; .name == "auto-deploy:patch"))][0].number // empty')"
+            if [ -z "$pr_number" ]; then
+              should_deploy=false
+            else
+              auto_deploy=true
+            fi
+          fi
+          printf 'should_deploy=%s\nauto_deploy=%s\n' "$should_deploy" "$auto_deploy" >> "$GITHUB_OUTPUT"
+      - name: Resolve and verify the immutable image digest
+        id: image
+        if: steps.source.outputs.should_deploy == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.source.outputs.head_sha }}
+        run: |
+          set -eu
+          image="ghcr.io/$GITHUB_REPOSITORY:$HEAD_SHA"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker pull "$image"
+          revision="$(docker image inspect "$image" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+          test "$revision" = "$HEAD_SHA"
+          digest="$(docker image inspect "$image" --format '{{ index .RepoDigests 0 }}' | sed 's|^ghcr.io/[^@]*@||')"
+          printf '%s' "$digest" | grep -Eq '^sha256:[a-f0-9]{64}$'
+          printf 'app_digest=%s\n' "$digest" >> "$GITHUB_OUTPUT"
   release:
-    if: github.ref == 'refs/heads/main'
+    needs: validate-image
+    if: needs.validate-image.outputs.should_deploy == 'true'
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -20,7 +89,7 @@ jobs:
     steps:
       - name: Validate and deploy through the restricted SSH command
         env:
-          APP_DIGEST: ${{ inputs.app_digest }}
+          APP_DIGEST: ${{ needs.validate-image.outputs.app_digest }}
           OVH_HOST: ${{ vars.OVH_HOST }}
           OVH_PORT: ${{ vars.OVH_SSH_PORT }}
           OVH_KNOWN_HOSTS: ${{ vars.OVH_KNOWN_HOSTS }}

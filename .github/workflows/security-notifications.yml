@@ -1,0 +1,35 @@
+name: Security and deployment notifications
+on:
+  workflow_run:
+    workflows:
+      - Verify security and application
+      - Build and scan OVH production images
+      - Security maintenance
+      - CodeQL
+      - Release a verified image on OVH
+    types: [completed]
+permissions:
+  actions: read
+  issues: write
+jobs:
+  notify-failure:
+    if: github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create or update a secret-free alert issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -eu
+          short_sha="${HEAD_SHA:0:12}"
+          title="[Sécurité] Échec ${WORKFLOW_NAME} ${short_sha}"
+          body="Le workflow a échoué. Vérifiez le journal privé de l'exécution; ce ticket n'inclut ni secrets ni données client. [Ouvrir l'exécution](${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID})."
+          issue="$(gh issue list --state open --search "$title in:title" --json number --jq '.[0].number // empty')"
+          if [ -n "$issue" ]; then
+            gh issue comment "$issue" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

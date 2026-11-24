@@ -1,4 +1,5 @@
 const assert = require("node:assert/strict");
+const { createHash } = require("node:crypto");
 const { readFileSync } = require("node:fs");
 const { transformSync } = require("esbuild");
 
@@ -33,6 +34,58 @@ const {
   MondialRelayApi1ResponseError,
   parseMondialRelayApi1Response,
 } = api1ResponseLoaded.exports;
+const api1Source = readFileSync("lib/mondialRelayApi1.ts", "utf8");
+const api1Compiled = transformSync(api1Source, {
+  loader: "ts",
+  format: "cjs",
+}).code;
+const api1Loaded = { exports: {} };
+new Function("require", "module", "exports", api1Compiled)(
+  (name) => {
+    if (name === "server-only") return {};
+    if (name === "node:crypto") return require(name);
+    if (name === "@/lib/mondialRelayApi1Response")
+      return { parseMondialRelayApi1Response };
+    throw new Error(`Unexpected dependency: ${name}`);
+  },
+  api1Loaded,
+  api1Loaded.exports,
+);
+const { buildApi1PointSearchRequest } = api1Loaded.exports;
+const api1Request = buildApi1PointSearchRequest({
+  shop: "BDTEST13",
+  privateKey: "TestAPI1key",
+  postalCode: "78300",
+  city: "Poissy",
+  weightGrams: 500,
+  serviceCode: "24R",
+});
+const expectedApi1Signature = createHash("md5")
+  .update(
+    [
+      "BDTEST13",
+      "FR",
+      "",
+      "Poissy",
+      "78300",
+      "",
+      "",
+      "",
+      "500",
+      "",
+      "",
+      "",
+      "",
+      "10",
+      "TestAPI1key",
+    ].join(""),
+    "utf8",
+  )
+  .digest("hex")
+  .toUpperCase();
+assert.match(api1Request, /<NACE><\/NACE>/);
+assert.match(api1Request, /<NombreResultats>10<\/NombreResultats>/);
+assert.match(api1Request, new RegExp(`<Security>${expectedApi1Signature}</Security>`));
 const api2Source = readFileSync("lib/mondialRelayApi2.ts", "utf8");
 const api2Compiled = transformSync(api2Source, {
   loader: "ts",
@@ -131,17 +184,18 @@ const successfulSoapResponse = `<?xml version="1.0"?>
     <m:WSI4_PointRelais_RechercheResult>
       <m:STAT>0</m:STAT>
       <m:PointsRelais><m:PointRelais_Details>
-        <m:Num>12345</m:Num><m:Localisation1>Relais &amp; boutique</m:Localisation1>
+        <m:Num>123456</m:Num><m:Localisation1>Relais &amp; boutique</m:Localisation1>
         <m:LgAdr1>1 rue de test</m:LgAdr1><m:CP>78300</m:CP><m:Ville>Poissy</m:Ville>
-        <m:Distance>1.2</m:Distance>
+        <m:Distance>1200</m:Distance>
       </m:PointRelais_Details></m:PointsRelais>
     </m:WSI4_PointRelais_RechercheResult>
   </m:WSI4_PointRelais_RechercheResponse></soap:Body>
 </soap:Envelope>`;
 const parsedPoints = parseMondialRelayApi1Response(successfulSoapResponse, "24R");
 assert.equal(parsedPoints.length, 1);
-assert.equal(parsedPoints[0].id, "12345");
+assert.equal(parsedPoints[0].id, "123456");
 assert.equal(parsedPoints[0].label, "Relais & boutique");
+assert.equal(parsedPoints[0].distanceKm, 1.2);
 assert.equal(parsedPoints[0].source, "sandbox");
 assert.deepEqual(
   parseMondialRelayApi1Response(

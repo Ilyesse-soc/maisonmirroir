@@ -54,7 +54,7 @@ function relayPoints(xml: string, serviceCode: MondialRelayServiceCode) {
     .map((match): RelayPoint | null => {
       const details = match[1];
       const id = element(details, "Num");
-      if (!/^[0-9A-Z]{1,10}$/i.test(id)) return null;
+      if (!/^[0-9]{6}$/.test(id)) return null;
       const address = ["LgAdr1", "LgAdr2", "LgAdr3", "LgAdr4"]
         .map((name) => element(details, name))
         .filter(Boolean);
@@ -69,7 +69,7 @@ function relayPoints(xml: string, serviceCode: MondialRelayServiceCode) {
         postalCode: element(details, "CP"),
         city: element(details, "Ville"),
         ...(Number.isFinite(Number(element(details, "Distance")))
-          ? { distanceKm: Number(element(details, "Distance")) }
+          ? { distanceKm: Number(element(details, "Distance")) / 1000 }
           : {}),
         source: "sandbox",
         serviceCode,

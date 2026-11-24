@@ -5,7 +5,7 @@ import type {
 } from "@/lib/mondialRelayTypes";
 import { parseMondialRelayApi1Response } from "@/lib/mondialRelayApi1Response";
 
-type SearchInput = {
+export type MondialRelayApi1SearchInput = {
   shop: string;
   privateKey: string;
   postalCode: string;
@@ -30,56 +30,48 @@ function signature(values: Array<string | number>, privateKey: string) {
     .toUpperCase();
 }
 
-export async function searchTestRelayPoints(input: SearchInput) {
-  const values = [
-    input.shop,
-    "FR",
-    "",
-    input.city,
-    input.postalCode,
-    "",
-    "",
-    "",
-    input.weightGrams,
-    "",
-    "",
-    "",
-    "",
-    "",
-    10,
+export function buildApi1PointSearchRequest(
+  input: MondialRelayApi1SearchInput,
+) {
+  const parameters: Array<[string, string | number]> = [
+    ["Enseigne", input.shop],
+    ["Pays", "FR"],
+    ["NumPointRelais", ""],
+    ["Ville", input.city],
+    ["CP", input.postalCode],
+    ["Latitude", ""],
+    ["Longitude", ""],
+    ["Taille", ""],
+    ["Poids", input.weightGrams],
+    ["Action", ""],
+    ["DelaiEnvoi", ""],
+    ["RayonRecherche", ""],
+    ["TypeActivite", ""],
+    ["NACE", ""],
+    ["NombreResultats", 10],
   ];
-  const fields = [
-    "Enseigne",
-    "Pays",
-    "NumPointRelais",
-    "Ville",
-    "CP",
-    "Latitude",
-    "Longitude",
-    "Taille",
-    "Poids",
-    "Action",
-    "DelaiEnvoi",
-    "RayonRecherche",
-    "TypeActivite",
-    "NACE",
-    "NombreResultats",
-  ];
-  const parameters = fields
+  const signedValues = parameters
+    .filter(([field]) => field !== "NACE")
+    .map(([, value]) => value);
+  const parametersXml = parameters
     .map(
-      (field, index) =>
-        `<${field}>${escapeXml(String(values[index]))}</${field}>`,
+      ([field, value]) => `<${field}>${escapeXml(String(value))}</${field}>`,
     )
     .join("");
-  const body = `<?xml version="1.0" encoding="utf-8"?>
+  return `<?xml version="1.0" encoding="utf-8"?>
     <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
       <soap:Body>
         <WSI4_PointRelais_Recherche xmlns="http://www.mondialrelay.fr/webservice/">
-          ${parameters}
-          <Security>${signature(values, input.privateKey)}</Security>
+          ${parametersXml}
+          <Security>${signature(signedValues, input.privateKey)}</Security>
         </WSI4_PointRelais_Recherche>
       </soap:Body>
     </soap:Envelope>`;
+}
+
+export async function searchTestRelayPoints(
+  input: MondialRelayApi1SearchInput,
+) {
   const response = await fetch(
     "https://api.mondialrelay.com/Web_Services.asmx",
     {
@@ -89,7 +81,7 @@ export async function searchTestRelayPoints(input: SearchInput) {
         SOAPAction:
           '"http://www.mondialrelay.fr/webservice/WSI4_PointRelais_Recherche"',
       },
-      body,
+      body: buildApi1PointSearchRequest(input),
       cache: "no-store",
       signal: AbortSignal.timeout(6000),
     },

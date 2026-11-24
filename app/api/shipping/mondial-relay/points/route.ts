@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { searchTestRelayPoints } from "@/lib/mondialRelayApi1";
+import { MondialRelayApi1ResponseError } from "@/lib/mondialRelayApi1Response";
 import { database } from "@/lib/newsletterDb";
 import { getMondialRelaySettings, getMondialRelayTestCredentialStatus } from "@/lib/mondialRelaySettings";
 import { createSimulatedRelayPoint } from "@/lib/mondialRelayTypes";
@@ -88,8 +89,18 @@ export async function GET(request: NextRequest) {
       },
       { headers: { "Cache-Control": "no-store" } },
     );
-  } catch {
+  } catch (error) {
     securityEvent("MONDIAL_RELAY_SEARCH_FAILED", "warn");
+    if (
+      error instanceof MondialRelayApi1ResponseError &&
+      error.code.startsWith("STAT_")
+    )
+      return NextResponse.json(
+        {
+          error: `Mondial Relay a rejeté la recherche (code ${error.code.slice(5)}). Vérifiez la clé API1 de test et les paramètres de recherche.`,
+        },
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+      );
     return NextResponse.json(
       { error: "Recherche des Points Relais indisponible." },
       { status: 503, headers: { "Cache-Control": "no-store" } },

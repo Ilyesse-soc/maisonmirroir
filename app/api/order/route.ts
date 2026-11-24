@@ -21,7 +21,11 @@ import type {
   PaymentMethod,
   ProductInfo,
 } from "@/lib/orderTypes";
-import { formatEuro, getShippingMethodById } from "@/lib/shipping";
+import {
+  formatEuro,
+  getShippingMethodById,
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+} from "@/lib/shipping";
 import {
   getAdminEmail,
   getEmailFrom,
@@ -141,6 +145,8 @@ export async function POST(req: NextRequest) {
     if (denied) return denied;
     if (process.env.SHOP_OPEN !== "true")
       return NextResponse.json({ error: "SHOP_CLOSED" }, { status: 403 });
+    if (process.env.REAL_PAYMENTS_ENABLED !== "true")
+      return NextResponse.json({ error: "PAYMENTS_DISABLED" }, { status: 403 });
     const rawBody = (await readJson(
       req,
       incomingOrderSchema,
@@ -178,6 +184,7 @@ export async function POST(req: NextRequest) {
       base64: string;
     }> = [];
     let shippingMethodId = "";
+    let relayPoint: OrderPayload["relayPoint"];
 
     if (rawBody.order && typeof rawBody.order === "object") {
       const op = rawBody.order as OrderPayload;
@@ -202,6 +209,7 @@ export async function POST(req: NextRequest) {
       shippingMethodId = isNonEmptyString(op.shippingMethodId)
         ? op.shippingMethodId
         : legacyShippingId;
+      relayPoint = op.relayPoint;
       attachments = (Array.isArray(op.attachments) ? op.attachments : []).map(
         (a) => ({
           filename: a.filename,
@@ -305,6 +313,11 @@ export async function POST(req: NextRequest) {
       ? getShippingMethodById(shippingMethodId)
       : null;
     if (!shippingMethod) validationErrors.push("shipping method is invalid");
+    if (
+      shippingMethodId === MONDIAL_RELAY_POINT_RELAIS_ID &&
+      (!relayPoint || relayPoint.source === "simulation")
+    )
+      validationErrors.push("a verified Mondial Relay test point is required");
 
     if (validationErrors.length > 0) {
       securityEvent("ORDER_INPUT_REJECTED", "warn");
@@ -320,6 +333,11 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    if (shippingMethod?.carrier === "Mondial Relay")
+      return NextResponse.json(
+        { error: "MONDIAL_RELAY_REAL_SHIPMENTS_DISABLED" },
+        { status: 403 },
+      );
 
     normalizedItems = canonicalItems(normalizedItems);
     const fromEmail = getEmailFrom();
@@ -430,6 +448,12 @@ export async function POST(req: NextRequest) {
             ["Code postal", customer.zip],
             ["Pays", customer.country || "France"],
             ["Mode choisi", shippingMethod?.label || ""],
+            [
+              "Point Relais",
+              relayPoint
+                ? `${relayPoint.id} - ${relayPoint.address.join(", ")} - ${relayPoint.postalCode} ${relayPoint.city}`
+                : "",
+            ],
             ["Prix de livraison", `${formatEuro(shippingPrice)}`],
             ["Delai estime", shippingMethod?.estimatedDelay || ""],
             ["Numero de suivi", "Non disponible"],
@@ -502,6 +526,12 @@ export async function POST(req: NextRequest) {
             ["Code postal", customer.zip],
             ["Pays", customer.country || "France"],
             ["Mode de livraison", shippingMethod?.label || ""],
+            [
+              "Point Relais",
+              relayPoint
+                ? `${relayPoint.id} - ${relayPoint.address.join(", ")} - ${relayPoint.postalCode} ${relayPoint.city}`
+                : "",
+            ],
             ["Prix de livraison", `${formatEuro(shippingPrice)}`],
             ["Delai estime de reception", shippingMethod?.estimatedDelay || ""],
           ])}
@@ -537,6 +567,7 @@ export async function POST(req: NextRequest) {
         price: shippingPrice,
         estimatedDelay: shippingMethod?.estimatedDelay || "",
         trackingBaseUrl: shippingMethod?.trackingBaseUrl || "",
+        ...(relayPoint ? { relayPoint } : {}),
       },
       subtotal,
       total,

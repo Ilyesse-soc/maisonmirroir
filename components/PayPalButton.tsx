@@ -1,9 +1,10 @@
 "use client";
 import { useRouter } from "next/navigation";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { getProductById } from "@/lib/products";
+import type { RelayPoint } from "@/lib/mondialRelayTypes";
 
 type CustomerInfo = {
   firstName: string;
@@ -36,6 +37,7 @@ type OrderPayload = {
     price: number;
     estimatedDelay: string;
   };
+  relayPoint?: RelayPoint;
   attachments?: Array<{
     filename: string;
     contentType: string;
@@ -64,11 +66,44 @@ export default function PayPalButton({
 
   const [status, setStatus] = useState<"idle" | "processing" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string>("");
+  const [paymentEnabled, setPaymentEnabled] = useState(false);
+  const [paymentConfigLoaded, setPaymentConfigLoaded] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/shipping/config", { cache: "no-store" })
+      .then(async (response) => {
+        const config = await response.json();
+        if (!response.ok) throw new Error("PAYMENT_CONFIG_UNAVAILABLE");
+        if (active)
+          setPaymentEnabled(
+            config.shopOpen === true && config.paymentsEnabled === true,
+          );
+      })
+      .catch(() => {
+        if (active) setPaymentEnabled(false);
+      })
+      .finally(() => {
+        if (active) setPaymentConfigLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (!product || product.availableForSale !== true) {
     return (
       <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
         Cette collection n’est pas encore ouverte à la commande.
+      </p>
+    );
+  }
+
+  if (!paymentConfigLoaded || !paymentEnabled) {
+    return (
+      <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
+        Les commandes et les paiements sont désactivés. Aucune commande ne sera
+        créée depuis cette page.
       </p>
     );
   }

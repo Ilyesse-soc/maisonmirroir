@@ -6,18 +6,25 @@ import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import type { CartAttachment, CartItem } from "@/lib/cart";
 import type { CustomerInfo } from "@/lib/orderTypes";
 import type { ShippingMethod } from "@/lib/shipping";
+import type { RelayPoint } from "@/lib/mondialRelayTypes";
 import { getProductById } from "@/lib/products";
 
 export default function CartCheckoutButton({
   items,
   customer,
   shippingMethod,
+  relayPoint,
+  shippingPrice,
+  checkoutEnabled,
   attachments = [],
   onSuccess,
 }: {
   items: CartItem[];
   customer: CustomerInfo;
   shippingMethod: ShippingMethod;
+  relayPoint: RelayPoint | null;
+  shippingPrice: number | null;
+  checkoutEnabled: boolean;
   attachments?: CartAttachment[];
   onSuccess?: (orderId: string) => void;
 }) {
@@ -31,7 +38,8 @@ export default function CartCheckoutButton({
       items.reduce((total, item) => total + item.unitPrice * item.quantity, 0),
     [items],
   );
-  const total = subtotal + shippingMethod.price;
+  const resolvedShippingPrice = shippingPrice ?? 0;
+  const total = subtotal + resolvedShippingPrice;
   const unavailableItems = items.filter((item) => {
     const product = getProductById(item.productId);
     return !product || product.availableForSale !== true;
@@ -42,6 +50,24 @@ export default function CartCheckoutButton({
       <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
         Un ou plusieurs articles du panier ne sont pas encore disponibles à la
         commande. Retirez-les pour continuer.
+      </p>
+    );
+  }
+
+  if (!checkoutEnabled) {
+    return (
+      <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
+        Les commandes et les paiements sont désactivés. Aucune commande ni
+        expédition ne sera créée depuis cette page.
+      </p>
+    );
+  }
+
+  if (shippingPrice === null) {
+    return (
+      <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
+        Le tarif contractuel de livraison n’est pas configuré. Le paiement reste
+        désactivé.
       </p>
     );
   }
@@ -91,7 +117,7 @@ export default function CartCheckoutButton({
                       },
                       shipping: {
                         currency_code: "EUR",
-                        value: shippingMethod.price.toFixed(2),
+                        value: resolvedShippingPrice.toFixed(2),
                       },
                     },
                   },
@@ -167,6 +193,7 @@ export default function CartCheckoutButton({
                     variantLabel: items[0].variantLabel,
                   },
                   shippingMethodId: shippingMethod.id,
+                  relayPoint: relayPoint || undefined,
                   attachments,
                   customer,
                 },
@@ -215,7 +242,7 @@ export default function CartCheckoutButton({
                         quantity: items[0].quantity,
                         subtotal: apiData.subtotal || subtotal.toFixed(2),
                         shipping:
-                          apiData.shipping || shippingMethod.price.toFixed(2),
+                          apiData.shipping || resolvedShippingPrice.toFixed(2),
                         total: apiData.total || total.toFixed(2),
                       },
                       items: items.map((item) => ({
@@ -233,8 +260,9 @@ export default function CartCheckoutButton({
                         label: shippingMethod.label,
                         shortLabel: shippingMethod.shortLabel,
                         carrier: shippingMethod.carrier,
-                        price: shippingMethod.price,
+                        price: resolvedShippingPrice,
                         estimatedDelay: shippingMethod.estimatedDelay,
+                        ...(relayPoint ? { relayPoint } : {}),
                       },
                       customValues: {},
                       address: customer,

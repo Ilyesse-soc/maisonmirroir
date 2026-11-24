@@ -3,6 +3,26 @@
 import { useEffect, useMemo, useState } from "react";
 import { fonts, pageMaxWidth, theme } from "@/lib/uiStyles";
 import type { OrderRecord, OrderStatus } from "@/lib/orderTypes";
+import { MONDIAL_RELAY_POINT_RELAIS_ID } from "@/lib/shipping";
+
+type ShipmentPreparation = {
+  mode: string;
+  apiRequestSent: boolean;
+  labelGenerated: boolean;
+  shipmentCreated: boolean;
+  realShippingEnabled: boolean;
+  readyForSandbox: boolean;
+  deliveryMode: { mode: string; location: string };
+  parcel: {
+    itemsPerParcel: number;
+    weightGrams: number | null;
+    lengthCm: number | null;
+    widthCm: number | null;
+    depthCm: number | null;
+  };
+  serviceRights: string;
+  blockers: string[];
+};
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: "En attente", label: "En attente" },
@@ -18,6 +38,9 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pending, setPending] = useState<string>("");
+  const [preparations, setPreparations] = useState<
+    Record<string, ShipmentPreparation>
+  >({});
 
   const hasOrders = useMemo(() => orders.length > 0, [orders]);
 
@@ -68,6 +91,33 @@ export default function AdminOrdersPage() {
       );
     } catch {
       setError("La mise a jour a echoue.");
+    } finally {
+      setPending("");
+    }
+  };
+
+  const prepareShipment = async (orderId: string) => {
+    setPending(orderId);
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/admin/orders/${orderId}/mondial-relay/prepare`,
+        { method: "POST" },
+      );
+      const data = (await response.json()) as
+        | ShipmentPreparation
+        | { error?: string };
+      if (!response.ok || !("deliveryMode" in data))
+        throw new Error(
+          "error" in data ? data.error || "Préparation impossible." : "Préparation impossible.",
+        );
+      setPreparations((current) => ({ ...current, [orderId]: data }));
+    } catch (prepareError) {
+      setError(
+        prepareError instanceof Error
+          ? prepareError.message
+          : "Préparation de l’expédition impossible.",
+      );
     } finally {
       setPending("");
     }
@@ -249,6 +299,20 @@ export default function AdminOrdersPage() {
                     </strong>{" "}
                     {order.shipping.estimatedDelay}
                   </div>
+                  {order.shipping.relayPoint && (
+                    <div>
+                      <strong style={{ color: theme.textDark }}>
+                        Point Relais:
+                      </strong>{" "}
+                      {order.shipping.relayPoint.id} -{" "}
+                      {order.shipping.relayPoint.label},{" "}
+                      {order.shipping.relayPoint.address.join(", ")},{" "}
+                      {order.shipping.relayPoint.postalCode}{" "}
+                      {order.shipping.relayPoint.city}
+                      {order.shipping.relayPoint.source === "simulation" &&
+                        " - SIMULATION"}
+                    </div>
+                  )}
                   <div>
                     <strong style={{ color: theme.textDark }}>
                       Sous-total:
@@ -318,6 +382,49 @@ export default function AdminOrdersPage() {
                   }
                 />
               </div>
+              {order.shipping.id === MONDIAL_RELAY_POINT_RELAIS_ID &&
+                order.shipping.relayPoint && (
+                  <section
+                    className="admin-card"
+                    style={{ marginTop: 16, padding: 16 }}
+                  >
+                    <h3>Préparation Mondial Relay</h3>
+                    <p className="admin-muted">
+                      Préparation en simulation uniquement. Aucun appel de
+                      création, aucune étiquette et aucune expédition ne seront
+                      envoyés.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => prepareShipment(order.orderId)}
+                      disabled={pending === order.orderId}
+                    >
+                      {pending === order.orderId
+                        ? "Préparation…"
+                        : "Préparer l’expédition (simulation)"}
+                    </button>
+                    {preparations[order.orderId] && (
+                      <div role="status" style={{ marginTop: 12 }}>
+                        <p>
+                          DeliveryMode.mode :{" "}
+                          {preparations[order.orderId].deliveryMode.mode}
+                          {" - "}
+                          DeliveryMode.location :{" "}
+                          {preparations[order.orderId].deliveryMode.location}
+                        </p>
+                        <p>
+                          Droit de service :{" "}
+                          {preparations[order.orderId].serviceRights}
+                        </p>
+                        <ul>
+                          {preparations[order.orderId].blockers.map((blocker) => (
+                            <li key={blocker}>{blocker}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </section>
+                )}
             </div>
           ))}
         </div>

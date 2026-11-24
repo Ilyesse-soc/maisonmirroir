@@ -4,8 +4,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { useMemo } from "react";
 import { useCart } from "@/components/CartProvider";
-import { SHIPPING_METHODS } from "@/lib/shipping";
-import { getCartItemSubtotal, getCartSubtotal, getCartTotal } from "@/lib/cart";
+import {
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+  SHIPPING_METHODS,
+} from "@/lib/shipping";
+import { getCartItemSubtotal, getCartSubtotal } from "@/lib/cart";
 import {
   buttonGoldStyle,
   buttonOutlineGoldStyle,
@@ -20,6 +23,10 @@ export default function CartPage() {
     items,
     shippingMethodId,
     setShippingMethodId,
+    selectedShippingPrice,
+    selectedShippingPriceLabel,
+    selectedShippingPriceIsSimulation,
+    relayPoint,
     updateItemQuantity,
     removeItem,
     itemCount,
@@ -33,8 +40,8 @@ export default function CartPage() {
   );
 
   const subtotal = getCartSubtotal(items);
-  const shippingPrice = items.length > 0 ? selectedShipping.price : 0;
-  const total = getCartTotal(items, selectedShipping.id);
+  const shippingPrice = items.length > 0 ? selectedShippingPrice : 0;
+  const total = shippingPrice === null ? null : subtotal + shippingPrice;
 
   return (
     <div
@@ -353,8 +360,31 @@ export default function CartPage() {
                   style={{ display: "flex", justifyContent: "space-between" }}
                 >
                   <span>Livraison</span>
-                  <span>{shippingPrice.toFixed(2)} €</span>
+                  <span>
+                    {shippingPrice === null
+                      ? "À confirmer"
+                      : selectedShipping.id === MONDIAL_RELAY_POINT_RELAIS_ID
+                        ? selectedShippingPriceLabel
+                        : `${shippingPrice.toFixed(2)} €`}
+                  </span>
                 </div>
+                {relayPoint && (
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                    }}
+                  >
+                    <span>Point Relais sélectionné</span>
+                    <span style={{ textAlign: "right" }}>
+                      {relayPoint.label}, {relayPoint.postalCode} {relayPoint.city}
+                      {relayPoint.source === "simulation"
+                        ? " - simulation"
+                        : ""}
+                    </span>
+                  </div>
+                )}
                 <div
                   style={{
                     display: "flex",
@@ -365,9 +395,15 @@ export default function CartPage() {
                   }}
                 >
                   <span>Total TTC</span>
-                  <span>{total.toFixed(2)} €</span>
+                  <span>{total === null ? "À confirmer" : `${total.toFixed(2)} €`}</span>
                 </div>
               </div>
+              {selectedShippingPriceIsSimulation && (
+                <p role="note" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                  Le tarif affiché est provisoire et réservé aux tests. Il ne
+                  correspond pas au tarif contractuel.
+                </p>
+              )}
 
               <div style={{ ...dividerStyle(100), margin: "18px 0" }} />
 
@@ -420,7 +456,12 @@ export default function CartPage() {
                             color: theme.textDark,
                           }}
                         >
-                          {method.shortLabel} - {method.price.toFixed(2)} €
+                          {method.shortLabel} -{" "}
+                          {method.carrier === "Mondial Relay"
+                            ? method.id === MONDIAL_RELAY_POINT_RELAIS_ID
+                              ? selectedShippingPriceLabel
+                              : "À confirmer"
+                            : `${method.price.toFixed(2)} €`}
                         </span>
                       </div>
                       <span

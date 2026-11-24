@@ -5,8 +5,12 @@ import { useMemo, useState } from "react";
 import CartReminderConsent from "@/components/CartReminderConsent";
 import CartCheckoutButton from "@/components/CartCheckoutButton";
 import { useCart } from "@/components/CartProvider";
-import { SHIPPING_METHODS } from "@/lib/shipping";
-import { getCartSubtotal, getCartTotal } from "@/lib/cart";
+import {
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+  SHIPPING_METHODS,
+} from "@/lib/shipping";
+import { getCartSubtotal } from "@/lib/cart";
+import type { RelayPoint } from "@/lib/mondialRelayTypes";
 import {
   buttonOutlineGoldStyle,
   dividerStyle,
@@ -16,7 +20,23 @@ import {
 } from "@/lib/uiStyles";
 
 export default function CheckoutPage() {
-  const { items, shippingMethodId, setShippingMethodId } = useCart();
+  const {
+    items,
+    itemCount,
+    shippingMethodId,
+    setShippingMethodId,
+    relayPoint,
+    setRelayPoint,
+    selectedShippingPrice,
+    selectedShippingPriceLabel,
+    selectedShippingPriceIsSimulation,
+    checkoutEnabled,
+    getShippingPriceQuote,
+  } = useCart();
+  const [relayPoints, setRelayPoints] = useState<RelayPoint[]>([]);
+  const [relaySearchError, setRelaySearchError] = useState("");
+  const [relaySearchMessage, setRelaySearchMessage] = useState("");
+  const [relaySearchBusy, setRelaySearchBusy] = useState(false);
   const [address, setAddress] = useState({
     firstName: "",
     lastName: "",
@@ -36,7 +56,7 @@ export default function CheckoutPage() {
   );
 
   const subtotal = getCartSubtotal(items);
-  const total = getCartTotal(items, selectedShipping.id);
+  const total = subtotal + (selectedShippingPrice ?? 0);
 
   if (items.length === 0) {
     return (
@@ -91,7 +111,55 @@ export default function CheckoutPage() {
 
   const handleChange = (field: keyof typeof address, value: string) => {
     setAddress((previous) => ({ ...previous, [field]: value }));
+    if (field === "zip" || field === "city") {
+      setRelayPoint(null);
+      setRelayPoints([]);
+      setRelaySearchMessage("");
+    }
   };
+
+  async function searchRelayPoints() {
+    setRelaySearchBusy(true);
+    setRelaySearchError("");
+    setRelaySearchMessage("");
+    setRelayPoints([]);
+    setRelayPoint(null);
+    try {
+      const query = new URLSearchParams({
+        postalCode: address.zip.trim(),
+        city: address.city.trim(),
+        quantity: String(itemCount),
+      });
+      const response = await fetch(
+        `/api/shipping/mondial-relay/points?${query.toString()}`,
+        { cache: "no-store" },
+      );
+      const data = (await response.json()) as {
+        source?: "simulation" | "sandbox";
+        points?: RelayPoint[];
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(data.error || "Recherche des Points Relais impossible.");
+      const points = Array.isArray(data.points) ? data.points : [];
+      setRelayPoints(points);
+      setRelaySearchMessage(
+        data.message ||
+          (data.source === "sandbox"
+            ? "Résultats issus du compte de test Mondial Relay."
+            : "Résultats de simulation, aucun Point Relais réel n’a été recherché."),
+      );
+    } catch (error) {
+      setRelaySearchError(
+        error instanceof Error
+          ? error.message
+          : "Recherche des Points Relais impossible.",
+      );
+    } finally {
+      setRelaySearchBusy(false);
+    }
+  }
 
   return (
     <div
@@ -242,50 +310,145 @@ export default function CheckoutPage() {
                 {SHIPPING_METHODS.map((method) => {
                   const checked = shippingMethodId === method.id;
                   return (
-                    <label
-                      key={method.id}
-                      style={{
-                        border: `1px solid ${checked ? theme.gold : theme.creamDark}`,
-                        background: checked ? "#fffaf0" : "white",
-                        padding: "12px 14px",
-                        cursor: "pointer",
-                        display: "grid",
-                        gap: 4,
-                      }}
-                    >
-                      <div
+                    <div key={method.id}>
+                      <label
                         style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 10,
+                          border: `1px solid ${checked ? theme.gold : theme.creamDark}`,
+                          background: checked ? "#fffaf0" : "white",
+                          padding: "12px 14px",
+                          cursor: "pointer",
+                          display: "grid",
+                          gap: 4,
                         }}
                       >
-                        <input
-                          type="radio"
-                          checked={checked}
-                          onChange={() => setShippingMethodId(method.id)}
-                        />
+                        <div
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 10,
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            checked={checked}
+                            onChange={() => setShippingMethodId(method.id)}
+                          />
+                          <span
+                            style={{
+                              fontFamily: fonts.body,
+                              fontSize: 13,
+                              color: theme.textDark,
+                            }}
+                          >
+                            {method.shortLabel} -{" "}
+                            {
+                              getShippingPriceQuote(
+                                method.id,
+                                itemCount,
+                              ).label
+                            }
+                          </span>
+                        </div>
                         <span
                           style={{
                             fontFamily: fonts.body,
-                            fontSize: 13,
-                            color: theme.textDark,
+                            fontSize: 11,
+                            color: theme.textMid,
+                            marginLeft: 24,
                           }}
                         >
-                          {method.shortLabel} - {method.price.toFixed(2)} €
+                          Délai estimé: {method.estimatedDelay}
                         </span>
-                      </div>
-                      <span
-                        style={{
-                          fontFamily: fonts.body,
-                          fontSize: 11,
-                          color: theme.textMid,
-                          marginLeft: 24,
-                        }}
-                      >
-                        Délai estimé: {method.estimatedDelay}
-                      </span>
-                    </label>
+                      </label>
+                      {checked && method.id === MONDIAL_RELAY_POINT_RELAIS_ID && (
+                        <div
+                          style={{
+                            border: `1px solid ${theme.creamDark}`,
+                            borderTop: 0,
+                            padding: 14,
+                            display: "grid",
+                            gap: 10,
+                          }}
+                        >
+                          <p
+                            role="note"
+                            style={{
+                              margin: 0,
+                              color: theme.textMid,
+                              fontSize: 12,
+                              lineHeight: 1.6,
+                            }}
+                          >
+                            {selectedShippingPriceIsSimulation
+                              ? "Tarif provisoire de test uniquement, non contractuel. Les commandes restent fermées."
+                              : "Le tarif contractuel reste à confirmer. Aucun paiement ne sera proposé."}
+                          </p>
+                          <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>
+                            La recherche utilise le code postal et la ville
+                            saisis dans l’adresse de livraison.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={searchRelayPoints}
+                            disabled={
+                              relaySearchBusy ||
+                              address.zip.trim().length !== 5 ||
+                              address.city.trim().length < 2
+                            }
+                          >
+                            {relaySearchBusy
+                              ? "Recherche…"
+                              : "Rechercher un Point Relais"}
+                          </button>
+                          {relaySearchMessage && (
+                            <p role="status" style={{ margin: 0, fontSize: 12 }}>
+                              {relaySearchMessage}
+                            </p>
+                          )}
+                          {relaySearchError && (
+                            <p role="alert" style={{ margin: 0, color: "#b42318", fontSize: 12 }}>
+                              {relaySearchError}
+                            </p>
+                          )}
+                          {relayPoints.map((point) => (
+                            <label
+                              key={`${point.source}:${point.id}`}
+                              style={{
+                                display: "grid",
+                                gridTemplateColumns: "auto 1fr",
+                                gap: 10,
+                                padding: 12,
+                                border: `1px solid ${relayPoint?.id === point.id ? theme.gold : theme.creamDark}`,
+                                cursor: "pointer",
+                              }}
+                            >
+                              <input
+                                type="radio"
+                                name="mondial-relay-point"
+                                checked={relayPoint?.id === point.id}
+                                onChange={() => setRelayPoint(point)}
+                              />
+                              <span style={{ display: "grid", gap: 4 }}>
+                                <strong>{point.label}</strong>
+                                <span>
+                                  {point.address.join(", ")} - {point.postalCode}{" "}
+                                  {point.city}
+                                </span>
+                                {point.distanceKm !== undefined && (
+                                  <span>{point.distanceKm} km</span>
+                                )}
+                              </span>
+                            </label>
+                          ))}
+                          {relayPoint && (
+                            <p role="status" style={{ margin: 0, fontSize: 12 }}>
+                              Point sélectionné : {relayPoint.label} -{" "}
+                              {relayPoint.location}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -366,8 +529,21 @@ export default function CheckoutPage() {
               </div>
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Livraison</span>
-                <span>{selectedShipping.price.toFixed(2)} €</span>
+                <span>
+                  {items.length === 0
+                    ? "À calculer"
+                    : selectedShippingPriceLabel}
+                </span>
               </div>
+              {relayPoint && (
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                  <span>Point Relais sélectionné</span>
+                  <span style={{ textAlign: "right" }}>
+                    {relayPoint.label}, {relayPoint.postalCode} {relayPoint.city}
+                    {relayPoint.source === "simulation" ? " - simulation" : ""}
+                  </span>
+                </div>
+              )}
               <div
                 style={{
                   display: "flex",
@@ -378,7 +554,11 @@ export default function CheckoutPage() {
                 }}
               >
                 <span>Total TTC</span>
-                <span>{total.toFixed(2)} €</span>
+                <span>
+                  {selectedShippingPrice === null
+                    ? "À confirmer"
+                    : `${total.toFixed(2)} €`}
+                </span>
               </div>
             </div>
 
@@ -390,6 +570,9 @@ export default function CheckoutPage() {
                 items={items}
                 customer={address}
                 shippingMethod={selectedShipping}
+                relayPoint={relayPoint}
+                shippingPrice={selectedShippingPrice}
+                checkoutEnabled={checkoutEnabled}
               />
             </div>
 

@@ -8,9 +8,11 @@ export type ShippingMethod = {
   trackingBaseUrl: string;
 };
 
+export const MONDIAL_RELAY_POINT_RELAIS_ID = "mondial-relay-point-relais";
+
 export const SHIPPING_METHODS: ShippingMethod[] = [
   {
-    id: "mondial-relay-point-relais",
+    id: MONDIAL_RELAY_POINT_RELAIS_ID,
     label: "Mondial Relay - Point Relais",
     shortLabel: "Mondial Relay - Point Relais",
     carrier: "Mondial Relay",

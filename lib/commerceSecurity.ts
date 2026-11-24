@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { products } from "./products";
 import type { ProductInfo } from "./orderTypes";
+import type { RelayPoint } from "./mondialRelayTypes";
 const short = z.string().max(300);
 const item = z
   .object({
@@ -39,6 +40,19 @@ const shipping = z
     trackingBaseUrl: z.string().optional(),
   })
   .strict();
+const relayPoint = z
+  .object({
+    id: short,
+    location: short,
+    label: short,
+    address: z.array(short).max(8),
+    postalCode: short,
+    city: short,
+    distanceKm: z.number().finite().nonnegative().optional(),
+    source: z.enum(["simulation", "sandbox"]),
+    serviceCode: z.enum(["24R", "24L"]),
+  })
+  .strict() satisfies z.ZodType<RelayPoint>;
 const attachment = z
   .object({
     filename: z
@@ -61,6 +75,7 @@ const order = z
     attachments: z.array(attachment).max(2).optional(),
     shippingMethodId: short.optional(),
     shipping: shipping.optional(),
+    relayPoint: relayPoint.optional(),
   })
   .strict();
 export const incomingOrderSchema = z

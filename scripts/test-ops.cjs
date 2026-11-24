@@ -77,6 +77,34 @@ const migrationPosition = releaseScript.indexOf(
 );
 assert(verifiedBackupPosition >= 0, "release must create and verify a fresh PostgreSQL backup");
 assert(migrationPosition > verifiedBackupPosition, "backup must complete before schema migration");
+const mondialRelayMigration = fs.readFileSync(
+    "migrations/007_mondial_relay_settings.sql",
+    "utf8",
+  ),
+  mondialRelaySettings = fs.readFileSync(
+    "app/api/shipping/config/route.ts",
+    "utf8",
+  ),
+  mondialRelayOrder = fs.readFileSync("app/api/order/route.ts", "utf8"),
+  mondialRelayPrepare = fs.readFileSync(
+    "app/api/admin/orders/[orderId]/mondial-relay/prepare/route.ts",
+    "utf8",
+  );
+assert(
+  /CREATE TABLE IF NOT EXISTS mm_shipping_settings/.test(mondialRelayMigration) &&
+    !/\b(?:DROP|TRUNCATE|DELETE)\b/i.test(mondialRelayMigration),
+  "Mondial Relay settings migration must be additive and non-destructive",
+);
+assert(
+  mondialRelaySettings.includes("realShippingEnabled: false") &&
+    mondialRelaySettings.includes("realShipmentCreationEnabled: false") &&
+    mondialRelayOrder.includes("REAL_PAYMENTS_ENABLED") &&
+    mondialRelayOrder.includes("MONDIAL_RELAY_REAL_SHIPMENTS_DISABLED") &&
+    mondialRelayPrepare.includes("apiRequestSent: false") &&
+    mondialRelayPrepare.includes("labelGenerated: false") &&
+    !mondialRelayPrepare.includes("connect-api.mondialrelay.com/api/shipment"),
+  "production payments, real shipments, and label creation must remain disabled",
+);
 const imageWorkflow = fs.readFileSync(".github/workflows/ovh-images.yml", "utf8"),
   releaseWorkflow = fs.readFileSync(".github/workflows/ovh-release.yml", "utf8"),
   maintenanceWorkflow = fs.readFileSync(

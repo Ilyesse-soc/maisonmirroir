@@ -39,18 +39,17 @@ data/orders.json              → Base JSON des commandes
 public/images/                → Tes vraies photos de produits
 ```
 
-## 🚚 Livraison (active sur tous les produits)
+## Livraison
 
-Les 5 modes sont centralises dans lib/shipping.ts et s'appliquent a toutes les pages produit (existantes et futures) via app/product/[id]/page.tsx.
+Les méthodes historiques restent définies dans `lib/shipping.ts`. Le tarif Mondial Relay de 4,10 EUR et le tarif domicile de 7,50 EUR qui figuraient dans ce fichier ne sont pas confirmés par le contrat et ne doivent pas être présentés comme officiels.
 
-Modes configures :
-1. Mondial Relay - Point Relais - 4.10 EUR - 2 a 5 jours ouvres
-2. Mondial Relay - Domicile - 7.50 EUR - 2 a 4 jours ouvres
-3. Chronopost Relais - 4.50 EUR - 24h a 72h
-4. Chronopost Express - Livraison rapide - 16.00 EUR - 24h a 48h selon zone
-5. Colissimo - Livraison standard - 7.90 EUR - 2 a 3 jours ouvres
+`/admin/settings` permet de configurer le code Point Relais 24R ou 24L, les grilles de test et les tarifs contractuels par poids. Les valeurs 0,5 kg, 45 x 40 x 5 cm et 4,10 EUR sont réservées à la simulation. Les tarifs contractuels et le profil d'emballage réel restent vides tant qu'ils ne sont pas confirmés.
 
-Le client doit selectionner un mode de livraison avant paiement. Le total TTC est recalcule instantanement.
+La recherche de Points Relais utilise exclusivement les identifiants API1 de test lorsque l'option sandbox est activée. À défaut, elle renvoie un point fictif explicitement étiqueté comme simulation. Le choix du point est conservé dans le panier et sa valeur `location` est utilisée pour préparer `DeliveryMode.location`.
+
+La création d'expédition et d'étiquette API2 n'est pas appelée. Les paiements, le transport réel et la génération d'étiquettes restent désactivés. Le droit du compte au service 24R n'a pas été vérifié.
+
+Les paiements nécessitent à la fois `SHOP_OPEN=true` et `REAL_PAYMENTS_ENABLED=true`. Ce second verrou est absent par défaut et doit rester désactivé tant que l'ouverture n'a pas été explicitement autorisée.
 
 ## 🧾 Emails automatiques
 
@@ -74,10 +73,22 @@ L'espace existant est accessible après connexion à `/77774555474447777554555`,
 - `/admin/newsletter` : brouillons, aperçu mobile/ordinateur, historique et validation manuelle des campagnes.
 - `/admin/miroir-ai` : assistant Gemini côté serveur avec relais Groq optionnel, brouillons uniquement ; désactivé si aucune clé fournisseur n'est configurée.
 - `/admin/calendar` : calendrier marketing et événements persistés.
-- `/admin/settings` : coordonnées et textes de marque non sensibles. Les secrets ne sont jamais affichés.
+- `/admin/settings` : coordonnées et textes de marque, configuration Mondial Relay, tarifs par service/poids et profils de colis. Les secrets ne sont jamais affichés.
 - `/admin/orders` : gestion existante des commandes et du suivi.
 
 La migration additive `migrations/006_admin_console.sql` ajoute le pré-en-tête des campagnes, le calendrier et les paramètres éditables sans supprimer de données existantes. Les taux d'ouverture et de clic restent indiqués comme indisponibles lorsque le suivi n'existe pas. Une campagne ne peut être approuvée que par une action explicite et seulement si `SHOP_OPEN=true`; ne pas activer ce paramètre avant validation métier. `NEWSLETTER_AUTO_PUBLISH` reste indépendant et doit demeurer désactivé tant qu'une publication automatique n'est pas souhaitée.
+
+La migration additive `migrations/007_mondial_relay_settings.sql` crée uniquement la table de configuration de livraison. Les identifiants Mondial Relay ne doivent jamais être saisis dans l'administration ou versionnés. Les secrets éventuels sont à configurer dans `ops/secrets/app.env` sur le VPS, avec des noms exclusivement réservés au test :
+
+- `MONDIAL_RELAY_API1_TEST_SHOP`
+- `MONDIAL_RELAY_API1_TEST_PRIVATE_KEY`
+- `MONDIAL_RELAY_API1_TEST_ENABLED=false` par défaut
+- `MONDIAL_RELAY_API2_TEST_LOGIN`
+- `MONDIAL_RELAY_API2_TEST_PASSWORD`
+- `MONDIAL_RELAY_API2_TEST_CUSTOMER_ID`
+- `MONDIAL_RELAY_API2_TEST_ENABLED=false` par défaut
+
+Les coordonnées expéditeur utilisées pour une future étiquette doivent également rester côté serveur (`MONDIAL_RELAY_SENDER_*`). Aucun identifiant de production n'est lu par l'application.
 
 Les tests admin isolés sont inclus dans `npm test`; ils utilisent PostgreSQL embarqué, une authentification mockée et un fournisseur Gemini simulé. Aucun email ni campagne réel n'est envoyé.
 

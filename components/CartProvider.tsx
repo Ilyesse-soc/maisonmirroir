@@ -9,10 +9,17 @@ import {
 import {
   type CartItem,
   getCartItemCount,
-  getCartShippingPrice,
   mergeCartItems,
 } from "@/lib/cart";
-import { getShippingMethodById } from "@/lib/shipping";
+import {
+  getShippingMethodById,
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+} from "@/lib/shipping";
+import {
+  getMondialRelayQuote,
+  type MondialRelaySettings,
+  type RelayPoint,
+} from "@/lib/mondialRelayTypes";
 import {
   readCart,
   serverCart,
@@ -23,22 +30,36 @@ type AddCartItemInput = Omit<CartItem, "key">;
 type CartContextValue = {
   items: CartItem[];
   shippingMethodId: string;
+  relayPoint: RelayPoint | null;
   itemCount: number;
   isReady: boolean;
   isDrawerOpen: boolean;
   flashMessage: string;
-  selectedShippingPrice: number;
+  selectedShippingPrice: number | null;
+  selectedShippingPriceLabel: string;
+  selectedShippingPriceIsSimulation: boolean;
+  shippingConfigurationLoaded: boolean;
+  checkoutEnabled: boolean;
+  getShippingPriceQuote: (
+    methodId: string,
+    itemCount: number,
+  ) => { price: number | null; label: string; isSimulation: boolean };
   addItem: (item: AddCartItemInput) => void;
   removeItem: (key: string) => void;
   updateItemQuantity: (key: string, quantity: number) => void;
   clearCart: () => void;
   setShippingMethodId: (id: string) => void;
+  setRelayPoint: (point: RelayPoint | null) => void;
   openDrawer: () => void;
   closeDrawer: () => void;
 };
 const CartContext = createContext<CartContextValue | null>(null);
 const ready = () => true,
   notReady = () => false;
+const euro = new Intl.NumberFormat("fr-FR", {
+  style: "currency",
+  currency: "EUR",
+});
 export function CartProvider({
   children,
   syncEnabled = true,
@@ -46,7 +67,7 @@ export function CartProvider({
   children: React.ReactNode;
   syncEnabled?: boolean;
 }) {
-  const { items, shippingMethodId } = useSyncExternalStore(
+  const { items, shippingMethodId, relayPoint } = useSyncExternalStore(
     subscribeCart,
     readCart,
     serverCart,
@@ -71,19 +92,93 @@ export function CartProvider({
   }, [items, isReady, syncEnabled]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false),
     [flashMessage, setFlashMessage] = useState("");
+  const [shippingConfig, setShippingConfig] = useState<{
+    settings: MondialRelaySettings;
+    mode: "simulation" | "sandbox";
+    shopOpen: boolean;
+    paymentsEnabled: boolean;
+    realShippingEnabled: false;
+  } | null>(null);
+  const [shippingConfigurationLoaded, setShippingConfigurationLoaded] =
+    useState(false);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/shipping/config", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "SHIPPING_CONFIG_FAILED");
+        if (active) setShippingConfig(data);
+      })
+      .catch(() => {
+        if (active) setShippingConfig(null);
+      })
+      .finally(() => {
+        if (active) setShippingConfigurationLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
   useEffect(() => {
     if (!flashMessage) return;
     const timer = setTimeout(() => setFlashMessage(""), 2200);
     return () => clearTimeout(timer);
   }, [flashMessage]);
+  const getShippingPriceQuote = (methodId: string, quantity: number) => {
+    const method = getShippingMethodById(methodId);
+    if (!method) return { price: null, label: "À confirmer", isSimulation: false };
+    if (method.carrier !== "Mondial Relay")
+      return {
+        price: method.price,
+        label: euro.format(method.price),
+        isSimulation: false,
+      };
+    if (
+      methodId !== MONDIAL_RELAY_POINT_RELAIS_ID ||
+      !shippingConfig
+    )
+      return { price: null, label: "À confirmer", isSimulation: false };
+    const quote = getMondialRelayQuote(
+      shippingConfig.settings,
+      quantity,
+      "simulation",
+    );
+    if (!quote)
+      return { price: null, label: "À confirmer", isSimulation: false };
+    const price = quote.priceCents / 100;
+    return {
+      price,
+      label: `${euro.format(price)} - tarif provisoire de test`,
+      isSimulation: true,
+    };
+  };
+  const selectedMethod = getShippingMethodById(shippingMethodId);
+  const isMondialRelayMethod = selectedMethod?.carrier === "Mondial Relay";
+  const selectedQuote = getShippingPriceQuote(
+    shippingMethodId,
+    getCartItemCount(items),
+  );
+  const selectedShippingPrice = selectedQuote.price;
+  const selectedShippingPriceIsSimulation = selectedQuote.isSimulation;
+  const selectedShippingPriceLabel = selectedQuote.label;
   const value: CartContextValue = {
     items,
     shippingMethodId,
+    relayPoint,
     itemCount: getCartItemCount(items),
     isReady,
     isDrawerOpen,
     flashMessage,
-    selectedShippingPrice: getCartShippingPrice(shippingMethodId),
+    selectedShippingPrice,
+    selectedShippingPriceLabel,
+    selectedShippingPriceIsSimulation,
+    shippingConfigurationLoaded,
+    getShippingPriceQuote,
+    checkoutEnabled:
+      shippingConfigurationLoaded &&
+      Boolean(shippingConfig?.shopOpen) &&
+      Boolean(shippingConfig?.paymentsEnabled) &&
+      (!isMondialRelayMethod || Boolean(shippingConfig?.realShippingEnabled)),
     addItem(item) {
       const cart = readCart();
       writeCart({ ...cart, items: mergeCartItems(cart.items, item) });
@@ -110,11 +205,24 @@ export function CartProvider({
       });
     },
     clearCart() {
-      writeCart({ ...readCart(), items: [] });
+      writeCart({ ...readCart(), items: [], relayPoint: null });
     },
     setShippingMethodId(id) {
-      if (getShippingMethodById(id))
-        writeCart({ ...readCart(), shippingMethodId: id });
+      if (getShippingMethodById(id)) {
+        const cart = readCart();
+        writeCart({
+          ...cart,
+          shippingMethodId: id,
+          relayPoint:
+            id === MONDIAL_RELAY_POINT_RELAIS_ID
+              ? cart.relayPoint
+              : null,
+        });
+      }
+    },
+    setRelayPoint(point) {
+      if (point && shippingMethodId !== MONDIAL_RELAY_POINT_RELAIS_ID) return;
+      writeCart({ ...readCart(), relayPoint: point });
     },
     openDrawer() {
       setIsDrawerOpen(true);

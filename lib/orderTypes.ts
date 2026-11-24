@@ -1,4 +1,5 @@
 import type { ShippingMethod } from "@/lib/shipping";
+import type { RelayPoint } from "@/lib/mondialRelayTypes";
 
 export type PaymentMethod = "PAYPAL" | "CARD";
 
@@ -35,7 +36,9 @@ export type ShippingSelection = Pick<
   | "price"
   | "estimatedDelay"
   | "trackingBaseUrl"
->;
+> & {
+  relayPoint?: RelayPoint;
+};
 
 export type OrderPayload = {
   product: ProductInfo;
@@ -48,6 +51,7 @@ export type OrderPayload = {
   }>;
   customer: CustomerInfo;
   shippingMethodId: string;
+  relayPoint?: RelayPoint;
 };
 
 export type OrderRecord = {

@@ -10,7 +10,12 @@ import {
 import PayPalButton from "@/components/PayPalButton";
 import ProductImageGallery from "@/components/ProductImageGallery";
 import { useCart } from "@/components/CartProvider";
-import { SHIPPING_METHODS, getShippingMethodById } from "@/lib/shipping";
+import {
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+  SHIPPING_METHODS,
+  getShippingMethodById,
+} from "@/lib/shipping";
+import type { RelayPoint } from "@/lib/mondialRelayTypes";
 import {
   buttonGoldStyle,
   buttonOutlineGoldStyle,
@@ -70,7 +75,7 @@ function UnavailableProduct({ product }: { product: Product }) {
 
 function ProductDetails({ productId }: { productId: string }) {
   const product = getProductById(productId);
-  const { addItem } = useCart();
+  const { addItem, getShippingPriceQuote } = useCart();
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -79,6 +84,11 @@ function ProductDetails({ productId }: { productId: string }) {
   >({});
   const [quantity, setQuantity] = useState("");
   const [selectedShippingId, setSelectedShippingId] = useState("");
+  const [relayPoint, setRelayPoint] = useState<RelayPoint | null>(null);
+  const [relayPoints, setRelayPoints] = useState<RelayPoint[]>([]);
+  const [relaySearchMessage, setRelaySearchMessage] = useState("");
+  const [relaySearchError, setRelaySearchError] = useState("");
+  const [relaySearchBusy, setRelaySearchBusy] = useState(false);
   const [artworkFile, setArtworkFile] = useState<{
     filename: string;
     contentType: string;
@@ -133,6 +143,11 @@ function ProductDetails({ productId }: { productId: string }) {
 
   const handleAddressChange = (field: string, value: string) => {
     setAddress((prev) => ({ ...prev, [field]: value }));
+    if (field === "zip" || field === "city") {
+      setRelayPoint(null);
+      setRelayPoints([]);
+      setRelaySearchMessage("");
+    }
   };
 
   const clampQuantity = (value: number) => {
@@ -186,10 +201,15 @@ function ProductDetails({ productId }: { productId: string }) {
   const qty = parseQuantity(quantity);
   const selectedShipping = getShippingMethodById(selectedShippingId);
   const subtotal = qty ? unitPrice * qty : 0;
-  const shippingPrice = selectedShipping?.price ?? 0;
+  const shippingQuote = getShippingPriceQuote(
+    selectedShippingId,
+    qty ?? 1,
+  );
+  const shippingPrice = shippingQuote.price ?? 0;
   const total = qty ? subtotal + shippingPrice : 0;
   const subtotalDisplayAmount = qty ? subtotal.toFixed(2) : "-";
-  const displayAmount = qty ? total.toFixed(2) : "-";
+  const displayAmount =
+    qty && shippingQuote.price !== null ? total.toFixed(2) : "-";
 
   const optionLabels: Record<string, string> = {
     boxColor: "Couleur des boîtes",
@@ -230,6 +250,48 @@ function ProductDetails({ productId }: { productId: string }) {
     ...formattedOptions,
     ...customValues,
   };
+
+  async function searchRelayPoints() {
+    setRelaySearchBusy(true);
+    setRelaySearchError("");
+    setRelaySearchMessage("");
+    setRelayPoints([]);
+    setRelayPoint(null);
+    try {
+      const query = new URLSearchParams({
+        postalCode: address.zip.trim(),
+        city: address.city.trim(),
+        quantity: String(qty ?? 1),
+      });
+      const response = await fetch(
+        `/api/shipping/mondial-relay/points?${query.toString()}`,
+        { cache: "no-store" },
+      );
+      const data = (await response.json()) as {
+        source?: "simulation" | "sandbox";
+        points?: RelayPoint[];
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok)
+        throw new Error(data.error || "Recherche des Points Relais impossible.");
+      setRelayPoints(Array.isArray(data.points) ? data.points : []);
+      setRelaySearchMessage(
+        data.message ||
+          (data.source === "sandbox"
+            ? "Résultats issus du compte de test Mondial Relay."
+            : "Résultats de simulation, non utilisables pour une commande."),
+      );
+    } catch (error) {
+      setRelaySearchError(
+        error instanceof Error
+          ? error.message
+          : "Recherche des Points Relais impossible.",
+      );
+    } finally {
+      setRelaySearchBusy(false);
+    }
+  }
 
   const handleAddToCart = () => {
     if (product.availableForSale !== true) {
@@ -313,6 +375,15 @@ function ProductDetails({ productId }: { productId: string }) {
       }
       if (!selectedShipping) {
         setError("Veuillez choisir un mode de livraison pour continuer.");
+        return;
+      }
+      if (
+        selectedShipping.id === MONDIAL_RELAY_POINT_RELAIS_ID &&
+        (!relayPoint || relayPoint.source !== "sandbox")
+      ) {
+        setError(
+          "Un Point Relais issu du compte de test est nécessaire. Les résultats simulés ne sont pas valides pour une commande.",
+        );
         return;
       }
       setError("");
@@ -1160,6 +1231,8 @@ function ProductDetails({ productId }: { productId: string }) {
                             checked={checked}
                             onChange={() => {
                               setSelectedShippingId(method.id);
+                              if (method.id !== MONDIAL_RELAY_POINT_RELAIS_ID)
+                                setRelayPoint(null);
                               setError("");
                             }}
                             style={{ marginTop: 3 }}
@@ -1173,7 +1246,13 @@ function ProductDetails({ productId }: { productId: string }) {
                                 letterSpacing: "0.04em",
                               }}
                             >
-                              {method.shortLabel} - {method.price.toFixed(2)} €
+                              {method.shortLabel} -{" "}
+                              {
+                                getShippingPriceQuote(
+                                  method.id,
+                                  qty ?? 1,
+                                ).label
+                              }
                             </span>
                             <span
                               style={{
@@ -1190,6 +1269,74 @@ function ProductDetails({ productId }: { productId: string }) {
                       );
                     })}
                   </div>
+                  {selectedShippingId === MONDIAL_RELAY_POINT_RELAIS_ID && (
+                    <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                      <p role="note" style={{ margin: 0, fontSize: 12 }}>
+                        {shippingQuote.isSimulation
+                          ? "Tarif provisoire de test uniquement, non contractuel."
+                          : "Le tarif contractuel reste à confirmer."}
+                      </p>
+                      <p style={{ margin: 0, fontSize: 12 }}>
+                        La recherche utilise le code postal et la ville de
+                        l’adresse de livraison ci-dessus.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={searchRelayPoints}
+                        disabled={
+                          relaySearchBusy ||
+                          address.zip.trim().length !== 5 ||
+                          address.city.trim().length < 2
+                        }
+                      >
+                        {relaySearchBusy
+                          ? "Recherche…"
+                          : "Rechercher un Point Relais"}
+                      </button>
+                      {relaySearchMessage && (
+                        <p role="status">{relaySearchMessage}</p>
+                      )}
+                      {relaySearchError && (
+                        <p role="alert" style={{ color: "#b42318" }}>
+                          {relaySearchError}
+                        </p>
+                      )}
+                      {relayPoints.map((point) => (
+                        <label
+                          key={`${point.source}:${point.id}`}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "auto 1fr",
+                            gap: 10,
+                            padding: 12,
+                            border: `1px solid ${relayPoint?.id === point.id ? theme.gold : theme.creamDark}`,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="radio"
+                            name="product-mondial-relay-point"
+                            checked={relayPoint?.id === point.id}
+                            onChange={() => setRelayPoint(point)}
+                          />
+                          <span>
+                            <strong>{point.label}</strong>
+                            <br />
+                            {point.address.join(", ")} - {point.postalCode}{" "}
+                            {point.city}
+                          </span>
+                        </label>
+                      ))}
+                      {relayPoint && (
+                        <p role="status">
+                          Point sélectionné : {relayPoint.location}
+                          {relayPoint.source === "simulation"
+                            ? " - simulation"
+                            : ""}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
                 {error && (
                   <p
@@ -1715,10 +1862,11 @@ function ProductDetails({ productId }: { productId: string }) {
                           label: selectedShipping?.label || "",
                           shortLabel: selectedShipping?.shortLabel || "",
                           carrier: selectedShipping?.carrier || "",
-                          price: selectedShipping?.price || 0,
+                          price: shippingPrice,
                           estimatedDelay:
                             selectedShipping?.estimatedDelay || "",
                         },
+                        ...(relayPoint ? { relayPoint } : {}),
                       }}
                     />
                   )}

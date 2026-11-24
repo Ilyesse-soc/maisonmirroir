@@ -5,9 +5,11 @@ import {
   type CartItem,
 } from "./cart";
 import { SHIPPING_METHODS, getShippingMethodById } from "./shipping";
+import { isRelayPoint } from "./mondialRelayTypes";
 const empty: CartSnapshot = {
   items: [],
   shippingMethodId: SHIPPING_METHODS[0]?.id || "",
+  relayPoint: null,
 };
 let cached = empty,
   serialized: string | null = null;
@@ -43,6 +45,7 @@ export function readCart(): CartSnapshot {
     cached = {
       items,
       shippingMethodId: shipping?.id || empty.shippingMethodId,
+      relayPoint: isRelayPoint(parsed.relayPoint) ? parsed.relayPoint : null,
     };
   } catch {
     cached = empty;

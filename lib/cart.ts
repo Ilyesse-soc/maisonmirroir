@@ -1,4 +1,5 @@
 import { getShippingMethodById } from "@/lib/shipping";
+import type { RelayPoint } from "@/lib/mondialRelayTypes";
 
 export type CartAttachment = {
   filename: string;
@@ -23,6 +24,7 @@ export type CartItem = {
 export type CartSnapshot = {
   items: CartItem[];
   shippingMethodId: string;
+  relayPoint: RelayPoint | null;
 };
 
 export const CART_STORAGE_KEY = "mm:cart:v1";
@@ -77,12 +79,15 @@ export function getCartSubtotal(items: CartItem[]) {
 }
 
 export function getCartShippingPrice(shippingMethodId: string) {
-  return getShippingMethodById(shippingMethodId)?.price ?? 0;
+  const method = getShippingMethodById(shippingMethodId);
+  if (!method || method.carrier === "Mondial Relay") return null;
+  return method.price;
 }
 
 export function getCartTotal(items: CartItem[], shippingMethodId: string) {
   if (items.length === 0) return 0;
-  return getCartSubtotal(items) + getCartShippingPrice(shippingMethodId);
+  const price = getCartShippingPrice(shippingMethodId);
+  return price === null ? null : getCartSubtotal(items) + price;
 }
 
 export function getCartItemCount(items: CartItem[]) {

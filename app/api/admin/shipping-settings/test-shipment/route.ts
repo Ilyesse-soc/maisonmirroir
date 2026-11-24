@@ -18,19 +18,38 @@ export const dynamic = "force-dynamic";
 
 const auditAction = "MONDIAL_RELAY_API2_SANDBOX_TEST_RESERVED";
 const auditTarget = "mondial-relay-api2-sandbox-test-v1";
+const outcomeAction = "MONDIAL_RELAY_API2_SANDBOX_TEST_RESULT";
+
+async function recordOutcome(actorId: string, outcome: string) {
+  try {
+    await database().query(
+      "INSERT INTO mm_admin_audit(id,actor_id,action,target_id) VALUES($1,$2,$3,$4)",
+      [randomUUID(), actorId, outcomeAction, outcome],
+    );
+  } catch {
+    securityEvent("MONDIAL_RELAY_API2_TEST_OUTCOME_AUDIT_FAILED", "warn");
+  }
+}
 
 export async function GET() {
   const denied = await adminDenied();
   if (denied) return denied;
   try {
-    const result = await database().query(
+    const [result, outcomeResult] = await Promise.all([
+      database().query(
       "SELECT created_at FROM mm_admin_audit WHERE action=$1 AND target_id=$2 ORDER BY created_at LIMIT 1",
       [auditAction, auditTarget],
-    );
+      ),
+      database().query(
+        "SELECT target_id FROM mm_admin_audit WHERE action=$1 ORDER BY created_at DESC LIMIT 1",
+        [outcomeAction],
+      ),
+    ]);
     return NextResponse.json(
       {
         attempted: Boolean(result.rows[0]),
         createdAt: result.rows[0]?.created_at ?? null,
+        outcome: outcomeResult.rows[0]?.target_id ?? null,
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -137,6 +156,10 @@ export async function POST(request: NextRequest) {
         depthCm: parcel.depthCm,
       },
     );
+    await recordOutcome(
+      session.user.id,
+      `success:${result.shipmentNumber}`,
+    );
     return NextResponse.json(
       { attempted: true, ...result },
       { headers: { "Cache-Control": "no-store" } },
@@ -145,10 +168,32 @@ export async function POST(request: NextRequest) {
     securityEvent("MONDIAL_RELAY_API2_TEST_FAILED", "warn");
     const code =
       error instanceof MondialRelayApi2Error ? error.code : "UNEXPECTED";
+    const providerStatuses =
+      error instanceof MondialRelayApi2Error
+        ? error.providerStatuses
+        : [];
+    const shipmentNumber =
+      error instanceof MondialRelayApi2Error
+        ? error.shipmentNumber
+        : undefined;
+    const providerCodes = providerStatuses.map((status) => status.code);
+    await recordOutcome(
+      session.user.id,
+      providerCodes.length
+        ? `provider-error:${providerCodes.join(",")}`
+        : `error:${code}`,
+    );
+    const details = providerStatuses.length
+      ? providerStatuses
+          .map(({ code: providerCode, level }) => `${providerCode} (${level})`)
+          .join(", ")
+      : code;
     return NextResponse.json(
       {
-        error: `Le test sandbox Mondial Relay a échoué (${code}). La tentative reste verrouillée pour empêcher un doublon.`,
+        error: `Le test sandbox Mondial Relay a échoué (${details}). La tentative reste verrouillée pour empêcher un doublon.`,
         attempted: true,
+        providerStatuses,
+        ...(shipmentNumber ? { shipmentNumber } : {}),
       },
       { status: 502, headers: { "Cache-Control": "no-store" } },
     );

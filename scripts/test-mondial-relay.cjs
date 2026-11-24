@@ -84,12 +84,33 @@ assert.equal(
 assert.throws(
   () =>
     parseApi2SandboxResponse(
-      "<Response><StatusList><Status><Code>10001</Code></Status></StatusList></Response>",
+      `<ShipmentCreationResponse>
+        <ShipmentsList><Shipment ShipmentNumber="12345678" /></ShipmentsList>
+        <StatusList><Status code="10001" level="Critical Error" message="must not be returned" /></StatusList>
+      </ShipmentCreationResponse>`,
     ),
-  (error) =>
-    error instanceof MondialRelayApi2Error &&
-    error.code === "PROVIDER_10001",
+  (error) => {
+    assert(error instanceof MondialRelayApi2Error);
+    assert.equal(error.code, "PROVIDER_10001");
+    assert.deepEqual(error.providerStatuses, [
+      { code: "10001", level: "Critical Error" },
+    ]);
+    assert.equal(error.shipmentNumber, "12345678");
+    assert.doesNotMatch(error.message, /must not be returned/);
+    return true;
+  },
 );
+const warningResponse = parseApi2SandboxResponse(
+  `<ShipmentCreationResponse>
+    <ShipmentsList><Shipment ShipmentNumber="12345679">
+      <LabelList><Label><Output>http://connect.mondialrelay.com/label.pdf</Output></Label></LabelList>
+    </Shipment></ShipmentsList>
+    <StatusList><Status code="10069" level="Warning" message="postcode updated" /></StatusList>
+  </ShipmentCreationResponse>`,
+);
+assert.deepEqual(warningResponse.warnings, [
+  { code: "10069", level: "Warning" },
+]);
 assert.throws(
   () =>
     parseApi2SandboxResponse(
@@ -216,6 +237,7 @@ const api2Route = readFileSync(
   "utf8",
 );
 assert.match(api2Route, /MONDIAL_RELAY_API2_SANDBOX_TEST_RESERVED/);
+assert.match(api2Route, /MONDIAL_RELAY_API2_SANDBOX_TEST_RESULT/);
 assert.match(api2Route, /pg_advisory_xact_lock/);
 assert.match(api2Route, /api2SandboxEnabled/);
 assert.doesNotMatch(api2Source, /connect-api\.mondialrelay\.com\/api\/shipment/);

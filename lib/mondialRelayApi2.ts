@@ -13,8 +13,17 @@ export type TestParcelDimensions = {
   depthCm: number;
 };
 
+export type MondialRelayApi2ProviderStatus = {
+  code: string;
+  level: string;
+};
+
 export class MondialRelayApi2Error extends Error {
-  constructor(readonly code: string) {
+  constructor(
+    readonly code: string,
+    readonly providerStatuses: MondialRelayApi2ProviderStatus[] = [],
+    readonly shipmentNumber?: string,
+  ) {
     super(`MONDIAL_RELAY_API2_${code}`);
     this.name = "MondialRelayApi2Error";
   }
@@ -55,6 +64,41 @@ function element(xml: string, name: string) {
     ),
   );
   return match ? decodeXml(match[1].trim()) : "";
+}
+
+function attribute(source: string, name: string) {
+  const match = source.match(
+    new RegExp(`(?:^|\\s)${name}\\s*=\\s*(["'])(.*?)\\1`, "i"),
+  );
+  return match ? decodeXml(match[2]) : "";
+}
+
+function providerStatuses(xml: string) {
+  const pattern =
+    /<(?:(?:[\w.-]+):)?Status\b([^>]*?)(?:\/>|>([\s\S]*?)<\/(?:(?:[\w.-]+):)?Status\s*>)/gi;
+  return Array.from(xml.matchAll(pattern), (match) => {
+    const body = match[2] || "";
+    const code = attribute(match[1], "code") || element(body, "Code");
+      const rawLevel = attribute(match[1], "level") || element(body, "Level");
+      const normalizedLevel = rawLevel.trim().toLowerCase().replace(/\s+/g, " ");
+      return {
+        code: /^-?[0-9]{1,5}$/.test(code) ? code : "UNKNOWN",
+        level:
+          normalizedLevel === "warning"
+            ? "Warning"
+            : normalizedLevel === "critical error"
+              ? "Critical Error"
+              : "Error",
+      };
+    });
+}
+
+function shipmentNumber(xml: string) {
+  const shipment = xml.match(/<(?:(?:[\w.-]+):)?Shipment\b([^>]*)>/i);
+  const value =
+    shipment?.[1].match(/\bShipmentNumber\s*=\s*["']([^"']+)["']/i)?.[1] ||
+    "";
+  return /^[0-9A-Z-]{1,24}$/i.test(value) ? value : "";
 }
 
 export function buildApi2SandboxTestRequest(
@@ -138,27 +182,32 @@ export function parseApi2SandboxResponse(xml: string) {
   if (/<(?:[\w.-]+:)?Fault\b/i.test(xml))
     throw new MondialRelayApi2Error("SOAP_FAULT");
 
-  const statusList = xml.match(
-    /<(?:(?:[\w.-]+):)?StatusList(?:\s[^>]*)?\s*\/>/i,
-  )
-    ? ""
-    : element(xml, "StatusList");
   if (!/<(?:(?:[\w.-]+):)?StatusList\b/i.test(xml))
     throw new MondialRelayApi2Error("STATUS_MISSING");
-  if (statusList) {
-    const code = element(statusList, "ErrorCode") || element(statusList, "Code");
+  const number = shipmentNumber(xml);
+  const statuses = providerStatuses(xml);
+  const malformedStatusList =
+    /<(?:(?:[\w.-]+):)?StatusList\b[^>]*>([\s\S]*?)<\/(?:(?:[\w.-]+):)?StatusList\s*>/i.exec(
+      xml,
+    );
+  if (
+    malformedStatusList &&
+    malformedStatusList[1].trim() &&
+    !/<(?:(?:[\w.-]+):)?Status\b/i.test(malformedStatusList[1])
+  )
+    throw new MondialRelayApi2Error("STATUS_INVALID", [], number || undefined);
+  const errors = statuses.filter(
+    (status) => status.level.trim().toLowerCase() !== "warning",
+  );
+  if (errors.length) {
+    const codes = errors.map((status) => status.code);
     throw new MondialRelayApi2Error(
-      /^[0-9A-Z_-]{1,32}$/i.test(code) ? `PROVIDER_${code}` : "PROVIDER_REJECTED",
+      `PROVIDER_${codes.join(",")}`,
+      errors,
+      number || undefined,
     );
   }
-
-  const shipment = xml.match(
-    /<(?:(?:[\w.-]+):)?Shipment\b([^>]*)>/i,
-  );
-  const shipmentNumber =
-    shipment?.[1].match(/\bShipmentNumber\s*=\s*["']([^"']+)["']/i)?.[1] ||
-    "";
-  if (!/^[0-9A-Z-]{1,24}$/i.test(shipmentNumber))
+  if (!number)
     throw new MondialRelayApi2Error("SHIPMENT_NUMBER_MISSING");
 
   const output = element(xml, "Output");
@@ -166,7 +215,11 @@ export function parseApi2SandboxResponse(xml: string) {
   try {
     labelUrl = new URL(output);
   } catch {
-    throw new MondialRelayApi2Error("LABEL_URL_INVALID");
+    throw new MondialRelayApi2Error(
+      "LABEL_URL_INVALID",
+      statuses,
+      number,
+    );
   }
   if (
     !["http:", "https:"].includes(labelUrl.protocol) ||
@@ -174,9 +227,19 @@ export function parseApi2SandboxResponse(xml: string) {
     labelUrl.username ||
     labelUrl.password
   )
-    throw new MondialRelayApi2Error("LABEL_URL_UNTRUSTED");
+    throw new MondialRelayApi2Error(
+      "LABEL_URL_UNTRUSTED",
+      statuses,
+      number,
+    );
   labelUrl.protocol = "https:";
-  return { shipmentNumber, labelUrl: labelUrl.toString() };
+  return {
+    shipmentNumber: number,
+    labelUrl: labelUrl.toString(),
+    warnings: statuses.filter(
+      (status) => status.level.trim().toLowerCase() === "warning",
+    ),
+  };
 }
 
 export async function createApi2SandboxTestShipment(

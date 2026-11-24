@@ -54,6 +54,7 @@ export default function AdminSettingsPage() {
     createdAt?: string | null;
     shipmentNumber?: string;
     labelUrl?: string;
+    outcome?: string | null;
   }>({ attempted: false });
   const [api2TestMessage, setApi2TestMessage] = useState("");
   const [api2TestBusy, setApi2TestBusy] = useState(false);
@@ -453,6 +454,12 @@ export default function AdminSettingsPage() {
                 ? ` le ${new Date(api2Test.createdAt).toLocaleString("fr-FR")}`
                 : ""}
               . Aucune seconde création ne sera envoyée.
+            </p>
+          )}
+          {api2Test.outcome && (
+            <p className="admin-muted" role="status">
+              Résultat technique journalisé sans secret :{" "}
+              <code>{api2Test.outcome}</code>
             </p>
           )}
           {api2Test.shipmentNumber && (

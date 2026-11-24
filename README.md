@@ -47,7 +47,7 @@ Les méthodes historiques restent définies dans `lib/shipping.ts`. Le tarif Mon
 
 La recherche de Points Relais utilise exclusivement les identifiants API1 de test lorsque l'option sandbox est activée. À défaut, elle renvoie un point fictif explicitement étiqueté comme simulation. Le choix du point est conservé dans le panier et sa valeur `location` est utilisée pour préparer `DeliveryMode.location`.
 
-La création d'expédition et d'étiquette API2 n'est pas appelée. Les paiements, le transport réel et la génération d'étiquettes restent désactivés. Le droit du compte au service 24R n'a pas été vérifié.
+La recherche API1 contrôle le code de réponse `STAT`; un rejet fournisseur est affiché comme erreur et non comme recherche réussie vide. L’administration dispose d’une création d’étiquette API2 strictement sandbox, avec des coordonnées synthétiques et un verrou permanent enregistré dans l’audit admin pour empêcher une seconde tentative. Cette action est disponible seulement si `MONDIAL_RELAY_API2_TEST_ENABLED=true`; le endpoint est fixé au sandbox et n’accepte aucun identifiant de production. Les expéditions des commandes, les paiements et les envois réels restent désactivés. L’API2 ne fournit pas, dans l’intégration présente, de consultation du suivi; le suivi des commandes reste manuel.
 
 Les paiements nécessitent à la fois `SHOP_OPEN=true` et `REAL_PAYMENTS_ENABLED=true`. Ce second verrou est absent par défaut et doit rester désactivé tant que l'ouverture n'a pas été explicitement autorisée.
 
@@ -73,12 +73,12 @@ L'espace existant est accessible après connexion à `/77774555474447777554555`,
 - `/admin/newsletter` : brouillons, aperçu mobile/ordinateur, historique et validation manuelle des campagnes.
 - `/admin/miroir-ai` : assistant Gemini côté serveur avec relais Groq optionnel, brouillons uniquement ; désactivé si aucune clé fournisseur n'est configurée.
 - `/admin/calendar` : calendrier marketing et événements persistés.
-- `/admin/settings` : coordonnées et textes de marque, configuration Mondial Relay, tarifs par service/poids et profils de colis. Les secrets ne sont jamais affichés.
+- `/admin/settings` : coordonnées et textes de marque, configuration Mondial Relay, profils de colis et test de création d’étiquette API2 sandbox à usage unique. Les secrets ne sont jamais affichés.
 - `/admin/orders` : gestion existante des commandes et du suivi.
 
 La migration additive `migrations/006_admin_console.sql` ajoute le pré-en-tête des campagnes, le calendrier et les paramètres éditables sans supprimer de données existantes. Les taux d'ouverture et de clic restent indiqués comme indisponibles lorsque le suivi n'existe pas. Une campagne ne peut être approuvée que par une action explicite et seulement si `SHOP_OPEN=true`; ne pas activer ce paramètre avant validation métier. `NEWSLETTER_AUTO_PUBLISH` reste indépendant et doit demeurer désactivé tant qu'une publication automatique n'est pas souhaitée.
 
-La migration additive `migrations/007_mondial_relay_settings.sql` crée uniquement la table de configuration de livraison. Les identifiants Mondial Relay ne doivent jamais être saisis dans l'administration ou versionnés. Les secrets éventuels sont à configurer dans `ops/secrets/app.env` sur le VPS, avec des noms exclusivement réservés au test :
+La migration additive `migrations/007_mondial_relay_settings.sql` crée uniquement la table de configuration de livraison. Le verrou du test API2 réutilise la table d’audit admin existante et n’ajoute aucune migration. Les identifiants Mondial Relay ne doivent jamais être saisis dans l'administration ou versionnés. Les secrets éventuels sont à configurer dans `ops/secrets/app.env` sur le VPS, avec des noms exclusivement réservés au test :
 
 - `MONDIAL_RELAY_API1_TEST_SHOP`
 - `MONDIAL_RELAY_API1_TEST_PRIVATE_KEY`

@@ -49,6 +49,15 @@ export default function AdminSettingsPage() {
   const [relayMode, setRelayMode] = useState<"simulation" | "sandbox">(
     "simulation",
   );
+  const [api2Test, setApi2Test] = useState<{
+    attempted: boolean;
+    createdAt?: string | null;
+    shipmentNumber?: string;
+    labelUrl?: string;
+  }>({ attempted: false });
+  const [api2TestMessage, setApi2TestMessage] = useState("");
+  const [api2TestBusy, setApi2TestBusy] = useState(false);
+  const [api2TestError, setApi2TestError] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -79,6 +88,20 @@ export default function AdminSettingsPage() {
           setShippingMessage(
             error instanceof Error ? error.message : "Chargement impossible.",
           );
+      });
+    fetch("/api/admin/shipping-settings/test-shipment", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Chargement impossible.");
+        if (active) setApi2Test(data);
+      })
+      .catch((error) => {
+        if (active) {
+          setApi2TestMessage(
+            error instanceof Error ? error.message : "Chargement impossible.",
+          );
+          setApi2TestError(true);
+        }
       });
     return () => { active = false; };
   }, []);
@@ -131,6 +154,37 @@ export default function AdminSettingsPage() {
       );
     } finally {
       setShippingBusy(false);
+    }
+  }
+
+  async function runApi2SandboxTest() {
+    setApi2TestBusy(true);
+    setApi2TestMessage("");
+    setApi2TestError(false);
+    try {
+      const response = await fetch(
+        "/api/admin/shipping-settings/test-shipment",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}",
+        },
+      );
+      const data = await response.json();
+      if (data.attempted) setApi2Test(data);
+      if (!response.ok)
+        throw new Error(data.error || "Le test API2 a échoué.");
+      setApi2Test(data);
+      setApi2TestMessage(
+        "Étiquette de test sandbox créée avec des coordonnées fictives. Aucun client ni paiement n’a été utilisé.",
+      );
+    } catch (error) {
+      setApi2TestMessage(
+        error instanceof Error ? error.message : "Le test API2 a échoué.",
+      );
+      setApi2TestError(true);
+    } finally {
+      setApi2TestBusy(false);
     }
   }
 
@@ -374,9 +428,77 @@ export default function AdminSettingsPage() {
           {" - "}service 24R : droit du compte non vérifié
         </div>
         <p className="admin-error" role="note">
-          Simulation active. Les commandes, paiements, étiquettes et expéditions
-          réelles restent désactivés.
+          Les commandes, paiements et expéditions réelles restent désactivés.
+          Le test API2 ci-dessous utilise uniquement le sandbox et des données fictives.
         </p>
+        <section
+          aria-labelledby="mondial-relay-api2-test-title"
+          style={{ marginTop: 18, borderTop: "1px solid #e5ddd2", paddingTop: 16 }}
+        >
+          <h3 id="mondial-relay-api2-test-title">Étiquette API2 sandbox</h3>
+          <p className="admin-muted">
+            Une seule tentative sera autorisée pour éviter les doublons. Elle
+            utilise un Point Relais et des coordonnées de test documentés, sans
+            commande ni donnée client. L’API2 de production n’est jamais appelée.
+          </p>
+          {api2TestMessage && (
+            <p className={api2TestError ? "admin-error" : "admin-success"} role="status">
+              {api2TestMessage}
+            </p>
+          )}
+          {api2Test.attempted && (
+            <p className="admin-muted" role="status">
+              Une tentative sandbox est déjà réservée
+              {api2Test.createdAt
+                ? ` le ${new Date(api2Test.createdAt).toLocaleString("fr-FR")}`
+                : ""}
+              . Aucune seconde création ne sera envoyée.
+            </p>
+          )}
+          {api2Test.shipmentNumber && (
+            <p role="status">
+              Référence d’expédition de test : {api2Test.shipmentNumber}
+              {api2Test.labelUrl && (
+                <>
+                  {" "}
+                  <a
+                    href={api2Test.labelUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Ouvrir l’étiquette PDF
+                  </a>
+                </>
+              )}
+            </p>
+          )}
+          {!relayStatus.api2SandboxEnabled && (
+            <p className="admin-muted">
+              Test inactif : activez uniquement
+              {" "}
+              <code>MONDIAL_RELAY_API2_TEST_ENABLED=true</code>
+              {" "}
+              dans l’environnement serveur après le déploiement.
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={
+              api2TestBusy ||
+              api2Test.attempted ||
+              !relayStatus.api2 ||
+              !relayStatus.api2SandboxEnabled
+            }
+            onClick={runApi2SandboxTest}
+            style={{ marginTop: 8 }}
+          >
+            {api2TestBusy
+              ? "Création du test sandbox…"
+              : api2Test.attempted
+                ? "Test déjà réservé"
+                : "Créer l’unique étiquette de test"}
+          </button>
+        </section>
         <form onSubmit={saveShipping}>
           <label style={{ display: "block", maxWidth: 360, marginTop: 16 }}>
             Code de service utilisé

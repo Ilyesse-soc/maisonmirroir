@@ -71,12 +71,17 @@ export async function PATCH(request: NextRequest) {
         read: client => getMondialRelaySettings(client),
         validate: value => mondialRelaySettingsSchema.parse(value),
         write: async (client, value) => {
+          const changes = { ...body.changes };
+          // Confirmations refer to the service and collection mode shown in the
+          // form, even when those contextual fields were absent in old JSON.
+          if ("serviceConfirmed" in changes) changes.serviceCode = value.serviceCode;
+          if ("collectionModeConfirmed" in changes) changes.collectionMode = value.collectionMode;
           await client.query(`INSERT INTO mm_shipping_settings(id,settings,updated_by) VALUES(1,$1,$2)
-            ON CONFLICT(id) DO UPDATE SET settings=mm_shipping_settings.settings || ($3::jsonb - 'sender') ||
+            ON CONFLICT(id) DO UPDATE SET settings=$1::jsonb || mm_shipping_settings.settings || ($3::jsonb - 'sender') ||
               CASE WHEN $3::jsonb ? 'sender' THEN jsonb_build_object('sender',
                 COALESCE(mm_shipping_settings.settings->'sender','{}'::jsonb) || ($3::jsonb->'sender'))
               ELSE '{}'::jsonb END,
-            updated_by=EXCLUDED.updated_by,updated_at=now()`, [JSON.stringify(value), session.user.id, JSON.stringify(body.changes)]);
+            updated_by=EXCLUDED.updated_by,updated_at=now()`, [JSON.stringify(value), session.user.id, JSON.stringify(changes)]);
         },
       });
       await adminAudit("MONDIAL_RELAY_SETTINGS_UPDATE_CONFIRMED");

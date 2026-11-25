@@ -22,4 +22,5 @@ jobs:
         with:
           name: iphone-webkit-purchase-check
           path: .qa/purchase-webkit-*
+          include-hidden-files: true
           retention-days: 7

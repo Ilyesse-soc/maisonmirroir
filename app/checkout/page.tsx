@@ -680,7 +680,7 @@ export default function CheckoutPage() {
               <strong>Acheminement :</strong> 3 à 5 jours ouvrés en moyenne
               après prise en charge par Mondial Relay.
               {" "}
-              <Link href="/livraison">Consulter la politique de livraison</Link>.
+              <Link prefetch={false} href="/livraison">Consulter la politique de livraison</Link>.
             </p>
             <label
               style={{
@@ -700,7 +700,7 @@ export default function CheckoutPage() {
               />
               <span>
                 J’ai lu et j’accepte les{" "}
-                <Link href="/conditions-de-vente" target="_blank">
+                <Link prefetch={false} href="/conditions-de-vente" target="_blank">
                   Conditions générales de vente
                 </Link>
                 . Cette case n’est pas précochée.

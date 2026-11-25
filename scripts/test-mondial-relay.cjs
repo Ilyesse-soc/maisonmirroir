@@ -485,8 +485,41 @@ assert.equal(
 );
 const quantitySettings = {
   ...quoteSettings,
+  fulfillmentMode: "manual_connect",
   shippingTiers: relayTypes.DEFAULT_MONDIAL_RELAY_SETTINGS.shippingTiers,
 };
+let publicSettingsForTest = {
+  ...relayTypes.DEFAULT_MONDIAL_RELAY_SETTINGS,
+  ...quantitySettings,
+  homeShippingTiers: [],
+  preparationDays: 3,
+};
+const publicShippingConfigRoute = loadTypeScript(
+  "app/api/shipping/config/route.ts",
+  {
+    "next/server": {
+      NextResponse: { json: (body, init) => Response.json(body, init) },
+    },
+    "@/lib/mondialRelaySettings": {
+      getMondialRelaySettings: async () => publicSettingsForTest,
+      getMondialRelayProductionReadiness: () => ({
+        checkoutShippingReady: true,
+        homeDeliveryReady: false,
+        shipmentCreationEnabled: false,
+        manualShippingReady: false,
+      }),
+    },
+    "@/lib/commerceSecurity": {
+      getPayPalProductionStatus: () => ({ configured: false, clientId: "" }),
+    },
+    "@/lib/observability": { securityEvent: () => {} },
+    "@/lib/legalVersion": { getCgvVersion: () => "test" },
+    "@/lib/shipping": {
+      MONDIAL_RELAY_HOME_ID: "mondial-relay-home",
+      MONDIAL_RELAY_POINT_RELAIS_ID: "mondial-relay-point-relais",
+    },
+  },
+);
 assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 1).priceCents, 410);
 assert.equal(
   relayTypes.getMondialRelayQuote(
@@ -500,7 +533,26 @@ assert.equal(
   ).priceCents,
   410,
 );
-assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 2), null);
+assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 2).priceCents, 454);
+assert.equal(
+  relayTypes.getMondialRelaySearchWeightGrams(quantitySettings, 2),
+  1000,
+);
+assert.equal(relayTypes.getMondialRelayParcelProfile(quantitySettings, 2), null);
+assert.equal(
+  relayTypes.getMondialRelayQuote(
+    { ...quantitySettings, fulfillmentMode: "api2" },
+    2,
+  ),
+  null,
+);
+assert.equal(
+  relayTypes.getMondialRelaySearchWeightGrams(
+    { ...quantitySettings, fulfillmentMode: "api2" },
+    2,
+  ),
+  null,
+);
 assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 3), null);
 const confirmedTwoBagTier = {
   ...quantitySettings,
@@ -623,6 +675,35 @@ assert.doesNotMatch(shipmentService, /sandbox/i);
 assert.doesNotMatch(publicSettings, /MONDIAL_RELAY_API[12]_PROD_(?:SHOP|PRIVATE_KEY|LOGIN|PASSWORD|CUSTOMER_ID)/);
 assert.doesNotMatch(publicSettings, /sender|collectionMode|priceCents/);
 
-console.log(
-  "PASS: production-only relay parsing, signed API1 search/tracking requests, contract quote fail-closed behavior, API2 request/response validation, protected checkout, shipment idempotency, and additive migration. No external API requests were made.",
-);
+publicShippingConfigRoute
+  .GET()
+  .then(async (response) => {
+    const manualConfig = await response.json();
+    const publicTwoBagTier = manualConfig.settings.shippingTiers.find(
+      (tier) => tier.quantity === 2,
+    );
+    assert.equal(publicTwoBagTier.customerPriceCents, 454);
+    assert.equal(publicTwoBagTier.weightGrams, 1000);
+    assert.equal(publicTwoBagTier.lengthCm, null);
+    assert.equal(
+      relayTypes.getMondialRelayQuote(manualConfig.settings, 2).priceCents,
+      454,
+    );
+    publicSettingsForTest = {
+      ...publicSettingsForTest,
+      fulfillmentMode: "api2",
+    };
+    const api2Response = await publicShippingConfigRoute.GET();
+    const api2Config = await api2Response.json();
+    assert.equal(
+      api2Config.settings.shippingTiers.some((tier) => tier.quantity === 2),
+      false,
+    );
+    console.log(
+      "PASS: two-bag manual Connect quote and public checkout configuration, API2 dimensions remain required, legacy rates fail closed, API1 request/response handling, checkout protections, and shipment idempotency. No external API requests were made.",
+    );
+  })
+  .catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });

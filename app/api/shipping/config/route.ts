@@ -53,10 +53,18 @@ export async function GET() {
       tier.depthCm > 0 &&
       typeof tier.customerPriceCents === "number" &&
       tier.customerPriceCents > 0;
+    const manualPublicTier = (tier: (typeof settings.shippingTiers)[number]) =>
+      Number.isInteger(tier.weightGrams) &&
+      Boolean(tier.weightGrams) &&
+      tier.weightGrams! > 0 &&
+      Number.isInteger(tier.customerPriceCents) &&
+      Boolean(tier.customerPriceCents) &&
+      tier.customerPriceCents! > 0;
     const publicShippingTiers = settings.shippingTiers.filter(
-          (tier) =>
-            completePublicTier(tier),
-        );
+      settings.fulfillmentMode === "manual_connect"
+        ? manualPublicTier
+        : completePublicTier,
+    );
     const publicHomeShippingTiers = settings.homeDeliveryEnabled &&
       settings.homeDeliveryContractConfirmed
       ? settings.homeShippingTiers.filter(

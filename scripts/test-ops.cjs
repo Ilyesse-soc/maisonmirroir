@@ -103,7 +103,9 @@ assert(
 assert(
   mondialRelaySettings.includes("relay.checkoutShippingReady") &&
     mondialRelaySettings.includes("relay.shipmentCreationEnabled") &&
-  mondialRelayOrder.includes("verifyCheckoutQuoteProof") &&
+  mondialRelayOrder.includes("verifyCommerceCheckoutProof") &&
+    mondialRelayOrder.includes("await captureAndVerifyPayPalOrder(") &&
+    mondialRelayOrder.includes("await finalizeCommercePayment(") &&
     paypalOrderRoute.includes("SHOP_OPEN") &&
     paypalOrderRoute.includes("REAL_PAYMENTS_ENABLED") &&
     productionReadiness.includes("MONDIAL_RELAY_PRODUCTION_CONFIRMED") &&

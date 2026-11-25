@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { getProductById } from "@/lib/products";
 import type { RelayPoint } from "@/lib/mondialRelayTypes";
+import { useCart } from "@/components/CartProvider";
 
 type CustomerInfo = {
   firstName: string;
@@ -38,6 +39,7 @@ type OrderPayload = {
     estimatedDelay: string;
   };
   relayPoint?: RelayPoint;
+  promotionCode?: string;
   attachments?: Array<{
     filename: string;
     contentType: string;
@@ -54,7 +56,11 @@ export default function PayPalButton({
   order: OrderPayload;
 }) {
   const router = useRouter();
+  const { isProductAvailable } = useCart();
   const product = getProductById(order.product.id);
+  const isAvailable = product
+    ? isProductAvailable(product.id, product.availableForSale === true)
+    : false;
   const checkoutOrder = {
     product: order.product,
     items: [order.product],
@@ -63,6 +69,7 @@ export default function PayPalButton({
     relayPoint: order.relayPoint,
     attachments: order.attachments,
     customValues: order.customValues || {},
+    promotionCode: order.promotionCode,
   };
 
   const safeAmount = useMemo(() => {
@@ -103,10 +110,17 @@ export default function PayPalButton({
     };
   }, []);
 
-  if (!product || product.availableForSale !== true) {
+  if (!product) {
     return (
       <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
-        Cette collection n’est pas encore ouverte à la commande.
+        Cette collection n’est pas disponible.
+      </p>
+    );
+  }
+  if (!isAvailable) {
+    return (
+      <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
+        Victime de son succès
       </p>
     );
   }
@@ -169,7 +183,7 @@ export default function PayPalButton({
             checkoutProofRef.current = data.checkoutProof;
             return data.id;
           }}
-          onApprove={async (data, actions) => {
+          onApprove={async (data) => {
             if (status === "processing") return;
             if (!checkoutProofRef.current) {
               setStatus("error");
@@ -180,21 +194,6 @@ export default function PayPalButton({
             }
             setStatus("processing");
             setErrorMessage("");
-
-            let capture: unknown = null;
-            try {
-              if (actions.order) {
-                capture = await actions.order.capture();
-              } else {
-                throw new Error("PayPal capture unavailable");
-              }
-            } catch {
-              setStatus("error");
-              setErrorMessage(
-                "Le paiement n'a pas pu être capturé. Veuillez réessayer.",
-              );
-              return;
-            }
 
             // Anti-duplicate submission (client-side)
             const sentKey = `mm:orderSent:${data.orderID}`;
@@ -220,7 +219,6 @@ export default function PayPalButton({
                   paymentMethod: "PAYPAL",
                   paypalOrderId: data.orderID,
                   checkoutProof: checkoutProofRef.current,
-                  paypalCapture: capture,
                   order: checkoutOrder,
                 };
 
@@ -230,8 +228,14 @@ export default function PayPalButton({
                   body: JSON.stringify(payload),
                 });
 
-                if (!res.ok)
-                  throw new Error(`ORDER_API_FAILED_${res.status}`);
+                if (!res.ok) {
+                  const errorData = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                  };
+                  throw new Error(
+                    errorData.error || `ORDER_API_FAILED_${res.status}`,
+                  );
+                }
                 const apiData = (await res.json()) as {
                   orderId?: string;
                   total?: string;
@@ -287,14 +291,17 @@ export default function PayPalButton({
                 } catch {
                   // ignore
                 }
-              } catch {
+              } catch (error) {
                 console.error(
                   "[checkout] order confirmation failed after PayPal capture",
                   { paypalOrderId: data.orderID },
                 );
                 setStatus("error");
                 setErrorMessage(
-                  "PayPal a confirmé la capture, mais la commande n’a pas pu être confirmée. Ne relancez pas le paiement et contactez MAISON MIROIR.",
+                  error instanceof Error &&
+                    error.message.includes("PAYMENT_CAPTURE")
+                    ? "Le paiement n’a pas pu être confirmé. Vérifiez votre compte PayPal avant de réessayer."
+                    : `La confirmation du paiement a échoué${error instanceof Error ? ` (${error.message})` : ""}. Ne relancez pas le paiement et contactez MAISON MIROIR.`,
                 );
                 return;
               }
@@ -302,9 +309,19 @@ export default function PayPalButton({
 
             router.push("/success");
           }}
-          onError={() => {
+          onError={(error) => {
             setStatus("error");
-            setErrorMessage("Erreur PayPal. Veuillez réessayer.");
+            const message =
+              error instanceof Error ? error.message : "PAYMENT_FAILED";
+            setErrorMessage(
+              message.includes("FIRSTPRINCESS1_EXHAUSTED")
+                ? "Cette offre a atteint sa limite d’utilisation."
+                : message.includes("FIRSTPRINCESS1_INVALID")
+                  ? "Ce code promotionnel est invalide."
+                  : message.includes("INVENTORY_UNAVAILABLE")
+                    ? "Victime de son succès"
+                    : `Erreur de paiement (${message}). Veuillez réessayer.`,
+            );
           }}
           onCancel={() => {
             setStatus("idle");

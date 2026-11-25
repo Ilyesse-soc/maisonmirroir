@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
 import { adminAudit } from "@/lib/adminAudit";
 import { adminDenied, adminSession } from "@/lib/adminAuth";
 import {
   getMondialRelaySettings,
   getMondialRelayProductionCredentialStatus,
   getMondialRelayProductionReadiness,
+  mondialRelaySettingsSchema,
   saveMondialRelaySettings,
 } from "@/lib/mondialRelaySettings";
 import { mutationAllowed, readJson, InputError, inputResponse } from "@/lib/requestSecurity";
@@ -14,36 +14,13 @@ import { securityEvent } from "@/lib/observability";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const serviceCode = z.enum(["24R/MED", "24R/APM", "24R", "24L"]);
-const parcelProfileSchema = z.object({
-  itemsPerParcel: z.number().int().min(1).max(30),
-  weightGrams: z.number().int().min(1).max(30000).nullable(),
-  lengthCm: z.number().int().min(1).max(200).nullable(),
-  widthCm: z.number().int().min(1).max(200).nullable(),
-  depthCm: z.number().int().min(1).max(200).nullable(),
-}).strict();
-const ratesSchema = z.array(
-  z.object({
-    serviceCode,
-    maxWeightGrams: z.number().int().min(1).max(30000),
-    priceCents: z.number().int().min(0).max(100000),
-  }).strict(),
-).max(60);
-const settingsSchema = z.object({
-  serviceCode,
-  testParcel: parcelProfileSchema,
-  contractParcel: parcelProfileSchema,
-  testRates: ratesSchema,
-  contractRates: ratesSchema,
-}).strict();
-
 export async function GET() {
   const denied = await adminDenied();
   if (denied) return denied;
   try {
     const settings = await getMondialRelaySettings();
     const credentialsConfigured =
-      getMondialRelayProductionCredentialStatus();
+      getMondialRelayProductionCredentialStatus(settings);
     const readiness = getMondialRelayProductionReadiness(settings);
     return NextResponse.json(
       {
@@ -70,7 +47,7 @@ export async function PUT(request: NextRequest) {
   const originDenied = mutationAllowed(request);
   if (originDenied) return originDenied;
   try {
-    const settings = await readJson(request, settingsSchema, 20000);
+    const settings = await readJson(request, mondialRelaySettingsSchema, 30000);
     const session = await adminSession();
     if (!session)
       return NextResponse.json(

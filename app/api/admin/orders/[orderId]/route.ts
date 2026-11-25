@@ -2,7 +2,6 @@ import { orderPatchSchema } from "@/lib/newsletterSchemas";
 import {
   readJson,
   mutationAllowed,
-  inputResponse,
   InputError,
 } from "@/lib/requestSecurity";
 import { adminAudit } from "@/lib/adminAudit";
@@ -10,17 +9,13 @@ import { securityEvent } from "@/lib/observability";
 import { adminDenied } from "@/lib/adminAuth";
 import { NextRequest, NextResponse } from "next/server";
 import { readOrders, updateOrder } from "@/lib/orderStore";
-import type { OrderStatus } from "@/lib/orderTypes";
-import {
-  getAdminEmail,
-  getEmailFrom,
-  sendEmailOrThrow,
-  normalizeEmailError,
-} from "@/lib/email";
+import type { OrderRecord, OrderStatus } from "@/lib/orderTypes";
+import { database, transaction } from "@/lib/newsletterDb";
+import { sendCommerceOrderNotification } from "@/lib/commerceNotifications";
+import { presentAdminOrders } from "@/lib/adminOrderPresentation";
 
 const STATUS_VALUES: OrderStatus[] = [
   "En attente",
-  "Payee",
   "En preparation",
   "Expediee",
   "Livree",
@@ -29,33 +24,6 @@ const STATUS_VALUES: OrderStatus[] = [
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0;
-}
-
-function escapeHtml(input: string): string {
-  return input
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function buildSection(title: string, rows: Array<[string, string]>) {
-  const safeTitle = escapeHtml(title);
-  const rowsHtml = rows
-    .filter(([, value]) => Boolean(value))
-    .map(
-      ([label, value]) =>
-        `<tr><td style=\"padding:6px 0;color:#7c6b54;font-size:13px;width:45%\">${escapeHtml(label)}</td><td style=\"padding:6px 0;color:#1f1a12;font-size:13px;font-weight:600\">${escapeHtml(value)}</td></tr>`,
-    )
-    .join("");
-
-  return `
-    <div style=\"border:1px solid #f3e4b8;padding:16px 16px 8px;margin:0 0 12px;background:#fff\">
-      <div style=\"font-size:11px;letter-spacing:0.22em;text-transform:uppercase;color:#c9a227;margin:0 0 10px\">${safeTitle}</div>
-      <table style=\"width:100%;border-collapse:collapse\">${rowsHtml}</table>
-    </div>
-  `;
 }
 
 function logAdminOrderEvent(message: string, meta?: Record<string, unknown>) {
@@ -79,6 +47,35 @@ function getTrackingLink(carrier: string, fallbackUrl: string) {
   return fallbackUrl;
 }
 
+export async function GET(
+  _request: NextRequest,
+  context: { params: Promise<{ orderId: string }> },
+) {
+  const denied = await adminDenied();
+  if (denied) return denied;
+  const noStore = { "Cache-Control": "no-store" };
+  try {
+    const { orderId } = await context.params;
+    if (!/^MM-[0-9]{4}-[A-Z0-9]{8}$/.test(orderId))
+      return NextResponse.json({ error: "Identifiant invalide." }, { status: 400, headers: noStore });
+    const order = (await readOrders()).find((item) => item.orderId === orderId);
+    if (!order) return NextResponse.json({ error: "Commande introuvable." }, { status: 404, headers: noStore });
+    let finance: Record<string, unknown> | null = null;
+    try {
+      finance = (await database().query(
+        `SELECT payment_status,shipment_status,subtotal_cents,discount_cents,
+          shipping_cents,total_cents,refunded_cents,internal_notes,created_at,updated_at
+         FROM mm_commerce_order_financials WHERE order_id=$1`,
+        [orderId],
+      )).rows[0] || null;
+    } catch {}
+    const [presented] = await presentAdminOrders([order]);
+    return NextResponse.json({ order: presented, finance }, { headers: noStore });
+  } catch {
+    return NextResponse.json({ error: "Détail de commande indisponible." }, { status: 503, headers: noStore });
+  }
+}
+
 export async function PATCH(
   req: NextRequest,
   context: { params: Promise<{ orderId: string }> },
@@ -86,7 +83,10 @@ export async function PATCH(
   const denied = await adminDenied();
   if (denied) return denied;
   const originDenied = mutationAllowed(req);
-  if (originDenied) return originDenied;
+  if (originDenied) {
+    originDenied.headers.set("Cache-Control", "no-store");
+    return originDenied;
+  }
   try {
     const { orderId } = await context.params;
     const body = await readJson(req, orderPatchSchema);
@@ -99,7 +99,7 @@ export async function PATCH(
       : "";
 
     if (nextStatus && !STATUS_VALUES.includes(nextStatus)) {
-      return NextResponse.json({ error: "Statut invalide" }, { status: 400 });
+      return NextResponse.json({ error: "Statut invalide ou non modifiable manuellement." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     }
 
     const orders = await readOrders();
@@ -107,7 +107,7 @@ export async function PATCH(
     if (!existing) {
       return NextResponse.json(
         { error: "Commande introuvable" },
-        { status: 404 },
+        { status: 404, headers: { "Cache-Control": "no-store" } },
       );
     }
 
@@ -121,11 +121,54 @@ export async function PATCH(
       );
     }
 
-    const updated = await updateOrder(orderId, patch);
+    const durable = Boolean(
+      process.env.NEWSLETTER_DATABASE_URL ||
+      process.env.DATABASE_URL ||
+      process.env.NODE_ENV === "production",
+    );
+    let previousShipmentStatus = "";
+    let updated: OrderRecord | null;
+    if (durable) {
+      const committed = await transaction(async (db) => {
+        const row = (await db.query(
+          "SELECT record FROM mm_orders WHERE order_id=$1 FOR UPDATE",
+          [orderId],
+        )).rows[0];
+        if (!row) return null;
+        const before = row.record as OrderRecord;
+        const finance = (await db.query(
+          "SELECT shipment_status FROM mm_commerce_order_financials WHERE order_id=$1 FOR UPDATE",
+          [orderId],
+        )).rows[0];
+        const statusShipmentMap: Record<string, string> = {
+          "En preparation": "preparing", Expediee: "shipped",
+          Livree: "delivered", Annulee: "cancelled",
+        };
+        previousShipmentStatus = String(finance?.shipment_status || statusShipmentMap[before.status] || "unfulfilled");
+        if (nextStatus === "Annulee" && ["shipped", "delivered"].includes(previousShipmentStatus))
+          throw new Error("SHIPPED_ORDER_CANCELLATION_BLOCKED");
+        const next = { ...before, ...patch } as OrderRecord;
+        await db.query("UPDATE mm_orders SET record=$2,updated_at=now() WHERE order_id=$1", [orderId, JSON.stringify(next)]);
+        const shipmentStatus = ({
+          "En preparation": "preparing", Expediee: "shipped",
+          Livree: "delivered", Annulee: "cancelled",
+        } as Record<string, string>)[String(nextStatus)];
+        if (shipmentStatus) {
+          await db.query(
+            "UPDATE mm_commerce_order_financials SET shipment_status=$2,updated_at=now() WHERE order_id=$1",
+            [orderId, shipmentStatus],
+          );
+        }
+        return next;
+      });
+      updated = committed;
+    } else {
+      updated = await updateOrder(orderId, patch);
+    }
     if (!updated) {
       return NextResponse.json(
         { error: "Mise a jour impossible" },
-        { status: 500 },
+        { status: 500, headers: { "Cache-Control": "no-store" } },
       );
     }
 
@@ -135,66 +178,11 @@ export async function PATCH(
       trackingNumber: nextTracking || updated.trackingNumber || "",
     });
 
-    const fromEmail = getEmailFrom();
-    const adminEmail = getAdminEmail();
-    if (fromEmail && adminEmail) {
-      try {
-        const baseStyle =
-          "font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;max-width:640px;margin:0 auto;background:#ffffff;";
-        const trackingUrl = updated.trackingNumber
-          ? getTrackingLink(
-              updated.shipping.carrier,
-              updated.trackingUrl || updated.shipping.trackingBaseUrl,
-            )
-          : updated.trackingUrl || updated.shipping.trackingBaseUrl;
-
-        const customerHtml = `
-          <div style=\"${baseStyle}padding:0\">
-            <div style=\"background:linear-gradient(135deg,#1a1408,#2c2010);padding:24px\">
-              <div style=\"color:#e8d08a;font-size:11px;letter-spacing:0.3em;text-transform:uppercase\">MAISON MIROIR</div>
-              <div style=\"color:#fff;font-size:18px;font-weight:600;margin-top:6px\">Mise a jour de votre commande #${escapeHtml(updated.orderId)}</div>
-            </div>
-            <div style=\"padding:20px 24px\">
-              <div style=\"font-size:14px;color:#1f1a12;line-height:1.8;margin-bottom:12px\">Bonjour ${escapeHtml(updated.customer.firstName)}, votre commande a ete mise a jour.</div>
-              ${buildSection("Etat de commande", [
-                ["Numero de commande", updated.orderId],
-                ["Nouveau statut", updated.status],
-                ["Transporteur", updated.shipping.carrier],
-                ["Mode de livraison", updated.shipping.label],
-                ["Numero de suivi", updated.trackingNumber || ""],
-                ["Lien de suivi", trackingUrl],
-                ["Delai estime restant", updated.shipping.estimatedDelay],
-              ])}
-              ${buildSection("Resume", [
-                ["Sous-total produits", `${updated.subtotal.toFixed(2)} EUR`],
-                ["Livraison", `${updated.shipping.price.toFixed(2)} EUR`],
-                ["Total paye", `${updated.total.toFixed(2)} EUR`],
-              ])}
-              <div style=\"color:#999;font-size:12px;line-height:1.7\">Vous recevrez un nouvel email a chaque etape cle de votre commande.</div>
-            </div>
-          </div>
-        `;
-
-        await sendEmailOrThrow({
-          from: fromEmail,
-          to: updated.customer.email,
-          replyTo: adminEmail,
-          subject: `Mise a jour commande - #${updated.orderId}`,
-          html: customerHtml.replace(
-            "[" +
-              "updated.trackingUrl || updated.shipping.trackingBaseUrl" +
-              "]",
-            trackingUrl,
-          ),
-        });
-        logAdminOrderEvent("email suivi envoyé", {
-          orderId,
-          to: updated.customer.email,
-        });
-      } catch (emailError) {
-        const message = normalizeEmailError(emailError);
-        void message;
-        securityEvent("ORDER_EMAIL_UPDATE_FAILED");
+    if (durable && nextStatus && existing.status !== nextStatus) {
+      if (nextStatus === "Annulee") {
+        await sendCommerceOrderNotification(updated, "cancellation", "cancelled");
+      } else if (nextStatus === "Expediee" || nextStatus === "Livree") {
+        await sendCommerceOrderNotification(updated, "shipment_confirmation", nextStatus);
       }
     }
 
@@ -212,12 +200,17 @@ export async function PATCH(
         },
       };
     }
-    return NextResponse.json({ success: true, order: safeOrder });
+    return NextResponse.json({ success: true, order: safeOrder }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
-    if (error instanceof InputError) return inputResponse(error);
+    if (error instanceof InputError) return NextResponse.json(
+      { error: "Requête invalide." },
+      { status: error.status, headers: { "Cache-Control": "no-store" } },
+    );
+    if (error instanceof Error && error.message === "SHIPPED_ORDER_CANCELLATION_BLOCKED")
+      return NextResponse.json({ error: "Une commande expédiée ou livrée ne peut pas être annulée ici." }, { status: 409, headers: { "Cache-Control": "no-store" } });
     return NextResponse.json(
       { error: "Echec de mise a jour" },
-      { status: 500 },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
     );
   }
 }

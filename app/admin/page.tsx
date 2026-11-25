@@ -37,6 +37,16 @@ type Dashboard = {
     lastResendEventAt: string | null;
   };
   metricsAvailability: { opens: boolean; clicks: boolean };
+  commerce: {
+    paidOrders: number;
+    productSalesCents: number;
+    shippingCents: number;
+    discountsCents: number;
+    refundsCents: number;
+    inventoryProducts: number;
+    unitsAvailable: number;
+  };
+  paypalLive: Record<"environmentConfigured" | "productionEnvironment" | "clientIdConfigured" | "clientSecretConfigured" | "merchantIdConfigured" | "webhookIdConfigured" | "paymentsEnabled" | "shopOpen", boolean>;
 };
 
 const number = (value: number | string | undefined) =>
@@ -96,6 +106,19 @@ export default function AdminDashboard() {
           </section>
 
           <section className="admin-card" style={{ marginTop: 18 }}>
+            <h2>Commerce — données enregistrées</h2>
+            <div className="admin-grid">
+              <div><span>Commandes payées</span><strong>{number(data.commerce.paidOrders)}</strong></div>
+              <div><span>Ventes produits (avant réductions)</span><strong>{money(data.commerce.productSalesCents)}</strong></div>
+              <div><span>Frais de livraison</span><strong>{money(data.commerce.shippingCents)}</strong></div>
+              <div><span>Réductions</span><strong>{money(data.commerce.discountsCents)}</strong></div>
+              <div><span>Remboursements</span><strong>{money(data.commerce.refundsCents)}</strong></div>
+              <div><span>Produits inventoriés</span><strong>{number(data.commerce.inventoryProducts)}</strong></div>
+              <div><span>Unités disponibles</span><strong>{number(data.commerce.unitsAvailable)}</strong></div>
+            </div>
+          </section>
+
+          <section className="admin-card" style={{ marginTop: 18 }}>
             <h2>Inscriptions - 30 derniers jours</h2>
             <SignupChart data={data.signups} />
           </section>
@@ -120,6 +143,18 @@ export default function AdminDashboard() {
               <p>Boutique : {data.service.shopOpen ? "ouverte" : "fermée"}</p>
               <p>Publication automatique des campagnes : {data.service.autoPublish ? "activée" : "désactivée"}</p>
             </div>
+            <div className="admin-card">
+              <h2>Configuration PayPal Live (lecture seule)</h2>
+              <p>Environnement configuré : {data.paypalLive.environmentConfigured ? "oui" : "non"}</p>
+              <p>Environnement production : {data.paypalLive.productionEnvironment ? "configuré" : "non configuré"}</p>
+              <p>Client ID : {data.paypalLive.clientIdConfigured ? "présent" : "absent"}</p>
+              <p>Secret : {data.paypalLive.clientSecretConfigured ? "présent" : "absent"}</p>
+              <p>Marchand : {data.paypalLive.merchantIdConfigured ? "présent" : "absent"}</p>
+              <p>Webhook : {data.paypalLive.webhookIdConfigured ? "présent" : "absent"}</p>
+              <p>Paiements activés : {data.paypalLive.paymentsEnabled ? "true" : "false"}</p>
+              <p>SHOP_OPEN : {data.paypalLive.shopOpen ? "true" : "false"}</p>
+              <p className="admin-muted">Valeurs masquées. Aucun appel PayPal n’est effectué; les paiements restent fermés tant que les indicateurs sont à false.</p>
+            </div>
           </section>
 
           <section className="admin-card" style={{ marginTop: 18 }}>
@@ -138,6 +173,10 @@ export default function AdminDashboard() {
       )}
     </main>
   );
+}
+
+function money(cents: number | string | undefined) {
+  return `${(Number(cents || 0) / 100).toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 }
 
 function SignupChart({ data }: { data: Dashboard["signups"] }) {

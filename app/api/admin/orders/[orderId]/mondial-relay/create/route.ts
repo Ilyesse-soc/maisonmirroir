@@ -8,10 +8,14 @@ import {
   readOrders,
   reserveMondialRelayShipment,
 } from "@/lib/orderStore";
-import { getMondialRelayProductionReadiness, getMondialRelaySettings } from "@/lib/mondialRelaySettings";
+import {
+  getMondialRelayProductionReadiness,
+  getMondialRelaySettings,
+} from "@/lib/mondialRelaySettings";
 import { mutationAllowed } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
 import { MONDIAL_RELAY_POINT_RELAIS_ID } from "@/lib/shipping";
+import { isMondialRelayServiceAllowed } from "@/lib/mondialRelayTypes";
 import type { ShipmentAddress } from "@/lib/mondialRelayApi2";
 
 export const runtime = "nodejs";
@@ -20,17 +24,20 @@ export const dynamic = "force-dynamic";
 const orderIdPattern = /^MM-[0-9]{4}-[A-Z0-9]{8}$/;
 const streetPattern = /^\s*(\d+[A-Za-z]?(?:\s*(?:bis|ter|quater))?)\s+(.+?)\s*$/i;
 
-function senderAddress(): ShipmentAddress | null {
-  const firstName = process.env.MONDIAL_RELAY_SENDER_FIRSTNAME?.trim() || "";
-  const lastName = process.env.MONDIAL_RELAY_SENDER_LASTNAME?.trim() || "";
-  const street = process.env.MONDIAL_RELAY_SENDER_STREET?.trim() || "";
-  const houseNo = process.env.MONDIAL_RELAY_SENDER_HOUSE_NO?.trim() || "";
-  const postalCode = process.env.MONDIAL_RELAY_SENDER_POSTCODE?.trim() || "";
-  const city = process.env.MONDIAL_RELAY_SENDER_CITY?.trim() || "";
-  const country = process.env.MONDIAL_RELAY_SENDER_COUNTRY?.trim().toUpperCase();
-  const phone = process.env.MONDIAL_RELAY_SENDER_PHONE?.trim() || "";
-  const email = process.env.MONDIAL_RELAY_SENDER_EMAIL?.trim() || "";
+function senderAddress(
+  sender: Awaited<ReturnType<typeof getMondialRelaySettings>>["sender"],
+): ShipmentAddress | null {
+  const firstName = sender.firstName.trim();
+  const lastName = sender.lastName.trim();
+  const street = sender.street.trim();
+  const houseNo = sender.houseNo.trim();
+  const postalCode = sender.postalCode.trim();
+  const city = sender.city.trim();
+  const country = sender.countryCode.trim().toUpperCase();
+  const phone = sender.phone.trim();
+  const email = sender.email.trim();
   if (
+    !sender.company.trim() ||
     !firstName ||
     !lastName ||
     !street ||
@@ -50,6 +57,7 @@ function senderAddress(): ShipmentAddress | null {
     countryCode: "FR",
     postalCode,
     city,
+    addressAdd1: sender.company.trim(),
     mobile: phone,
     email,
   };
@@ -81,7 +89,7 @@ export async function POST(
     if (
       !point ||
       point.source !== "production" ||
-      (point.serviceCode !== "24R/MED" && point.serviceCode !== "24R/APM")
+      !["24R/MED", "24R/APM"].includes(point.serviceCode)
     )
       return NextResponse.json(
         { error: "PRODUCTION_RELAY_POINT_REQUIRED" },
@@ -97,6 +105,7 @@ export async function POST(
         { status: 503 },
       );
     if (
+      !isMondialRelayServiceAllowed(settings, point.serviceCode) ||
       point.serviceCode !== settings.serviceCode ||
       !settings.contractParcel.weightGrams ||
       !settings.contractParcel.lengthCm ||
@@ -127,7 +136,7 @@ export async function POST(
         { error: "CUSTOMER_ADDRESS_REQUIRES_HOUSE_NUMBER" },
         { status: 409 },
       );
-    const sender = senderAddress();
+    const sender = senderAddress(settings.sender);
     if (!sender)
       return NextResponse.json(
         { error: "MONDIAL_RELAY_SENDER_PROFILE_INVALID" },
@@ -171,7 +180,7 @@ export async function POST(
           customerNo: orderId,
           serviceCode: point.serviceCode,
           relayLocation: point.location,
-          collectionMode: process.env.MONDIAL_RELAY_COLLECTION_MODE || "",
+          collectionMode: settings.collectionMode,
           sender,
           recipient,
           parcels: [

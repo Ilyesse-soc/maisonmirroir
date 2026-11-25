@@ -129,6 +129,15 @@
 .admin-page label > textarea {
   margin-top: 5px;
 }
+.admin-page input[type="checkbox"] {
+  width: auto;
+  margin-right: 6px;
+}
+.admin-page fieldset {
+  margin: 16px 0;
+  border: 1px solid #eadfcf;
+  padding: 12px;
+}
 .admin-table-wrap {
   overflow-x: auto;
 }

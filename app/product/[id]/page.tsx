@@ -75,7 +75,12 @@ function UnavailableProduct({ product }: { product: Product }) {
 
 function ProductDetails({ productId }: { productId: string }) {
   const product = getProductById(productId);
-  const { addItem, getShippingPriceQuote } = useCart();
+  const {
+    addItem,
+    getShippingPriceQuote,
+    getProductPrice,
+    isProductAvailable,
+  } = useCart();
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [customValues, setCustomValues] = useState<Record<string, string>>({});
@@ -134,7 +139,13 @@ function ProductDetails({ productId }: { productId: string }) {
         </Link>
       </div>
     );
-  if (product.availableForSale !== true)
+  const inventoryManaged =
+    product.id === "modest-era" || product.id === "paradise-way";
+  const isAvailable = isProductAvailable(
+    product.id,
+    product.availableForSale === true,
+  );
+  if (!inventoryManaged && product.availableForSale !== true)
     return <UnavailableProduct product={product} />;
 
   const handleCustomChange = (field: string, value: string) => {
@@ -175,7 +186,7 @@ function ProductDetails({ productId }: { productId: string }) {
   };
 
   const computeUnitPrice = () => {
-    let price = product.price;
+    let price = getProductPrice(product.id, product.price);
     const entries = Object.entries(product.options ?? {});
     for (const [key] of entries) {
       if (key === "artworkFile") continue;
@@ -291,9 +302,9 @@ function ProductDetails({ productId }: { productId: string }) {
     }
   }
 
-  const handleAddToCart = () => {
-    if (product.availableForSale !== true) {
-      setError("Cette collection n’est pas encore ouverte à la commande.");
+  const handleAddToCart = async () => {
+    if (!isAvailable) {
+      setError("Victime de son succès");
       return;
     }
     const q = parseQuantity(quantity);
@@ -314,7 +325,7 @@ function ProductDetails({ productId }: { productId: string }) {
         Math.min(Math.max(selectedImageIndex, 0), product.images.length - 1)
       ];
 
-    addItem({
+    const added = await addItem({
       productId: product.id,
       name: product.name,
       category: product.category,
@@ -334,12 +345,14 @@ function ProductDetails({ productId }: { productId: string }) {
           ]
         : [],
     });
-    setError("");
+    setError(
+      added ? "" : "Victime de son succès. Veuillez réessayer ultérieurement.",
+    );
   };
 
   const validateStep = () => {
-    if (product.availableForSale !== true) {
-      setError("Cette collection n’est pas encore ouverte à la commande.");
+    if (!isAvailable) {
+      setError("Victime de son succès");
       return;
     }
     if (step === "customize") {
@@ -539,11 +552,15 @@ function ProductDetails({ productId }: { productId: string }) {
             >
               {product.name}
             </h1>
-            {product.availableForSale !== true && (
+            {inventoryManaged ? (
+              <p className="product-availability" role="status">
+                {isAvailable ? "Disponible" : "Victime de son succès"}
+              </p>
+            ) : product.availableForSale !== true ? (
               <p className="product-availability" role="status">
                 Bientôt disponible - les commandes ne sont pas encore ouvertes.
               </p>
-            )}
+            ) : null}
             {typeof product.originalPrice === "number" &&
             product.originalPrice > unitPrice ? (
               <div
@@ -931,31 +948,31 @@ function ProductDetails({ productId }: { productId: string }) {
                 <button
                   className="btn-gold"
                   onClick={validateStep}
-                  disabled={product.availableForSale !== true}
+                  disabled={!isAvailable}
                   style={{
                     ...buttonGoldStyle({ fullWidth: true }),
                     marginTop: 16,
-                    opacity: product.availableForSale === true ? 1 : 0.55,
+                    opacity: isAvailable ? 1 : 0.55,
                     cursor:
-                      product.availableForSale === true
+                      isAvailable
                         ? "pointer"
                         : "not-allowed",
                   }}
                 >
-                  {product.availableForSale === true
+                  {isAvailable
                     ? "Continuer →"
-                    : "Bientôt disponible"}
+                    : "Victime de son succès"}
                 </button>
                 <button
                   onClick={handleAddToCart}
-                  disabled={product.availableForSale !== true}
+                  disabled={!isAvailable}
                   style={{
                     ...buttonOutlineGoldStyle({ fullWidth: true }),
                     marginTop: 4,
                     display: "block",
-                    opacity: product.availableForSale === true ? 1 : 0.55,
+                    opacity: isAvailable ? 1 : 0.55,
                     cursor:
-                      product.availableForSale === true
+                      isAvailable
                         ? "pointer"
                         : "not-allowed",
                   }}

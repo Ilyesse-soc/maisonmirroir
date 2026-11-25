@@ -1,12 +1,8 @@
 import { markCartOrdered } from "@/lib/abandonedCarts";
 import {
   incomingOrderSchema,
-  verifiedPayPalOrder,
 } from "@/lib/commerceSecurity";
-import {
-  verifyCheckoutQuoteProof,
-  CheckoutQuoteProofError,
-} from "@/lib/checkoutQuoteProof";
+import { captureAndVerifyPayPalOrder } from "@/lib/commerceSecurity";
 import {
   readJson,
   mutationAllowed,
@@ -15,8 +11,16 @@ import {
 } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
 import { NextRequest, NextResponse } from "next/server";
-import { randomUUID } from "crypto";
-import { saveOrder } from "@/lib/orderStore";
+import {
+  CommerceError,
+  checkoutRequestDigest,
+  finalizeCommercePayment,
+  getCommerceReservation,
+  releaseCommerceReservation,
+  sendCommerceEmailOnce,
+  sendFinalizedCommerceEmails,
+  verifyCommerceCheckoutProof,
+} from "@/lib/commerceInventory";
 import type {
   CustomerInfo,
   OrderPayload,
@@ -33,14 +37,12 @@ import {
   getAdminEmail,
   getEmailFrom,
   normalizeEmailError,
-  sendEmailOrThrow,
 } from "@/lib/email";
 
 type IncomingBody = {
   paymentMethod?: PaymentMethod;
   paypalOrderId?: string;
   checkoutProof?: string;
-  paypalCapture?: unknown;
   order: OrderPayload;
 };
 
@@ -87,12 +89,6 @@ function isValidPhone(value: unknown): value is string {
 
 function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
-}
-
-function generateOrderId(now = new Date()): string {
-  const year = now.getFullYear();
-  const suffix = randomUUID().split("-")[0].toUpperCase();
-  return `MM-${year}-${suffix}`;
 }
 
 function buildSection(title: string, rows: Array<[string, string]>): string {
@@ -147,6 +143,10 @@ export async function POST(req: NextRequest) {
   try {
     const denied = mutationAllowed(req);
     if (denied) return denied;
+    if (process.env.SHOP_OPEN !== "true")
+      return NextResponse.json({ error: "SHOP_CLOSED" }, { status: 403 });
+    if (process.env.REAL_PAYMENTS_ENABLED !== "true")
+      return NextResponse.json({ error: "PAYMENTS_DISABLED" }, { status: 403 });
     const rawBody = (await readJson(
       req,
       incomingOrderSchema,
@@ -157,19 +157,6 @@ export async function POST(req: NextRequest) {
         { error: "CHECKOUT_PROOF_REQUIRED" },
         { status: 400 },
       );
-    let checkout: ReturnType<typeof verifyCheckoutQuoteProof>;
-    try {
-      checkout = verifyCheckoutQuoteProof(
-        rawBody.checkoutProof,
-        rawBody.paypalOrderId,
-        rawBody.order,
-      );
-    } catch (error) {
-      if (error instanceof CheckoutQuoteProofError)
-        return NextResponse.json({ error: error.code }, { status: 400 });
-      throw error;
-    }
-
     const paymentMethod = rawBody.paymentMethod;
     if (paymentMethod !== "PAYPAL") {
       return NextResponse.json(
@@ -177,16 +164,72 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    const reservation = await getCommerceReservation(rawBody.paypalOrderId);
+    if (!reservation)
+      return NextResponse.json(
+        { error: "RESERVATION_NOT_FOUND" },
+        { status: 409 },
+      );
+    const snapshot = reservation.order_snapshot;
+    try {
+      verifyCommerceCheckoutProof(
+        rawBody.checkoutProof,
+        reservation.reservation_id,
+        rawBody.paypalOrderId,
+        Number(snapshot.expiresAt),
+      );
+    } catch (error) {
+      if (error instanceof CommerceError)
+        return NextResponse.json({ error: error.code }, { status: error.status });
+      throw error;
+    }
+    if (checkoutRequestDigest(rawBody.order) !== snapshot.requestDigest)
+      return NextResponse.json(
+        { error: "CHECKOUT_PROOF_MISMATCH_OR_EXPIRED" },
+        { status: 409 },
+      );
+    if (reservation.status === "completed" && reservation.order_id) {
+      const completed = await finalizeCommercePayment(
+        rawBody.paypalOrderId,
+        "",
+      );
+      let emailWarnings: string[] = [];
+      if (!("expired" in completed) && completed.orderRecord)
+        emailWarnings = await sendFinalizedCommerceEmails(
+          completed.orderRecord as OrderRecord,
+          completed.snapshot,
+        );
+      return NextResponse.json({
+        success: true,
+        orderId: reservation.order_id,
+        paymentMethod: "PAYPAL",
+        subtotal: (Number(snapshot.subtotalCents) / 100).toFixed(2),
+        shipping: (Number(snapshot.shippingCents) / 100).toFixed(2),
+        total: (Number(snapshot.totalCents) / 100).toFixed(2),
+        alreadyFinalized: true,
+        emailWarnings,
+      });
+    }
+    if (reservation.status !== "reserved")
+      return NextResponse.json(
+        { error: "RESERVATION_NOT_ACTIVE" },
+        { status: 409 },
+      );
+    const checkout = {
+      items: snapshot.items as ProductInfo[],
+      relayPoint: snapshot.relayPoint as OrderPayload["relayPoint"],
+      subtotalCents: Number(snapshot.subtotalCents),
+      discountCents: Number(snapshot.discountCents),
+      shippingCents: Number(snapshot.shippingCents),
+      totalCents: Number(snapshot.totalCents),
+    };
 
     logOrderEvent("paiement validé", {
       paymentMethod,
       paypalOrderId: isNonEmptyString(rawBody.paypalOrderId)
         ? rawBody.paypalOrderId
         : null,
-      hasPaypalCapture: Boolean(rawBody.paypalCapture),
     });
-
-    const orderId = generateOrderId();
 
     // Accept both payload formats:
     // 1) current app payload: { order: { product, customValues, customer } }
@@ -375,7 +418,48 @@ export async function POST(req: NextRequest) {
     const subtotal = checkout.subtotalCents / 100;
     const shippingPrice = checkout.shippingCents / 100;
     const total = checkout.totalCents / 100;
-    await verifiedPayPalOrder(String(rawBody.paypalOrderId || ""), total);
+    let capture: { captureId: string };
+    try {
+      capture = await captureAndVerifyPayPalOrder(
+        rawBody.paypalOrderId,
+        checkout.totalCents,
+      );
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        ["PAYMENT_CAPTURE_FAILED", "PAYMENT_NOT_COMPLETED"].includes(
+          error.message,
+        )
+      )
+        await releaseCommerceReservation(
+          reservation.reservation_id,
+          "payment_failed",
+        );
+      if (
+        error instanceof Error &&
+        /^PAYMENT_(?:CAPTURE_FAILED|NOT_COMPLETED|AMOUNT_MISMATCH|MERCHANT_MISMATCH)$/.test(
+          error.message,
+        )
+      )
+        return NextResponse.json(
+          { error: error.message },
+          { status: 402 },
+        );
+      throw error;
+    }
+    const finalized = await finalizeCommercePayment(
+      rawBody.paypalOrderId,
+      capture.captureId,
+    );
+    if ("expired" in finalized)
+      return NextResponse.json(
+        { error: "RESERVATION_EXPIRED" },
+        { status: 409 },
+      );
+    const orderId = finalized.orderId;
+    const finalOrderRecord = finalized.orderRecord as OrderRecord | null;
+    if (!finalOrderRecord)
+      throw new CommerceError("ORDER_FINALIZATION_FAILED", 503);
 
     const safeCustomValues =
       customValues && typeof customValues === "object" ? customValues : {};
@@ -485,6 +569,14 @@ export async function POST(req: NextRequest) {
           </div>
           ${buildSection("Totaux", [
             ["Sous-total", `${formatEuro(subtotal)}`],
+            ...(checkout.discountCents > 0
+              ? [
+                  [
+                    "Réduction",
+                    `-${formatEuro(checkout.discountCents / 100)}`,
+                  ] as [string, string],
+                ]
+              : []),
             ["Livraison", `${formatEuro(shippingPrice)}`],
             ["Total final TTC", `${formatEuro(total)}`],
           ])}
@@ -523,6 +615,14 @@ export async function POST(req: NextRequest) {
             ],
             ["Nombre d'articles", String(normalizedItems.length)],
             ["Sous-total", `${formatEuro(subtotal)}`],
+            ...(checkout.discountCents > 0
+              ? [
+                  [
+                    "Réduction",
+                    `-${formatEuro(checkout.discountCents / 100)}`,
+                  ] as [string, string],
+                ]
+              : []),
             ["Livraison", `${formatEuro(shippingPrice)}`],
             ["Total paye", `${formatEuro(total)}`],
             ["Référence", orderId],
@@ -551,41 +651,6 @@ export async function POST(req: NextRequest) {
       </div>
     `;
 
-    const orderRecord: OrderRecord = {
-      orderId,
-      orderDate: new Date().toISOString(),
-      paymentMethod,
-      paypalOrderId: isNonEmptyString(rawBody.paypalOrderId)
-        ? rawBody.paypalOrderId
-        : undefined,
-      customer: {
-        firstName: customer.firstName,
-        lastName: customer.lastName,
-        email: customer.email,
-        phone: customer.phone || "",
-        street: customer.street,
-        city: customer.city,
-        zip: customer.zip,
-        country: customer.country || "France",
-      },
-      items: normalizedItems,
-      customValues: safeCustomValues,
-      shipping: {
-        id: shippingMethod?.id || shippingMethodId,
-        label: shippingMethod?.label || "",
-        shortLabel: shippingMethod?.shortLabel || "",
-        carrier: shippingMethod?.carrier || "Mondial Relay",
-        price: shippingPrice,
-        estimatedDelay: shippingMethod?.estimatedDelay || "",
-        trackingBaseUrl: shippingMethod?.trackingBaseUrl || "",
-        ...(relayPoint ? { relayPoint } : {}),
-      },
-      subtotal,
-      total,
-      status: "Payee",
-    };
-
-    await saveOrder(orderRecord);
     await markCartOrdered(req.cookies.get("mm_cart")?.value).catch(() =>
       securityEvent("CART_ORDER_SYNC_FAILED"),
     );
@@ -627,9 +692,10 @@ export async function POST(req: NextRequest) {
             to: adminEmail,
             provider: "resend",
           });
-          const sellerResult = await sendEmailOrThrow({
-            from: fromEmail,
-            to: adminEmail,
+          const sellerResult = await sendCommerceEmailOnce({
+            orderId,
+            type: "new_order_admin",
+            recipient: adminEmail,
             replyTo: customer.email,
             subject,
             html: sellerHtml,
@@ -663,9 +729,10 @@ export async function POST(req: NextRequest) {
           to: customer.email,
           provider: "resend",
         });
-        const customerResult = await sendEmailOrThrow({
-          from: fromEmail,
-          to: customer.email,
+        const customerResult = await sendCommerceEmailOnce({
+          orderId,
+          type: "order_confirmation",
+          recipient: customer.email,
           replyTo: isAdminEmailValid ? adminEmail : undefined,
           subject: `Confirmation de votre commande - #${orderId}`,
           html: customerHtml,
@@ -700,6 +767,22 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     if (err instanceof InputError) return inputResponse(err);
+    if (err instanceof CommerceError)
+      return NextResponse.json(
+        { error: err.code },
+        { status: err.status },
+      );
+    if (err instanceof Error && err.message.startsWith("PAYMENT_"))
+      return NextResponse.json(
+        { error: err.message },
+        {
+          status:
+            err.message.includes("UNAVAILABLE") ||
+            err.message.includes("NOT_CONFIGURED")
+              ? 503
+              : 402,
+        },
+      );
     if (err instanceof Error && err.message === "DUPLICATE_PAYMENT")
       return NextResponse.json(
         { error: "Cette référence de paiement a déjà été traitée." },

@@ -44,6 +44,7 @@ export async function sendEmailOrThrow(params: {
   subject: string;
   html: string;
   replyTo?: string;
+  idempotencyKey?: string;
   attachments?: Array<{
     filename: string;
     contentType: string;
@@ -55,14 +56,19 @@ export async function sendEmailOrThrow(params: {
   if (!resend) throw new Error("RESEND_API_KEY is not configured");
   if (!from) throw new Error("EMAIL_FROM or RESEND_FROM is not configured");
 
-  const result = await resend.emails.send({
-    from,
-    to: Array.isArray(params.to) ? params.to : [params.to],
-    subject: params.subject,
-    html: params.html,
-    replyTo: params.replyTo,
-    attachments: params.attachments,
-  });
+  const result = await resend.emails.send(
+    {
+      from,
+      to: Array.isArray(params.to) ? params.to : [params.to],
+      subject: params.subject,
+      html: params.html,
+      replyTo: params.replyTo,
+      attachments: params.attachments,
+    },
+    params.idempotencyKey
+      ? { idempotencyKey: params.idempotencyKey }
+      : undefined,
+  );
 
   if (result.error) {
     const providerError = result.error;

@@ -7,7 +7,6 @@ import type { CartAttachment, CartItem } from "@/lib/cart";
 import type { CustomerInfo } from "@/lib/orderTypes";
 import type { ShippingMethod } from "@/lib/shipping";
 import type { RelayPoint } from "@/lib/mondialRelayTypes";
-import { getProductById } from "@/lib/products";
 import { useCart } from "@/components/CartProvider";
 
 export default function CartCheckoutButton({
@@ -17,6 +16,7 @@ export default function CartCheckoutButton({
   relayPoint,
   shippingPrice,
   checkoutEnabled,
+  promotionCode,
   attachments = [],
   onSuccess,
 }: {
@@ -26,11 +26,15 @@ export default function CartCheckoutButton({
   relayPoint: RelayPoint | null;
   shippingPrice: number | null;
   checkoutEnabled: boolean;
+  promotionCode?: string;
   attachments?: CartAttachment[];
   onSuccess?: (orderId: string) => void;
 }) {
   const router = useRouter();
-  const { paypalClientId: clientId } = useCart();
+  const {
+    paypalClientId: clientId,
+    isProductAvailable,
+  } = useCart();
   const checkoutProofRef = useRef("");
   const [status, setStatus] = useState<"idle" | "processing" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
@@ -42,10 +46,9 @@ export default function CartCheckoutButton({
   );
   const resolvedShippingPrice = shippingPrice ?? 0;
   const total = subtotal + resolvedShippingPrice;
-  const unavailableItems = items.filter((item) => {
-    const product = getProductById(item.productId);
-    return !product || product.availableForSale !== true;
-  });
+  const unavailableItems = items.filter(
+    (item) => !isProductAvailable(item.productId, true),
+  );
   const checkoutOrder = {
     items: items.map((item) => ({
       id: item.productId,
@@ -70,6 +73,7 @@ export default function CartCheckoutButton({
     shippingMethodId: shippingMethod.id,
     relayPoint: relayPoint || undefined,
     attachments,
+    promotionCode,
     customer,
   };
 
@@ -149,7 +153,7 @@ export default function CartCheckoutButton({
             checkoutProofRef.current = data.checkoutProof;
             return data.id;
           }}
-          onApprove={async (data, actions) => {
+          onApprove={async (data) => {
             if (status === "processing") return;
             if (!checkoutProofRef.current) {
               setStatus("error");
@@ -160,18 +164,6 @@ export default function CartCheckoutButton({
             }
             setStatus("processing");
             setErrorMessage("");
-
-            let capture: unknown = null;
-            try {
-              if (!actions.order) throw new Error("PayPal capture unavailable");
-              capture = await actions.order.capture();
-            } catch {
-              setStatus("error");
-              setErrorMessage(
-                "Le paiement n'a pas pu être capturé. Veuillez réessayer.",
-              );
-              return;
-            }
 
             const sentKey = `mm:orderSent:${data.orderID}`;
             const alreadySent =
@@ -188,7 +180,6 @@ export default function CartCheckoutButton({
                 paymentMethod: "PAYPAL",
                 paypalOrderId: data.orderID,
                 checkoutProof: checkoutProofRef.current,
-                paypalCapture: capture,
                 order: checkoutOrder,
               };
 
@@ -198,7 +189,14 @@ export default function CartCheckoutButton({
                 body: JSON.stringify(payload),
               });
 
-              if (!res.ok) throw new Error(`ORDER_API_FAILED_${res.status}`);
+              if (!res.ok) {
+                const errorData = (await res.json().catch(() => ({}))) as {
+                  error?: string;
+                };
+                throw new Error(
+                  errorData.error || `ORDER_API_FAILED_${res.status}`,
+                );
+              }
               const apiData = (await res.json()) as {
                 orderId?: string;
                 total?: string;
@@ -265,14 +263,17 @@ export default function CartCheckoutButton({
               } catch {
                 // ignore
               }
-            } catch {
+            } catch (error) {
               console.error(
                 "[checkout] order confirmation failed after PayPal capture",
                 { paypalOrderId: data.orderID },
               );
               setStatus("error");
               setErrorMessage(
-                "PayPal a confirmé la capture, mais la commande n’a pas pu être confirmée. Ne relancez pas le paiement et contactez MAISON MIROIR.",
+                error instanceof Error &&
+                  error.message.includes("PAYMENT_CAPTURE")
+                  ? "Le paiement n’a pas pu être confirmé. Vérifiez votre compte PayPal avant de réessayer."
+                  : "La confirmation du paiement a échoué. Ne relancez pas le paiement et contactez MAISON MIROIR.",
               );
               return;
             }
@@ -280,9 +281,19 @@ export default function CartCheckoutButton({
             onSuccess?.(data.orderID);
             router.push("/success");
           }}
-          onError={() => {
+          onError={(error) => {
             setStatus("error");
-            setErrorMessage("Erreur PayPal. Veuillez réessayer.");
+            const message =
+              error instanceof Error ? error.message : "PAYMENT_FAILED";
+            setErrorMessage(
+              message.includes("FIRSTPRINCESS1_EXHAUSTED")
+                ? "Cette offre a atteint sa limite d’utilisation."
+                : message.includes("FIRSTPRINCESS1_INVALID")
+                  ? "Ce code promotionnel est invalide."
+                  : message.includes("INVENTORY_UNAVAILABLE")
+                    ? "Victime de son succès"
+                    : `Erreur de paiement (${message}). Veuillez réessayer.`,
+            );
           }}
           onCancel={() => {
             setStatus("idle");

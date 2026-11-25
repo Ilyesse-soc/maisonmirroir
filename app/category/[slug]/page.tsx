@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import ProductImageGallery from "@/components/ProductImageGallery";
+import PublicCatalogMeta from "@/components/PublicCatalogMeta";
 import { getProductsByCategory, categories } from "@/lib/products";
 import { dividerStyle, fonts, pageMaxWidth, theme } from "@/lib/uiStyles";
 
@@ -141,7 +142,14 @@ export default async function CategoryPage({
                     >
                       {product.name}
                     </h3>
-                    {typeof product.originalPrice === "number" &&
+                    {["modest-era", "paradise-way"].includes(product.id) ? (
+                      <PublicCatalogMeta
+                        productId={product.id}
+                        fallbackPrice={product.price}
+                        fallbackAvailable={product.availableForSale}
+                        className="mm-prod-live-meta"
+                      />
+                    ) : typeof product.originalPrice === "number" &&
                     product.originalPrice > product.price ? (
                       <div
                         style={{

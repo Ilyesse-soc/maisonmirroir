@@ -36,6 +36,12 @@ export default function CheckoutPage() {
   const [relaySearchError, setRelaySearchError] = useState("");
   const [relaySearchMessage, setRelaySearchMessage] = useState("");
   const [relaySearchBusy, setRelaySearchBusy] = useState(false);
+  const [promotionInput, setPromotionInput] = useState("");
+  const [promotionCode, setPromotionCode] = useState("");
+  const [promotionDiscountCents, setPromotionDiscountCents] = useState(0);
+  const [promotionCartKey, setPromotionCartKey] = useState("");
+  const [promotionMessage, setPromotionMessage] = useState("");
+  const [promotionBusy, setPromotionBusy] = useState(false);
   const [address, setAddress] = useState({
     firstName: "",
     lastName: "",
@@ -55,7 +61,64 @@ export default function CheckoutPage() {
   );
 
   const subtotal = getCartSubtotal(items);
-  const total = subtotal + (selectedShippingPrice ?? 0);
+  const currentCartKey = items
+    .map((item) => `${item.productId}:${item.quantity}:${item.unitPrice}`)
+    .join("|");
+  const currentPromotionDiscount =
+    promotionCartKey === currentCartKey ? promotionDiscountCents : 0;
+  const currentPromotionCode =
+    promotionCartKey === currentCartKey ? promotionCode : "";
+  const total =
+    subtotal -
+    currentPromotionDiscount / 100 +
+    (selectedShippingPrice ?? 0);
+
+  async function applyPromotion() {
+    setPromotionBusy(true);
+    setPromotionMessage("");
+    try {
+      const response = await fetch("/api/promotions/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({
+          code: promotionInput.trim(),
+          items: items.map((item) => ({
+            id: item.productId,
+            quantity: item.quantity,
+          })),
+        }),
+      });
+      const data = (await response.json()) as {
+        code?: string;
+        discountCents?: number;
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok || typeof data.discountCents !== "number")
+        throw new Error(
+          data.message ||
+            (data.error === "FIRSTPRINCESS1_EXHAUSTED"
+              ? "Cette offre a atteint sa limite d’utilisation."
+              : "Ce code promotionnel est invalide."),
+        );
+      setPromotionCode(data.code || promotionInput.trim().toUpperCase());
+      setPromotionDiscountCents(data.discountCents);
+      setPromotionCartKey(currentCartKey);
+      setPromotionMessage("Code promotionnel appliqué.");
+    } catch (error) {
+      setPromotionCode("");
+      setPromotionDiscountCents(0);
+      setPromotionCartKey("");
+      setPromotionMessage(
+        error instanceof Error
+          ? error.message
+          : "Ce code promotionnel est invalide.",
+      );
+    } finally {
+      setPromotionBusy(false);
+    }
+  }
 
   if (items.length === 0) {
     return (
@@ -514,6 +577,49 @@ export default function CheckoutPage() {
               ))}
             </div>
 
+            <div style={{ display: "grid", gap: 8, marginBottom: 18 }}>
+              <label
+                htmlFor="checkout-promotion-code"
+                style={{
+                  fontFamily: fonts.body,
+                  fontSize: 11,
+                  letterSpacing: "0.16em",
+                  textTransform: "uppercase",
+                  color: theme.textMid,
+                }}
+              >
+                Code promotionnel
+              </label>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  id="checkout-promotion-code"
+                  value={promotionInput}
+                  onChange={(event) => {
+                    setPromotionInput(event.target.value);
+                    setPromotionCode("");
+                    setPromotionDiscountCents(0);
+                    setPromotionCartKey("");
+                    setPromotionMessage("");
+                  }}
+                  maxLength={80}
+                  style={{ ...buttonOutlineGoldStyle(), minWidth: 0, flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={applyPromotion}
+                  disabled={promotionBusy || !promotionInput.trim()}
+                  style={buttonOutlineGoldStyle({ fullWidth: false })}
+                >
+                  {promotionBusy ? "Vérification…" : "Appliquer"}
+                </button>
+              </div>
+              {promotionMessage && (
+                <p role="status" style={{ margin: 0, fontSize: 12 }}>
+                  {promotionMessage}
+                </p>
+              )}
+            </div>
+
             <div
               style={{
                 display: "grid",
@@ -527,6 +633,12 @@ export default function CheckoutPage() {
                 <span>Sous-total produits</span>
                 <span>{subtotal.toFixed(2)} €</span>
               </div>
+              {currentPromotionDiscount > 0 && (
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Réduction {currentPromotionCode}</span>
+                  <span>-{(currentPromotionDiscount / 100).toFixed(2)} €</span>
+                </div>
+              )}
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Livraison</span>
                 <span>
@@ -572,6 +684,7 @@ export default function CheckoutPage() {
                 relayPoint={relayPoint}
                 shippingPrice={selectedShippingPrice}
                 checkoutEnabled={checkoutEnabled}
+                promotionCode={currentPromotionCode || undefined}
               />
             </div>
 

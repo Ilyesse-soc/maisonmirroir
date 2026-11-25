@@ -286,8 +286,6 @@ export function CartProvider({
     if (cart.shippingMethodId !== nextMethod || cart.relayPoint)
       writeCart({ ...cart, shippingMethodId: nextMethod, relayPoint: null });
   }, [shippingConfig, shippingMethodId, items]);
-  const selectedMethod = getShippingMethodById(shippingMethodId);
-  const isMondialRelayMethod = selectedMethod?.carrier === "Mondial Relay";
   const selectedQuote = getShippingPriceQuote(
     shippingMethodId,
     getCartItemCount(items),
@@ -316,11 +314,7 @@ export function CartProvider({
       shippingConfigurationLoaded &&
       Boolean(shippingConfig?.shopOpen) &&
       Boolean(shippingConfig?.paymentsEnabled) &&
-      (!isMondialRelayMethod ||
-        Boolean(shippingConfig?.realShippingEnabled)) &&
-      Boolean(
-        shippingConfig?.availableShippingMethodIds.includes(shippingMethodId),
-      ),
+      Boolean(shippingConfig?.realShippingEnabled),
     paypalClientId: shippingConfig?.paypalClientId || "",
     promotionCode: promotionCode || "",
     setPromotionCode(code) {

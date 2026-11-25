@@ -56,12 +56,15 @@ export default function PayPalButton({
   order: OrderPayload;
 }) {
   const router = useRouter();
-  const { isProductAvailable } = useCart();
+  const { isProductAvailable, cgvVersion } = useCart();
+  const [acceptTerms, setAcceptTerms] = useState(false);
   const product = getProductById(order.product.id);
   const isAvailable = product
     ? isProductAvailable(product.id, product.availableForSale === true)
     : false;
   const checkoutOrder = {
+    acceptTerms,
+    cgvVersion,
     product: order.product,
     items: [order.product],
     customer: order.customer,
@@ -151,6 +154,11 @@ export default function PayPalButton({
 
   return (
     <div>
+      <label style={{ display: "flex", gap: 8, marginBottom: 16, fontSize: 12 }}>
+        <input type="checkbox" required checked={acceptTerms}
+          onChange={event => setAcceptTerms(event.target.checked)} />
+        <span>J&apos;ai lu et j&apos;accepte les <a href="/conditions-de-vente" target="_blank" rel="noopener noreferrer">Conditions g&#233;n&#233;rales de vente</a>.</span>
+      </label>
       <PayPalScriptProvider
         options={{
           clientId,
@@ -161,8 +169,10 @@ export default function PayPalButton({
       >
         <PayPalButtons
           style={{ layout: "vertical" }}
-          disabled={status === "processing"}
+          disabled={status === "processing" || !acceptTerms || !cgvVersion}
+          forceReRender={[acceptTerms, cgvVersion, order.shipping.id, order.product.quantity]}
           createOrder={async () => {
+            if (!acceptTerms || !cgvVersion) throw new Error("CGV_ACCEPTANCE_REQUIRED");
             checkoutProofRef.current = "";
             const response = await fetch("/api/paypal/create-order", {
               method: "POST",

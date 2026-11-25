@@ -34,15 +34,15 @@ function loadTypeScript(filename, overrides = {}) {
 }
 
 async function main() {
-  process.env.PAYPAL_ENV = "sandbox";
-  process.env.PAYPAL_CLIENT_ID = "sandbox-client-id";
-  process.env.PAYPAL_CLIENT_SECRET = "sandbox-client-secret";
-  process.env.PAYPAL_MERCHANT_ID = "sandbox-merchant-id";
-  process.env.PAYPAL_WEBHOOK_ID = "sandbox-webhook-id";
+  process.env.PAYPAL_ENV = "production";
+  process.env.PAYPAL_CLIENT_ID = "unit-production-client-id";
+  process.env.PAYPAL_CLIENT_SECRET = "unit-production-client-secret";
+  process.env.PAYPAL_MERCHANT_ID = "unit-production-merchant-id";
+  process.env.PAYPAL_WEBHOOK_ID = "unit-production-webhook-id";
 
   const originalFetch = global.fetch;
   let orderStatus = "COMPLETED";
-  let merchantId = "sandbox-merchant-id";
+  let merchantId = "unit-production-merchant-id";
   let capturedAmount = "40.00";
   let signatureStatus = "SUCCESS";
   const calls = [];
@@ -51,9 +51,11 @@ async function main() {
     calls.push({ url, init });
     if (url.endsWith("/v1/oauth2/token"))
       return Response.json({ access_token: "unit-access-token" });
-    if (url.endsWith("/v2/checkout/orders/SANDBOX-ORDER-01"))
+    if (url.endsWith("/v2/checkout/orders"))
+      return Response.json({ id: "PRODORDER0001" });
+    if (url.endsWith("/v2/checkout/orders/PROD-ORDER-01"))
       return Response.json({
-        id: "SANDBOX-ORDER-01",
+        id: "PROD-ORDER-01",
         status: orderStatus,
         purchase_units: [
           {
@@ -76,57 +78,89 @@ async function main() {
 
   const commerce = loadTypeScript("lib/commerceSecurity.ts");
   try {
+    assert.equal(commerce.getPayPalProductionStatus().configured, true);
     assert.equal(
-      await commerce.verifiedPayPalOrder("SANDBOX-ORDER-01", 40),
+      await commerce.createPayPalCheckoutOrder({
+        totalCents: 10425,
+        subtotalCents: 10000,
+        shippingCents: 425,
+        items: [
+          { name: "Modest Era", quantity: 1, unitPriceCents: 10000 },
+        ],
+        customer: {
+          firstName: "Test",
+          lastName: "Client",
+          street: "2 rue de test",
+          city: "Paris",
+          zip: "75001",
+          country: "France",
+        },
+      }),
+      "PRODORDER0001",
+    );
+    const creationCall = calls.find((call) =>
+      call.url.endsWith("/v2/checkout/orders"),
+    );
+    const creationBody = JSON.parse(creationCall.init.body);
+    assert.equal(
+      creationBody.purchase_units[0].amount.value,
+      "104.25",
+    );
+    assert.equal(
+      creationBody.purchase_units[0].amount.breakdown.shipping.value,
+      "4.25",
+    );
+    assert.equal(
+      await commerce.verifiedPayPalOrder("PROD-ORDER-01", 40),
       true,
     );
     assert(
       calls.every((call) =>
-        call.url.startsWith("https://api-m.sandbox.paypal.com/"),
+        call.url.startsWith("https://api-m.paypal.com/"),
       ),
     );
 
     await assert.rejects(
-      commerce.verifiedPayPalOrder("SANDBOX-ORDER-01", 41),
+      commerce.verifiedPayPalOrder("PROD-ORDER-01", 41),
       /PAYMENT_AMOUNT_MISMATCH/,
     );
     capturedAmount = "40.00";
     merchantId = "different-merchant";
     await assert.rejects(
-      commerce.verifiedPayPalOrder("SANDBOX-ORDER-01", 40),
+      commerce.verifiedPayPalOrder("PROD-ORDER-01", 40),
       /PAYMENT_MERCHANT_MISMATCH/,
     );
-    merchantId = "sandbox-merchant-id";
+    merchantId = "unit-production-merchant-id";
     orderStatus = "APPROVED";
     await assert.rejects(
-      commerce.verifiedPayPalOrder("SANDBOX-ORDER-01", 40),
+      commerce.verifiedPayPalOrder("PROD-ORDER-01", 40),
       /PAYMENT_NOT_COMPLETED/,
     );
     orderStatus = "VOIDED";
     await assert.rejects(
-      commerce.verifiedPayPalOrder("SANDBOX-ORDER-01", 40),
+      commerce.verifiedPayPalOrder("PROD-ORDER-01", 40),
       /PAYMENT_NOT_COMPLETED/,
     );
     orderStatus = "COMPLETED";
     process.env.PAYPAL_ENV = "";
     await assert.rejects(
-      commerce.verifiedPayPalOrder("SANDBOX-ORDER-01", 40),
+      commerce.verifiedPayPalOrder("PROD-ORDER-01", 40),
       /PAYMENT_ENV_NOT_CONFIGURED/,
     );
-    process.env.PAYPAL_ENV = "sandbox";
+    process.env.PAYPAL_ENV = "production";
 
     const headers = {
       authAlgo: "SHA256withRSA",
-      certUrl: "https://api-m.sandbox.paypal.com/cert",
-      transmissionId: "sandbox-transmission",
-      transmissionSignature: "sandbox-signature",
+      certUrl: "https://api-m.paypal.com/cert",
+      transmissionId: "production-transmission",
+      transmissionSignature: "production-signature",
       transmissionTime: new Date().toISOString(),
     };
     const event = {
-      id: "WH-SANDBOX-01",
+      id: "WH-PROD-01",
       event_type: "PAYMENT.CAPTURE.COMPLETED",
       create_time: new Date().toISOString(),
-      resource: { id: "CAPTURE-SANDBOX-01" },
+      resource: { id: "CAPTURE-PROD-01" },
     };
     assert.equal(await commerce.verifyPayPalWebhook(headers, event), true);
     signatureStatus = "FAILURE";
@@ -172,9 +206,9 @@ async function main() {
         headers: {
           "content-type": "application/json",
           "paypal-auth-algo": "SHA256withRSA",
-          "paypal-cert-url": "https://api-m.sandbox.paypal.com/cert",
-          "paypal-transmission-id": "sandbox-transmission",
-          "paypal-transmission-sig": "sandbox-signature",
+          "paypal-cert-url": "https://api-m.paypal.com/cert",
+          "paypal-transmission-id": "production-transmission",
+          "paypal-transmission-sig": "production-signature",
           "paypal-transmission-time": new Date().toISOString(),
         },
         body: JSON.stringify(receivedEvent),
@@ -187,30 +221,30 @@ async function main() {
     assert.equal(duplicate.status, 200);
     let rows = await db.query(
       "SELECT event_id,provider_id,event_type FROM mm_webhook_receipts WHERE event_id=$1",
-      ["paypal:WH-SANDBOX-01"],
+      ["paypal:WH-PROD-01"],
     );
     assert.equal(rows.rows.length, 1);
-    assert.equal(rows.rows[0].provider_id, "CAPTURE-SANDBOX-01");
+    assert.equal(rows.rows[0].provider_id, "CAPTURE-PROD-01");
 
     const approved = {
-      id: "WH-SANDBOX-02",
+      id: "WH-PROD-02",
       event_type: "CHECKOUT.ORDER.APPROVED",
       create_time: new Date().toISOString(),
-      resource: { id: "SANDBOX-ORDER-02" },
+      resource: { id: "PROD-ORDER-02" },
     };
     assert.equal((await route.POST(webhookRequest(approved))).status, 200);
     const cancelled = {
-      id: "WH-SANDBOX-03",
+      id: "WH-PROD-03",
       event_type: "CHECKOUT.ORDER.VOIDED",
       create_time: new Date().toISOString(),
-      resource: { id: "SANDBOX-ORDER-03" },
+      resource: { id: "PROD-ORDER-03" },
     };
     assert.equal((await route.POST(webhookRequest(cancelled))).status, 200);
     assert.equal(
       (
         await db.query(
           "SELECT event_id FROM mm_webhook_receipts WHERE event_id=$1",
-          ["paypal:WH-SANDBOX-03"],
+          ["paypal:WH-PROD-03"],
         )
       ).rows.length,
       1,
@@ -224,7 +258,7 @@ async function main() {
 
     await db.close();
     console.log(
-      "PASS: sandbox API URL selection, completed-order amount and merchant checks, rejection of uncompleted orders, webhook signature verification, idempotent PostgreSQL webhook receipts, and cancellation event handling. All PayPal calls were mocked; no real payment or external request was made.",
+      "PASS: production API URL selection, completed-order amount and merchant checks, rejection of uncompleted orders, webhook signature verification, idempotent PostgreSQL webhook receipts, and cancellation event handling. All PayPal calls were mocked; no real payment or external request was made.",
     );
   } finally {
     global.fetch = originalFetch;

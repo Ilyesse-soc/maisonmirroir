@@ -8,7 +8,23 @@ export async function GET() {
   if (denied) return denied;
   try {
     const orders = await readOrders();
-    return NextResponse.json({ orders });
+    return NextResponse.json({
+      orders: orders.map((order) => {
+        const shipment = order.shipping.mondialRelayShipment;
+        if (!shipment) return order;
+        const { labelUrl, ...safeShipment } = shipment;
+        return {
+          ...order,
+          shipping: {
+            ...order.shipping,
+            mondialRelayShipment: {
+              ...safeShipment,
+              labelAvailable: Boolean(labelUrl),
+            },
+          },
+        };
+      }),
+    });
   } catch {
     return NextResponse.json(
       { error: "Impossible de charger les commandes" },

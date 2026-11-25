@@ -41,15 +41,13 @@ public/images/                → Tes vraies photos de produits
 
 ## Livraison
 
-Les méthodes historiques restent définies dans `lib/shipping.ts`. Le tarif Mondial Relay de 4,10 EUR et le tarif domicile de 7,50 EUR qui figuraient dans ce fichier ne sont pas confirmés par le contrat et ne doivent pas être présentés comme officiels.
+`lib/shipping.ts` expose uniquement le Point Relais Mondial Relay. Aucun tarif fixe ou transporteur non configuré n'est proposé. `/admin/settings` permet de saisir le service contractuel 24R/MED ou 24R/APM, le profil colis emballé et la grille tarifaire confirmée. Un prix manquant ou égal à zéro ne génère pas de devis. Les anciennes données de test ne servent jamais au calcul d'une commande.
 
-`/admin/settings` permet de configurer le code Point Relais 24R ou 24L, les grilles de test et les tarifs contractuels par poids. Les valeurs 0,5 kg, 45 x 40 x 5 cm et 4,10 EUR sont réservées à la simulation. Les tarifs contractuels et le profil d'emballage réel restent vides tant qu'ils ne sont pas confirmés.
+La recherche API1 appelle uniquement la production lorsque les identifiants, le service, le profil et les garde-fous sont prêts. Un statut fournisseur invalide produit une erreur explicite; aucun point fictif n'est renvoyé. Le choix de relais est signé côté serveur, lié au service choisi et expire après six heures.
 
-La recherche de Points Relais utilise exclusivement les identifiants API1 de test lorsque l'option sandbox est activée. À défaut, elle renvoie un point fictif explicitement étiqueté comme simulation. Le choix du point est conservé dans le panier et sa valeur `location` est utilisée pour préparer `DeliveryMode.location`.
+Le checkout demande au serveur de recalculer les produits et le tarif avant de créer une commande PayPal. Le serveur vérifie de nouveau le même montant après capture. Une commande payée ne crée pas automatiquement d'expédition. Un administrateur peut confirmer explicitement la création API2 depuis `/admin/orders`; la réservation atomique et les états incertains empêchent les doubles expéditions. L'étiquette PDF est téléchargée par une route protégée et le suivi API1 est actualisé au plus une fois toutes les six heures.
 
-La recherche API1 contrôle le code de réponse `STAT`; un rejet fournisseur est affiché comme erreur et non comme recherche réussie vide. L’administration dispose d’une création d’étiquette API2 strictement sandbox, avec des coordonnées synthétiques et un verrou permanent enregistré dans l’audit admin pour empêcher une seconde tentative. Cette action est disponible seulement si `MONDIAL_RELAY_API2_TEST_ENABLED=true`; le endpoint est fixé au sandbox et n’accepte aucun identifiant de production. Les expéditions des commandes, les paiements et les envois réels restent désactivés. L’API2 ne fournit pas, dans l’intégration présente, de consultation du suivi; le suivi des commandes reste manuel.
-
-Les paiements nécessitent à la fois `SHOP_OPEN=true` et `REAL_PAYMENTS_ENABLED=true`. Ce second verrou est absent par défaut et doit rester désactivé tant que l'ouverture n'a pas été explicitement autorisée.
+Le contrôle de disponibilité requiert la confirmation du contrat, les accès API1 et API2 de production, le service et tarif réels, le profil colis, les coordonnées de l'expéditeur, le mode de collecte `CCC`, PayPal production et tous les drapeaux commerciaux. `SHOP_OPEN`, `REAL_PAYMENTS_ENABLED`, `REAL_SHIPPING_ENABLED`, `REAL_SHIPMENT_CREATION_ENABLED`, `MONDIAL_RELAY_API1_PROD_ENABLED`, `MONDIAL_RELAY_API2_PROD_ENABLED` et `MONDIAL_RELAY_PRODUCTION_CONFIRMED` restent à `false` jusqu'à confirmation métier. Aucun paiement, commande ou envoi réel n'a été exécuté pour valider cette implémentation.
 
 ## 🧾 Emails automatiques
 
@@ -73,22 +71,16 @@ L'espace existant est accessible après connexion à `/77774555474447777554555`,
 - `/admin/newsletter` : brouillons, aperçu mobile/ordinateur, historique et validation manuelle des campagnes.
 - `/admin/miroir-ai` : assistant Gemini côté serveur avec relais Groq optionnel, brouillons uniquement ; désactivé si aucune clé fournisseur n'est configurée.
 - `/admin/calendar` : calendrier marketing et événements persistés.
-- `/admin/settings` : coordonnées et textes de marque, configuration Mondial Relay, profils de colis et test de création d’étiquette API2 sandbox à usage unique. Les secrets ne sont jamais affichés.
-- `/admin/orders` : gestion existante des commandes et du suivi.
+- `/admin/settings` : coordonnées et textes de marque, configuration Mondial Relay et saisie des profils de colis et tarifs contractuels. Les secrets ne sont jamais affichés.
+- `/admin/orders` : gestion des commandes, création explicite des expéditions, téléchargement protégé des étiquettes et actualisation limitée du suivi.
 
 La migration additive `migrations/006_admin_console.sql` ajoute le pré-en-tête des campagnes, le calendrier et les paramètres éditables sans supprimer de données existantes. Les taux d'ouverture et de clic restent indiqués comme indisponibles lorsque le suivi n'existe pas. Une campagne ne peut être approuvée que par une action explicite et seulement si `SHOP_OPEN=true`; ne pas activer ce paramètre avant validation métier. `NEWSLETTER_AUTO_PUBLISH` reste indépendant et doit demeurer désactivé tant qu'une publication automatique n'est pas souhaitée.
 
-La migration additive `migrations/007_mondial_relay_settings.sql` crée uniquement la table de configuration de livraison. Le verrou du test API2 réutilise la table d’audit admin existante et n’ajoute aucune migration. Les identifiants Mondial Relay ne doivent jamais être saisis dans l'administration ou versionnés. Les secrets éventuels sont à configurer dans `ops/secrets/app.env` sur le VPS, avec des noms exclusivement réservés au test :
+La migration additive `migrations/007_mondial_relay_settings.sql` crée uniquement la table de configuration de livraison. Les identifiants Mondial Relay et PayPal ne doivent jamais être saisis dans l'administration ou versionnés. Les valeurs privées sont à configurer dans `ops/secrets/app.env` sur le VPS. Le modèle complet, avec les drapeaux désactivés et des marqueurs de remplacement, se trouve dans `ops/secrets/app.env.example`.
 
-- `MONDIAL_RELAY_API1_TEST_SHOP`
-- `MONDIAL_RELAY_API1_TEST_PRIVATE_KEY`
-- `MONDIAL_RELAY_API1_TEST_ENABLED=false` par défaut
-- `MONDIAL_RELAY_API2_TEST_LOGIN`
-- `MONDIAL_RELAY_API2_TEST_PASSWORD`
-- `MONDIAL_RELAY_API2_TEST_CUSTOMER_ID`
-- `MONDIAL_RELAY_API2_TEST_ENABLED=false` par défaut
+Variables serveur Mondial Relay : `MONDIAL_RELAY_PRODUCTION_CONFIRMED`, `MONDIAL_RELAY_API1_PROD_SHOP`, `MONDIAL_RELAY_API1_PROD_PRIVATE_KEY`, `MONDIAL_RELAY_API1_PROD_ENABLED`, `MONDIAL_RELAY_API2_PROD_LOGIN`, `MONDIAL_RELAY_API2_PROD_PASSWORD`, `MONDIAL_RELAY_API2_PROD_CUSTOMER_ID`, `MONDIAL_RELAY_API2_PROD_URL`, `MONDIAL_RELAY_API2_PROD_ENABLED`, `MONDIAL_RELAY_COLLECTION_MODE`, `MONDIAL_RELAY_SENDER_FIRSTNAME`, `MONDIAL_RELAY_SENDER_LASTNAME`, `MONDIAL_RELAY_SENDER_STREET`, `MONDIAL_RELAY_SENDER_HOUSE_NO`, `MONDIAL_RELAY_SENDER_POSTCODE`, `MONDIAL_RELAY_SENDER_CITY`, `MONDIAL_RELAY_SENDER_COUNTRY`, `MONDIAL_RELAY_SENDER_PHONE` et `MONDIAL_RELAY_SENDER_EMAIL`.
 
-Les coordonnées expéditeur utilisées pour une future étiquette doivent également rester côté serveur (`MONDIAL_RELAY_SENDER_*`). Aucun identifiant de production n'est lu par l'application.
+Variables serveur PayPal : `PAYPAL_ENV=production`, `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_MERCHANT_ID` et `PAYPAL_WEBHOOK_ID`. Ne pas configurer le Client ID dans une variable `NEXT_PUBLIC_*`.
 
 Les tests admin isolés sont inclus dans `npm test`; ils utilisent PostgreSQL embarqué, une authentification mockée et un fournisseur Gemini simulé. Aucun email ni campagne réel n'est envoyé.
 
@@ -97,10 +89,7 @@ Pour activer Miroir AI, renseigner `GEMINI_API_KEY` uniquement dans l'environnem
 ## 🔑 Configuration
 
 ### PayPal
-1. Va sur https://developer.paypal.com
-2. Crée une app → récupère le **Client ID**
-3. Colle dans `NEXT_PUBLIC_PAYPAL_CLIENT_ID`
-4. En production : utilise le **Live Client ID** (pas Sandbox)
+Les identifiants doivent être placés côté serveur. Les commandes restent fermées jusqu'à la confirmation de l'application Live, du marchand, du webhook et des paramètres de livraison. Le navigateur reçoit le Client ID public uniquement lorsque tous les garde-fous de disponibilité sont activés.
 
 ### Resend (emails)
 1. Crée un compte sur https://resend.com

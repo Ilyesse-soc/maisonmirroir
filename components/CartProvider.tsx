@@ -37,13 +37,13 @@ type CartContextValue = {
   flashMessage: string;
   selectedShippingPrice: number | null;
   selectedShippingPriceLabel: string;
-  selectedShippingPriceIsSimulation: boolean;
   shippingConfigurationLoaded: boolean;
   checkoutEnabled: boolean;
+  paypalClientId: string;
   getShippingPriceQuote: (
     methodId: string,
     itemCount: number,
-  ) => { price: number | null; label: string; isSimulation: boolean };
+  ) => { price: number | null; label: string };
   addItem: (item: AddCartItemInput) => void;
   removeItem: (key: string) => void;
   updateItemQuantity: (key: string, quantity: number) => void;
@@ -93,11 +93,14 @@ export function CartProvider({
   const [isDrawerOpen, setIsDrawerOpen] = useState(false),
     [flashMessage, setFlashMessage] = useState("");
   const [shippingConfig, setShippingConfig] = useState<{
-    settings: MondialRelaySettings;
-    mode: "simulation" | "sandbox";
+    settings: Pick<
+      MondialRelaySettings,
+      "serviceCode" | "contractParcel" | "contractRates"
+    >;
     shopOpen: boolean;
     paymentsEnabled: boolean;
-    realShippingEnabled: false;
+    realShippingEnabled: boolean;
+    paypalClientId: string;
   } | null>(null);
   const [shippingConfigurationLoaded, setShippingConfigurationLoaded] =
     useState(false);
@@ -126,30 +129,22 @@ export function CartProvider({
   }, [flashMessage]);
   const getShippingPriceQuote = (methodId: string, quantity: number) => {
     const method = getShippingMethodById(methodId);
-    if (!method) return { price: null, label: "À confirmer", isSimulation: false };
-    if (method.carrier !== "Mondial Relay")
-      return {
-        price: method.price,
-        label: euro.format(method.price),
-        isSimulation: false,
-      };
+    if (!method) return { price: null, label: "À confirmer" };
     if (
       methodId !== MONDIAL_RELAY_POINT_RELAIS_ID ||
       !shippingConfig
     )
-      return { price: null, label: "À confirmer", isSimulation: false };
+      return { price: null, label: "À confirmer" };
     const quote = getMondialRelayQuote(
       shippingConfig.settings,
       quantity,
-      "simulation",
     );
     if (!quote)
-      return { price: null, label: "À confirmer", isSimulation: false };
+      return { price: null, label: "À confirmer" };
     const price = quote.priceCents / 100;
     return {
       price,
-      label: `${euro.format(price)} - tarif provisoire de test`,
-      isSimulation: true,
+      label: euro.format(price),
     };
   };
   const selectedMethod = getShippingMethodById(shippingMethodId);
@@ -159,7 +154,6 @@ export function CartProvider({
     getCartItemCount(items),
   );
   const selectedShippingPrice = selectedQuote.price;
-  const selectedShippingPriceIsSimulation = selectedQuote.isSimulation;
   const selectedShippingPriceLabel = selectedQuote.label;
   const value: CartContextValue = {
     items,
@@ -171,7 +165,6 @@ export function CartProvider({
     flashMessage,
     selectedShippingPrice,
     selectedShippingPriceLabel,
-    selectedShippingPriceIsSimulation,
     shippingConfigurationLoaded,
     getShippingPriceQuote,
     checkoutEnabled:
@@ -179,6 +172,7 @@ export function CartProvider({
       Boolean(shippingConfig?.shopOpen) &&
       Boolean(shippingConfig?.paymentsEnabled) &&
       (!isMondialRelayMethod || Boolean(shippingConfig?.realShippingEnabled)),
+    paypalClientId: shippingConfig?.paypalClientId || "",
     addItem(item) {
       const cart = readCart();
       writeCart({ ...cart, items: mergeCartItems(cart.items, item) });

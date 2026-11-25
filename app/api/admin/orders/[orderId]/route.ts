@@ -198,7 +198,21 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json({ success: true, order: updated });
+    const shipment = updated.shipping.mondialRelayShipment;
+    let safeOrder = updated;
+    if (shipment) {
+      const safeShipment = { ...shipment };
+      delete safeShipment.labelUrl;
+      safeShipment.labelAvailable = Boolean(shipment.labelUrl);
+      safeOrder = {
+        ...updated,
+        shipping: {
+          ...updated.shipping,
+          mondialRelayShipment: safeShipment,
+        },
+      };
+    }
+    return NextResponse.json({ success: true, order: safeOrder });
   } catch (error) {
     if (error instanceof InputError) return inputResponse(error);
     return NextResponse.json(

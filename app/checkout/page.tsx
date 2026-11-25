@@ -29,7 +29,6 @@ export default function CheckoutPage() {
     setRelayPoint,
     selectedShippingPrice,
     selectedShippingPriceLabel,
-    selectedShippingPriceIsSimulation,
     checkoutEnabled,
     getShippingPriceQuote,
   } = useCart();
@@ -135,7 +134,7 @@ export default function CheckoutPage() {
         { cache: "no-store" },
       );
       const data = (await response.json()) as {
-        source?: "simulation" | "sandbox";
+        source?: "production";
         points?: RelayPoint[];
         message?: string;
         error?: string;
@@ -146,9 +145,7 @@ export default function CheckoutPage() {
       setRelayPoints(points);
       setRelaySearchMessage(
         data.message ||
-          (data.source === "sandbox"
-            ? "Résultats issus du compte de test Mondial Relay."
-            : "Résultats de simulation, aucun Point Relais réel n’a été recherché."),
+          "Résultats de la recherche Mondial Relay.",
       );
     } catch (error) {
       setRelaySearchError(
@@ -260,6 +257,9 @@ export default function CheckoutPage() {
                   value={address.street}
                   onChange={(value) => handleChange("street", value)}
                 />
+                <p role="note" style={{ margin: "-4px 0 0", fontSize: 12 }}>
+                  Indiquez le numéro avant le nom de la rue.
+                </p>
                 <div
                   style={{
                     display: "grid",
@@ -379,9 +379,9 @@ export default function CheckoutPage() {
                               lineHeight: 1.6,
                             }}
                           >
-                            {selectedShippingPriceIsSimulation
-                              ? "Tarif provisoire de test uniquement, non contractuel. Les commandes restent fermées."
-                              : "Le tarif contractuel reste à confirmer. Aucun paiement ne sera proposé."}
+                            {selectedShippingPrice === null
+                              ? "Le tarif contractuel reste à confirmer. Aucun paiement ne sera proposé."
+                              : "Les commandes et paiements ne sont pas encore ouverts."}
                           </p>
                           <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>
                             La recherche utilise le code postal et la ville
@@ -540,7 +540,6 @@ export default function CheckoutPage() {
                   <span>Point Relais sélectionné</span>
                   <span style={{ textAlign: "right" }}>
                     {relayPoint.label}, {relayPoint.postalCode} {relayPoint.city}
-                    {relayPoint.source === "simulation" ? " - simulation" : ""}
                   </span>
                 </div>
               )}

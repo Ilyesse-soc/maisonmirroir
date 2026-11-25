@@ -49,8 +49,9 @@ const relayPoint = z
     postalCode: short,
     city: short,
     distanceKm: z.number().finite().nonnegative().optional(),
-    source: z.enum(["simulation", "sandbox"]),
-    serviceCode: z.enum(["24R", "24L"]),
+    source: z.literal("production"),
+    serviceCode: z.enum(["24R/MED", "24R/APM", "24R", "24L"]),
+    proof: z.string().max(4096).optional(),
   })
   .strict() satisfies z.ZodType<RelayPoint>;
 const attachment = z
@@ -63,7 +64,7 @@ const attachment = z
     base64: z.string().max(2800000),
   })
   .strict();
-const order = z
+export const orderPayloadSchema = z
   .object({
     product: item,
     items: z.array(item).min(1).max(30).optional(),
@@ -82,8 +83,9 @@ export const incomingOrderSchema = z
   .object({
     paymentMethod: z.enum(["PAYPAL", "CARD"]),
     paypalOrderId: z.string().regex(/^[A-Z0-9]{10,32}$/),
+    checkoutProof: z.string().min(1).max(8192),
     paypalCapture: z.unknown().optional(),
-    order: order.optional(),
+    order: orderPayloadSchema.optional(),
     name: short.optional(),
     email: z.string().email().max(254).optional(),
     phone: short.optional(),
@@ -97,7 +99,7 @@ export const incomingOrderSchema = z
     shippingMethodId: short.optional(),
   })
   .strict()
-  .refine((v) => Boolean(v.order || v.product));
+  .refine((v) => Boolean(v.order));
 export function canonicalItems(items: ProductInfo[]) {
   return items.map((item) => {
     const p = products.find(
@@ -128,7 +130,7 @@ export function canonicalItems(items: ProductInfo[]) {
     if (!choice) throw Error("INVALID_CATALOG_PRICE");
     return {
       id: p.id,
-      name: p.name + (choice.label ? " ? " + choice.label : ""),
+      name: p.name + (choice.label ? " - " + choice.label : ""),
       category: p.category,
       categoryLabel: p.categoryLabel,
       unitPrice: choice.price,
@@ -145,9 +147,23 @@ function paypalApiBase() {
   throw Error("PAYMENT_ENV_NOT_CONFIGURED");
 }
 
+export function getPayPalProductionStatus() {
+  return {
+    configured:
+      process.env.PAYPAL_ENV === "production" &&
+      Boolean(process.env.PAYPAL_CLIENT_ID?.trim()) &&
+      Boolean(process.env.PAYPAL_CLIENT_SECRET?.trim()) &&
+      Boolean(process.env.PAYPAL_MERCHANT_ID?.trim()) &&
+      Boolean(process.env.PAYPAL_WEBHOOK_ID?.trim()),
+    clientId:
+      process.env.PAYPAL_ENV === "production"
+        ? process.env.PAYPAL_CLIENT_ID?.trim() || ""
+        : "",
+  };
+}
+
 async function paypalAccessToken(base: string) {
-  const client =
-      process.env.PAYPAL_CLIENT_ID || process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID,
+  const client = process.env.PAYPAL_CLIENT_ID,
     secret = process.env.PAYPAL_CLIENT_SECRET;
   if (!client || !secret) throw Error("PAYMENT_VERIFICATION_NOT_CONFIGURED");
   const response = await fetch(base + "/v1/oauth2/token", {
@@ -171,6 +187,97 @@ async function paypalAccessToken(base: string) {
   )
     throw Error("PAYMENT_VERIFICATION_INVALID_RESPONSE");
   return payload.access_token;
+}
+
+export async function createPayPalCheckoutOrder(input: {
+  totalCents: number;
+  subtotalCents: number;
+  shippingCents: number;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unitPriceCents: number;
+  }>;
+  customer: {
+    firstName: string;
+    lastName: string;
+    street: string;
+    city: string;
+    zip: string;
+    country?: string;
+  };
+}) {
+  if (!getPayPalProductionStatus().configured)
+    throw Error("PAYMENT_VERIFICATION_NOT_CONFIGURED");
+  const base = paypalApiBase();
+  const token = await paypalAccessToken(base);
+  const body = {
+    intent: "CAPTURE",
+    purchase_units: [
+      {
+        amount: {
+          currency_code: "EUR",
+          value: (input.totalCents / 100).toFixed(2),
+          breakdown: {
+            item_total: {
+              currency_code: "EUR",
+              value: (input.subtotalCents / 100).toFixed(2),
+            },
+            shipping: {
+              currency_code: "EUR",
+              value: (input.shippingCents / 100).toFixed(2),
+            },
+          },
+        },
+        shipping: {
+          name: {
+            full_name: `${input.customer.firstName} ${input.customer.lastName}`.trim(),
+          },
+          address: {
+            address_line_1: input.customer.street,
+            admin_area_2: input.customer.city,
+            postal_code: input.customer.zip,
+            country_code: "FR",
+          },
+        },
+        items: input.items.map((item) => ({
+          name: item.name.slice(0, 127),
+          unit_amount: {
+            currency_code: "EUR",
+            value: (item.unitPriceCents / 100).toFixed(2),
+          },
+          quantity: String(item.quantity),
+          category: "PHYSICAL_GOODS",
+        })),
+      },
+    ],
+    application_context: {
+      shipping_preference: "SET_PROVIDED_ADDRESS",
+      user_action: "PAY_NOW",
+    },
+  };
+  const response = await fetch(base + "/v2/checkout/orders", {
+    method: "POST",
+    headers: {
+      Authorization: "Bearer " + token,
+      "Content-Type": "application/json",
+      Prefer: "return=representation",
+    },
+    body: JSON.stringify(body),
+    cache: "no-store",
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!response.ok) throw Error("PAYMENT_ORDER_CREATION_FAILED");
+  const result: unknown = await response.json();
+  if (
+    !result ||
+    typeof result !== "object" ||
+    !("id" in result) ||
+    typeof result.id !== "string" ||
+    !/^[A-Z0-9]{10,32}$/.test(result.id)
+  )
+    throw Error("PAYMENT_ORDER_CREATION_INVALID_RESPONSE");
+  return result.id;
 }
 
 export async function verifiedPayPalOrder(id: string, total: number) {

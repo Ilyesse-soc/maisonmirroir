@@ -51,13 +51,13 @@ export default function Footer({
     >
       <div className="storefront-footer-main">
         <div className="storefront-footer-brand">
-          <a
-            href="https://preview.maison-miroir.fr:9443/"
+          <Link
+            href="/"
             className="storefront-footer-wordmark"
             aria-label="MAISON MIROIR, accueil"
           >
             <span>MAISON MIROIR</span>
-          </a>
+          </Link>
           <p>Une marque autour de la modestie, de l’identité et du lifestyle.</p>
           <div className="storefront-footer-social">
             <SocialLink href={brandInfo.instagram} label="Instagram">

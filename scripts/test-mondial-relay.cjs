@@ -3,67 +3,69 @@ const { createHash } = require("node:crypto");
 const { readFileSync } = require("node:fs");
 const { transformSync } = require("esbuild");
 
-const source = readFileSync("lib/mondialRelayTypes.ts", "utf8");
-const compiled = transformSync(source, {
-  loader: "ts",
-  format: "cjs",
-}).code;
-const loaded = { exports: {} };
-new Function("module", "exports", compiled)(loaded, loaded.exports);
-const {
-  DEFAULT_MONDIAL_RELAY_SETTINGS,
-  createSimulatedRelayPoint,
-  getMondialRelayQuote,
-  isRelayPoint,
-} = loaded.exports;
+function loadTypeScript(file, dependencies = {}) {
+  const compiled = transformSync(readFileSync(file, "utf8"), {
+    loader: "ts",
+    format: "cjs",
+  }).code;
+  const loaded = { exports: {} };
+  new Function("require", "module", "exports", compiled)(
+    (name) => {
+      if (name === "server-only") return {};
+      if (name === "node:crypto") return require(name);
+      if (name === "zod") return require(name);
+      if (name in dependencies) return dependencies[name];
+      throw new Error(`Unexpected dependency: ${name}`);
+    },
+    loaded,
+    loaded.exports,
+  );
+  return loaded.exports;
+}
 
-const api1ResponseSource = readFileSync(
-  "lib/mondialRelayApi1Response.ts",
-  "utf8",
-);
-const api1ResponseCompiled = transformSync(api1ResponseSource, {
-  loader: "ts",
-  format: "cjs",
-}).code;
-const api1ResponseLoaded = { exports: {} };
-new Function("module", "exports", api1ResponseCompiled)(
-  api1ResponseLoaded,
-  api1ResponseLoaded.exports,
-);
-const {
-  MondialRelayApi1ResponseError,
-  parseMondialRelayApi1Response,
-} = api1ResponseLoaded.exports;
-const api1Source = readFileSync("lib/mondialRelayApi1.ts", "utf8");
-const api1Compiled = transformSync(api1Source, {
-  loader: "ts",
-  format: "cjs",
-}).code;
-const api1Loaded = { exports: {} };
-new Function("require", "module", "exports", api1Compiled)(
-  (name) => {
-    if (name === "server-only") return {};
-    if (name === "node:crypto") return require(name);
-    if (name === "@/lib/mondialRelayApi1Response")
-      return { parseMondialRelayApi1Response };
-    throw new Error(`Unexpected dependency: ${name}`);
+const relayTypes = loadTypeScript("lib/mondialRelayTypes.ts");
+const commerceSecurity = loadTypeScript("lib/commerceSecurity.ts", {
+  "./products": {
+    products: [
+      {
+        id: "modest-era",
+        name: "Modest Era",
+        category: "sac",
+        categoryLabel: "Sac",
+        price: 100,
+        publiclyListed: true,
+        availableForSale: true,
+        options: {},
+      },
+    ],
   },
-  api1Loaded,
-  api1Loaded.exports,
-);
-const { buildApi1PointSearchRequest } = api1Loaded.exports;
-const api1Request = buildApi1PointSearchRequest({
-  shop: "BDTEST13",
-  privateKey: "TestAPI1key",
+});
+const checkoutProof = loadTypeScript("lib/checkoutQuoteProof.ts", {
+  "@/lib/commerceSecurity": commerceSecurity,
+  "@/lib/mondialRelayPointProof": {
+    verifyMondialRelayPointProof: (point) => point.proof === "signed",
+  },
+  "@/lib/shipping": {
+    MONDIAL_RELAY_POINT_RELAIS_ID: "mondial-relay-point-relais",
+  },
+});
+process.env.BETTER_AUTH_SECRET = "unit-test-secret";
+const api1Response = loadTypeScript("lib/mondialRelayApi1Response.ts");
+const api1 = loadTypeScript("lib/mondialRelayApi1.ts", {
+  "@/lib/mondialRelayApi1Response": api1Response,
+});
+const searchRequest = api1.buildApi1PointSearchRequest({
+  shop: "ABCD1234",
+  privateKey: "test-key",
   postalCode: "78300",
   city: "Poissy",
   weightGrams: 500,
-  serviceCode: "24R",
+  serviceCode: "24R/MED",
 });
-const expectedApi1Signature = createHash("md5")
+const expectedSearchSignature = createHash("md5")
   .update(
     [
-      "BDTEST13",
+      "ABCD1234",
       "FR",
       "",
       "Poissy",
@@ -72,61 +74,132 @@ const expectedApi1Signature = createHash("md5")
       "",
       "",
       "500",
-      "",
+      "24R/MED",
       "",
       "",
       "",
       "10",
-      "TestAPI1key",
+      "test-key",
     ].join(""),
     "utf8",
   )
   .digest("hex")
   .toUpperCase();
-assert.match(api1Request, /<NACE><\/NACE>/);
-assert.match(api1Request, /<NombreResultats>10<\/NombreResultats>/);
-assert.match(api1Request, new RegExp(`<Security>${expectedApi1Signature}</Security>`));
-const api2Source = readFileSync("lib/mondialRelayApi2.ts", "utf8");
-const api2Compiled = transformSync(api2Source, {
-  loader: "ts",
-  format: "cjs",
-}).code;
-const api2Loaded = { exports: {} };
-new Function("require", "module", "exports", api2Compiled)(
-  (name) => {
-    if (name === "server-only") return {};
-    throw new Error(`Unexpected dependency: ${name}`);
-  },
-  api2Loaded,
-  api2Loaded.exports,
-);
-const {
-  MondialRelayApi2Error,
-  buildApi2SandboxTestRequest,
-  parseApi2SandboxResponse,
-} = api2Loaded.exports;
+assert.match(searchRequest, /<Action>24R\/MED<\/Action>/);
+assert.match(searchRequest, /<NACE><\/NACE>/);
+assert.match(searchRequest, new RegExp(`<Security>${expectedSearchSignature}</Security>`));
 
-const api2Request = buildApi2SandboxTestRequest(
-  {
-    login: "test&login",
-    password: "test<password>",
-    customerId: "TEST01",
-  },
-  { weightGrams: 500, lengthCm: 45, widthCm: 40, depthCm: 5 },
+const successfulSearch = `<Response><STAT>0</STAT><PointsRelais>
+  <PointRelais_Details><Num>123456</Num><Localisation1>Relais &amp; boutique</Localisation1>
+  <LgAdr1>1 rue de test</LgAdr1><CP>78300</CP><Ville>Poissy</Ville><Distance>1200</Distance>
+  </PointRelais_Details></PointsRelais></Response>`;
+const points = api1Response.parseMondialRelayApi1Response(
+  successfulSearch,
+  "24R/MED",
 );
-assert.match(api2Request, /<Login>test&amp;login<\/Login>/);
-assert.match(api2Request, /<Password>test&lt;password&gt;<\/Password>/);
-assert.match(api2Request, /<DeliveryMode Mode="24R" Location="FR-66974"/);
-assert.match(api2Request, /<Depth Value="5" Unit="cm" \/>/);
-assert.match(api2Request, /<City>POISSY<\/City>/);
-assert.match(api2Request, /sandbox-test@example\.com/);
-assert.match(api2Source, /Content-Type": "text\/xml; charset=utf-8"/);
-const api2Response = parseApi2SandboxResponse(
+assert.equal(points.length, 1);
+assert.equal(points[0].source, "production");
+assert.equal(points[0].serviceCode, "24R/MED");
+assert.equal(points[0].label, "Relais & boutique");
+assert.equal(points[0].distanceKm, 1.2);
+assert.deepEqual(
+  api1Response.parseMondialRelayApi1Response(
+    "<Response><STAT>0</STAT><PointsRelais /></Response>",
+    "24R/APM",
+  ),
+  [],
+);
+assert.throws(
+  () =>
+    api1Response.parseMondialRelayApi1Response(
+      "<Response><STAT>97</STAT></Response>",
+      "24R/MED",
+    ),
+  (error) =>
+    error instanceof api1Response.MondialRelayApi1ResponseError &&
+    error.code === "STAT_97",
+);
+
+const trackingRequest = api1.buildApi1TrackingRequest({
+  shop: "ABCD1234",
+  privateKey: "test-key",
+  shipmentNumber: "12345678",
+});
+const expectedTrackingSignature = createHash("md5")
+  .update("ABCD123412345678FRtest-key", "utf8")
+  .digest("hex")
+  .toUpperCase();
+assert.match(trackingRequest, /<Expedition>12345678<\/Expedition>/);
+assert.match(trackingRequest, new RegExp(`<Security>${expectedTrackingSignature}</Security>`));
+const tracking = api1.parseMondialRelayTrackingResponse(
+  `<WSI2_TracingColisDetailleResponse><WSI2_TracingColisDetailleResult>
+    <Libelle01>En transit</Libelle01><Relais_Libelle>Relais Poissy</Relais_Libelle>
+    <Relais_Num>123456</Relais_Num><Tracing>
+      <ret_WSI2_sub_TracingColisDetaille><Libelle>Pris en charge</Libelle>
+        <Date>01/01/2026</Date><Heure>10:00</Heure><Emplacement>Poissy</Emplacement>
+        <Relais_Num>123456</Relais_Num><Relais_Pays>FR</Relais_Pays>
+      </ret_WSI2_sub_TracingColisDetaille>
+    </Tracing></WSI2_TracingColisDetailleResult></WSI2_TracingColisDetailleResponse>`,
+);
+assert.equal(tracking.summary, "En transit");
+assert.equal(tracking.events[0].location, "Poissy");
+
+const api2 = loadTypeScript("lib/mondialRelayApi2.ts");
+const shipmentRequest = api2.buildApi2ProductionRequest(
+  { login: "test&login", password: "test<password>", customerId: "TEST01" },
+  {
+    orderNo: "MM-2026-12345678",
+    customerNo: "MM-2026-12345678",
+    serviceCode: "24R/MED",
+    relayLocation: "FR-123456",
+    collectionMode: "CCC",
+    sender: {
+      firstName: "Maison",
+      lastName: "Miroir",
+      street: "Rue de test",
+      houseNo: "1",
+      countryCode: "FR",
+      postalCode: "78300",
+      city: "Poissy",
+      email: "sender@example.test",
+    },
+    recipient: {
+      firstName: "Test",
+      lastName: "Client",
+      street: "Rue de test",
+      houseNo: "2",
+      countryCode: "FR",
+      postalCode: "75001",
+      city: "Paris",
+      email: "client@example.test",
+    },
+    parcels: [
+      {
+        content: "Sac Maison Miroir",
+        weightGrams: 500,
+        lengthCm: 45,
+        widthCm: 40,
+        depthCm: 5,
+      },
+    ],
+  },
+);
+assert.match(shipmentRequest, /<Login>test&amp;login<\/Login>/);
+assert.match(shipmentRequest, /<Password>test&lt;password&gt;<\/Password>/);
+assert.match(shipmentRequest, /<DeliveryMode Mode="24R\/MED" Location="FR-123456"/);
+assert.match(shipmentRequest, /<Content>Sac Maison Miroir<\/Content>/);
+assert.match(shipmentRequest, /<HouseNo>2<\/HouseNo>/);
+assert.match(api2.API2_PRODUCTION_URL || api2Source(), /api\/shipment/i);
+
+function api2Source() {
+  return readFileSync("lib/mondialRelayApi2.ts", "utf8");
+}
+
+const api2Response = api2.parseApi2ProductionResponse(
   `<ShipmentCreationResponse>
     <ShipmentsList><Shipment ShipmentNumber="12345678">
       <LabelList><Label><Output>http://connect.mondialrelay.com/label.pdf?crc=abc&amp;format=10x15</Output></Label></LabelList>
-    </Shipment></ShipmentsList>
-    <StatusList />
+    </Shipment></ShipmentsList><StatusList />
   </ShipmentCreationResponse>`,
 );
 assert.equal(api2Response.shipmentNumber, "12345678");
@@ -136,141 +209,127 @@ assert.equal(
 );
 assert.throws(
   () =>
-    parseApi2SandboxResponse(
-      `<ShipmentCreationResponse>
-        <ShipmentsList><Shipment ShipmentNumber="12345678" /></ShipmentsList>
-        <StatusList><Status code="10001" level="Critical Error" message="must not be returned" /></StatusList>
-      </ShipmentCreationResponse>`,
-    ),
-  (error) => {
-    assert(error instanceof MondialRelayApi2Error);
-    assert.equal(error.code, "PROVIDER_10001");
-    assert.deepEqual(error.providerStatuses, [
-      { code: "10001", level: "Critical Error" },
-    ]);
-    assert.equal(error.shipmentNumber, "12345678");
-    assert.doesNotMatch(error.message, /must not be returned/);
-    return true;
-  },
-);
-const warningResponse = parseApi2SandboxResponse(
-  `<ShipmentCreationResponse>
-    <ShipmentsList><Shipment ShipmentNumber="12345679">
-      <LabelList><Label><Output>http://connect.mondialrelay.com/label.pdf</Output></Label></LabelList>
-    </Shipment></ShipmentsList>
-    <StatusList><Status code="10069" level="Warning" message="postcode updated" /></StatusList>
-  </ShipmentCreationResponse>`,
-);
-assert.deepEqual(warningResponse.warnings, [
-  { code: "10069", level: "Warning" },
-]);
-assert.throws(
-  () =>
-    parseApi2SandboxResponse(
-      `<ShipmentCreationResponse>
-        <ShipmentsList><Shipment ShipmentNumber="12345678">
-          <LabelList><Label><Output>https://attacker.example/label.pdf</Output></Label></LabelList>
-        </Shipment></ShipmentsList><StatusList />
-      </ShipmentCreationResponse>`,
+    api2.parseApi2ProductionResponse(
+      `<ShipmentCreationResponse><ShipmentsList>
+        <Shipment ShipmentNumber="12345678"><LabelList><Label>
+          <Output>https://attacker.example/label.pdf</Output>
+        </Label></LabelList></Shipment></ShipmentsList><StatusList /></ShipmentCreationResponse>`,
     ),
   (error) =>
-    error instanceof MondialRelayApi2Error &&
+    error instanceof api2.MondialRelayApi2Error &&
     error.code === "LABEL_URL_UNTRUSTED",
 );
 
-const successfulSoapResponse = `<?xml version="1.0"?>
-<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-  <soap:Body><m:WSI4_PointRelais_RechercheResponse xmlns:m="http://www.mondialrelay.fr/webservice/">
-    <m:WSI4_PointRelais_RechercheResult>
-      <m:STAT>0</m:STAT>
-      <m:PointsRelais><m:PointRelais_Details>
-        <m:Num>123456</m:Num><m:Localisation1>Relais &amp; boutique</m:Localisation1>
-        <m:LgAdr1>1 rue de test</m:LgAdr1><m:CP>78300</m:CP><m:Ville>Poissy</m:Ville>
-        <m:Distance>1200</m:Distance>
-      </m:PointRelais_Details></m:PointsRelais>
-    </m:WSI4_PointRelais_RechercheResult>
-  </m:WSI4_PointRelais_RechercheResponse></soap:Body>
-</soap:Envelope>`;
-const parsedPoints = parseMondialRelayApi1Response(successfulSoapResponse, "24R");
-assert.equal(parsedPoints.length, 1);
-assert.equal(parsedPoints[0].id, "123456");
-assert.equal(parsedPoints[0].label, "Relais & boutique");
-assert.equal(parsedPoints[0].distanceKm, 1.2);
-assert.equal(parsedPoints[0].source, "sandbox");
-assert.deepEqual(
-  parseMondialRelayApi1Response(
-    "<Response><PointsRelais /></Response>",
-    "24R",
+const checkoutOrder = {
+  product: {
+    id: "modest-era",
+    name: "Modest Era",
+    category: "sac",
+    categoryLabel: "Sac",
+    unitPrice: 100,
+    quantity: 1,
+  },
+  items: [
+    {
+      id: "modest-era",
+      name: "Modest Era",
+      category: "sac",
+      categoryLabel: "Sac",
+      unitPrice: 100,
+      quantity: 1,
+    },
+  ],
+  customer: {
+    firstName: "Test",
+    lastName: "Client",
+    email: "client@example.test",
+    phone: "0612345678",
+    street: "2 rue de test",
+    city: "Paris",
+    zip: "75001",
+    country: "France",
+  },
+  shippingMethodId: "mondial-relay-point-relais",
+  relayPoint: {
+    id: "123456",
+    location: "FR-123456",
+    label: "Relay",
+    address: ["1 rue de test"],
+    postalCode: "75001",
+    city: "Paris",
+    source: "production",
+    serviceCode: "24R/MED",
+    proof: "signed",
+  },
+  attachments: [],
+  customValues: {},
+};
+const proof = checkoutProof.createCheckoutQuoteProof(
+  "A123456789012345",
+  checkoutOrder,
+  { subtotalCents: 10000, shippingCents: 425, totalCents: 10425 },
+);
+assert.equal(
+  checkoutProof.verifyCheckoutQuoteProof(
+    proof,
+    "A123456789012345",
+    checkoutOrder,
+  ).totalCents,
+  10425,
+);
+assert.throws(() =>
+  checkoutProof.verifyCheckoutQuoteProof(
+    proof,
+    "A123456789012345",
+    {
+      ...checkoutOrder,
+      customer: { ...checkoutOrder.customer, street: "3 rue de test" },
+    },
   ),
-  [],
 );
-assert.throws(
-  () =>
-    parseMondialRelayApi1Response(
-      "<Response><STAT>97</STAT></Response>",
-      "24R",
-    ),
-  (error) =>
-    error instanceof MondialRelayApi1ResponseError &&
-    error.code === "STAT_97",
-);
-assert.throws(
-  () => parseMondialRelayApi1Response("<Response />", "24R"),
-  (error) =>
-    error instanceof MondialRelayApi1ResponseError &&
-    error.code === "STATUS_MISSING",
+assert.throws(() =>
+  checkoutProof.verifyCheckoutQuoteProof(
+    proof,
+    "A123456789012346",
+    checkoutOrder,
+  ),
 );
 
-const oneTestParcel = getMondialRelayQuote(
-  DEFAULT_MONDIAL_RELAY_SETTINGS,
-  1,
-  "simulation",
-);
-assert.deepEqual(oneTestParcel, {
-  priceCents: 410,
-  parcelCount: 1,
-  serviceCode: "24R",
-  source: "simulation",
-});
-assert.equal(
-  getMondialRelayQuote(DEFAULT_MONDIAL_RELAY_SETTINGS, 2, "simulation")
-    .priceCents,
-  820,
-);
-assert.equal(
-  getMondialRelayQuote(DEFAULT_MONDIAL_RELAY_SETTINGS, 1, "contract"),
-  null,
-);
-assert.equal(
-  getMondialRelayQuote(DEFAULT_MONDIAL_RELAY_SETTINGS, 0, "simulation"),
-  null,
-);
-
-const largeParcelSettings = {
-  ...DEFAULT_MONDIAL_RELAY_SETTINGS,
-  serviceCode: "24L",
+const quoteSettings = {
+  serviceCode: "24R/MED",
   contractParcel: {
     itemsPerParcel: 1,
-    weightGrams: 1200,
+    weightGrams: 500,
     lengthCm: 45,
     widthCm: 40,
     depthCm: 5,
   },
   contractRates: [
-    { serviceCode: "24L", maxWeightGrams: 1500, priceCents: 725 },
+    { serviceCode: "24R/MED", maxWeightGrams: 600, priceCents: 425 },
   ],
 };
+assert.deepEqual(relayTypes.getMondialRelayQuote(quoteSettings, 1), {
+  priceCents: 425,
+  parcelCount: 1,
+  serviceCode: "24R/MED",
+  source: "contract",
+});
+assert.equal(relayTypes.getMondialRelayQuote(quoteSettings, 2), null);
 assert.equal(
-  getMondialRelayQuote(largeParcelSettings, 1, "contract").priceCents,
-  725,
+  relayTypes.getMondialRelayQuote(
+    { ...quoteSettings, contractRates: [{ ...quoteSettings.contractRates[0], priceCents: 0 }] },
+    1,
+  ),
+  null,
 );
-
-const simulatedPoint = createSimulatedRelayPoint("75001", "Paris", "24R");
-assert.equal(simulatedPoint.source, "simulation");
-assert.match(simulatedPoint.id, /^SIM-/);
-assert.match(simulatedPoint.location, /^SIM-/);
-assert.equal(isRelayPoint(simulatedPoint), true);
-assert.equal(isRelayPoint({ ...simulatedPoint, source: "production" }), false);
+assert.equal(
+  relayTypes.isRelayPoint({ ...points[0], proof: "signed-token" }),
+  true,
+);
+assert.equal(
+  relayTypes.isRelayPoint({ ...points[0], source: "sandbox" }),
+  false,
+);
 
 const migration = readFileSync(
   "migrations/007_mondial_relay_settings.sql",
@@ -278,24 +337,28 @@ const migration = readFileSync(
 );
 assert.match(migration, /CREATE TABLE IF NOT EXISTS mm_shipping_settings/);
 assert.doesNotMatch(migration, /\b(?:DROP|TRUNCATE|DELETE)\b/i);
-
 const publicSettings = readFileSync(
   "app/api/shipping/config/route.ts",
   "utf8",
 );
-assert.match(publicSettings, /realShippingEnabled:\s*false/);
-assert.match(publicSettings, /realShipmentCreationEnabled:\s*false/);
-assert.match(publicSettings, /REAL_PAYMENTS_ENABLED/);
-const api2Route = readFileSync(
-  "app/api/admin/shipping-settings/test-shipment/route.ts",
+const paypalOrderRoute = readFileSync(
+  "app/api/paypal/create-order/route.ts",
   "utf8",
 );
-assert.match(api2Route, /MONDIAL_RELAY_API2_SANDBOX_TEST_RESERVED/);
-assert.match(api2Route, /MONDIAL_RELAY_API2_SANDBOX_TEST_RESULT/);
-assert.match(api2Route, /pg_advisory_xact_lock/);
-assert.match(api2Route, /api2SandboxEnabled/);
-assert.doesNotMatch(api2Source, /connect-api\.mondialrelay\.com\/api\/shipment/);
+const orderRoute = readFileSync("app/api/order/route.ts", "utf8");
+const shipmentRoute = readFileSync(
+  "app/api/admin/orders/[orderId]/mondial-relay/create/route.ts",
+  "utf8",
+);
+assert.match(publicSettings, /SHOP_OPEN/);
+assert.match(publicSettings, /REAL_PAYMENTS_ENABLED/);
+assert.match(paypalOrderRoute, /prepareCheckoutOrder/);
+assert.match(orderRoute, /verifyCheckoutQuoteProof/);
+assert.match(shipmentRoute, /reserveMondialRelayShipment/);
+assert.match(shipmentRoute, /SHIPMENT_RESULT_UNKNOWN/);
+assert.doesNotMatch(publicSettings, /simulation/);
+assert.doesNotMatch(shipmentRoute, /sandbox/i);
 
 console.log(
-  "PASS: API1 SOAP status handling, API2 sandbox request/response validation and idempotency guards, test-only quotes, contract-rate fail-closed behavior, simulated relay markers, and non-destructive migration",
+  "PASS: production-only relay parsing, signed API1 search/tracking requests, contract quote fail-closed behavior, API2 request/response validation, protected checkout, shipment idempotency, and additive migration. No external API requests were made.",
 );

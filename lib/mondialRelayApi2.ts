@@ -1,16 +1,44 @@
 import "server-only";
 
-type TestCredentials = {
+type ProductionCredentials = {
   login: string;
   password: string;
   customerId: string;
 };
 
-export type TestParcelDimensions = {
+export type ShipmentParcel = {
+  content: string;
   weightGrams: number;
   lengthCm: number;
   widthCm: number;
   depthCm: number;
+};
+
+export type ShipmentAddress = {
+  firstName: string;
+  lastName: string;
+  street: string;
+  houseNo: string;
+  countryCode: "FR";
+  postalCode: string;
+  city: string;
+  addressAdd1?: string;
+  addressAdd2?: string;
+  addressAdd3?: string;
+  phone?: string;
+  mobile?: string;
+  email: string;
+};
+
+export type ProductionShipmentInput = {
+  orderNo: string;
+  customerNo: string;
+  serviceCode: "24R/MED" | "24R/APM";
+  relayLocation: string;
+  collectionMode: string;
+  sender: ShipmentAddress;
+  recipient: ShipmentAddress;
+  parcels: ShipmentParcel[];
 };
 
 export type MondialRelayApi2ProviderStatus = {
@@ -29,8 +57,8 @@ export class MondialRelayApi2Error extends Error {
   }
 }
 
-const API2_SANDBOX_URL =
-  "https://connect-api-sandbox.mondialrelay.com/api/shipment";
+const API2_PRODUCTION_URL =
+  "https://connect-api.mondialrelay.com/api/shipment";
 
 function escapeXml(value: string) {
   return value
@@ -101,9 +129,29 @@ function shipmentNumber(xml: string) {
   return /^[0-9A-Z-]{1,24}$/i.test(value) ? value : "";
 }
 
-export function buildApi2SandboxTestRequest(
-  credentials: TestCredentials,
-  parcel: TestParcelDimensions,
+function addressXml(name: string, address: ShipmentAddress) {
+  const value = (input: string | undefined) => escapeXml(input || "");
+  return `<${name}><Address>
+    <Title />
+    <Firstname>${value(address.firstName)}</Firstname>
+    <Lastname>${value(address.lastName)}</Lastname>
+    <Streetname>${value(address.street)}</Streetname>
+    <HouseNo>${value(address.houseNo)}</HouseNo>
+    <CountryCode>${address.countryCode}</CountryCode>
+    <PostCode>${value(address.postalCode)}</PostCode>
+    <City>${value(address.city)}</City>
+    <AddressAdd1>${value(address.addressAdd1)}</AddressAdd1>
+    <AddressAdd2>${value(address.addressAdd2)}</AddressAdd2>
+    <AddressAdd3>${value(address.addressAdd3)}</AddressAdd3>
+    <PhoneNo>${value(address.phone)}</PhoneNo>
+    <MobileNo>${value(address.mobile)}</MobileNo>
+    <Email>${value(address.email)}</Email>
+  </Address></${name}>`;
+}
+
+export function buildApi2ProductionRequest(
+  credentials: ProductionCredentials,
+  shipment: ProductionShipmentInput,
 ) {
   const value = (input: string) => escapeXml(input);
   return `<?xml version="1.0" encoding="utf-8"?>
@@ -121,62 +169,32 @@ export function buildApi2SandboxTestRequest(
   </OutputOptions>
   <ShipmentsList>
     <Shipment>
-      <OrderNo>MMTEST-MR-API2</OrderNo>
-      <CustomerNo>MMTEST</CustomerNo>
-      <ParcelCount>1</ParcelCount>
-      <DeliveryMode Mode="24R" Location="FR-66974" />
-      <CollectionMode Mode="CCC" Location="" />
+      <OrderNo>${value(shipment.orderNo)}</OrderNo>
+      <CustomerNo>${value(shipment.customerNo)}</CustomerNo>
+      <ParcelCount>${shipment.parcels.length}</ParcelCount>
+      <DeliveryMode Mode="${value(shipment.serviceCode)}" Location="${value(shipment.relayLocation)}" />
+      <CollectionMode Mode="${value(shipment.collectionMode)}" Location="" />
       <Parcels>
-        <Parcel>
-          <Content>TEST BAG</Content>
+        ${shipment.parcels
+          .map(
+            (parcel) => `<Parcel>
+          <Content>${value(parcel.content)}</Content>
           <Weight Value="${parcel.weightGrams}" Unit="gr" />
           <Length Value="${parcel.lengthCm}" Unit="cm" />
           <Width Value="${parcel.widthCm}" Unit="cm" />
           <Depth Value="${parcel.depthCm}" Unit="cm" />
-        </Parcel>
+        </Parcel>`,
+          )
+          .join("")}
       </Parcels>
-      <Sender>
-        <Address>
-          <Title />
-          <Firstname>TEST</Firstname>
-          <Lastname>MAISONMIROIR</Lastname>
-          <Streetname>RUE DE TEST</Streetname>
-          <HouseNo>1</HouseNo>
-          <CountryCode>FR</CountryCode>
-          <PostCode>78300</PostCode>
-          <City>POISSY</City>
-          <AddressAdd1 />
-          <AddressAdd2 />
-          <AddressAdd3 />
-          <PhoneNo />
-          <MobileNo>+33100000000</MobileNo>
-          <Email>sandbox-test@example.com</Email>
-        </Address>
-      </Sender>
-      <Recipient>
-        <Address>
-          <Title />
-          <Firstname>SANDBOX</Firstname>
-          <Lastname>TEST</Lastname>
-          <Streetname>RUE DE TEST</Streetname>
-          <HouseNo>1</HouseNo>
-          <CountryCode>FR</CountryCode>
-          <PostCode>75001</PostCode>
-          <City>PARIS</City>
-          <AddressAdd1 />
-          <AddressAdd2 />
-          <AddressAdd3 />
-          <PhoneNo />
-          <MobileNo>+33100000000</MobileNo>
-          <Email>sandbox-test@example.com</Email>
-        </Address>
-      </Recipient>
+      ${addressXml("Sender", shipment.sender)}
+      ${addressXml("Recipient", shipment.recipient)}
     </Shipment>
   </ShipmentsList>
 </ShipmentCreationRequest>`;
 }
 
-export function parseApi2SandboxResponse(xml: string) {
+export function parseApi2ProductionResponse(xml: string) {
   if (xml.length > 1_000_000)
     throw new MondialRelayApi2Error("RESPONSE_TOO_LARGE");
   if (/<(?:[\w.-]+:)?Fault\b/i.test(xml))
@@ -242,19 +260,21 @@ export function parseApi2SandboxResponse(xml: string) {
   };
 }
 
-export async function createApi2SandboxTestShipment(
-  credentials: TestCredentials,
-  parcel: TestParcelDimensions,
+export async function createApi2ProductionShipment(
+  credentials: ProductionCredentials,
+  shipment: ProductionShipmentInput,
 ) {
+  if (process.env.MONDIAL_RELAY_API2_PROD_URL !== API2_PRODUCTION_URL)
+    throw new MondialRelayApi2Error("PRODUCTION_ENDPOINT_NOT_CONFIGURED");
   let response: Response;
   try {
-    response = await fetch(API2_SANDBOX_URL, {
+    response = await fetch(API2_PRODUCTION_URL, {
       method: "POST",
       headers: {
         "Content-Type": "text/xml; charset=utf-8",
         Accept: "application/xml",
       },
-      body: buildApi2SandboxTestRequest(credentials, parcel),
+      body: buildApi2ProductionRequest(credentials, shipment),
       cache: "no-store",
       signal: AbortSignal.timeout(10000),
     });
@@ -264,5 +284,43 @@ export async function createApi2SandboxTestShipment(
   if (!response.ok)
     throw new MondialRelayApi2Error(`HTTP_${response.status}`);
   const xml = await response.text();
-  return parseApi2SandboxResponse(xml);
+  return parseApi2ProductionResponse(xml);
+}
+
+export async function downloadApi2ProductionLabel(labelUrl: string) {
+  let url: URL;
+  try {
+    url = new URL(labelUrl);
+  } catch {
+    throw new MondialRelayApi2Error("LABEL_URL_INVALID");
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.hostname.toLowerCase() !== "connect.mondialrelay.com" ||
+    url.username ||
+    url.password
+  )
+    throw new MondialRelayApi2Error("LABEL_URL_UNTRUSTED");
+  const response = await fetch(url, {
+    method: "GET",
+    cache: "no-store",
+    redirect: "manual",
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!response.ok)
+    throw new MondialRelayApi2Error(`LABEL_HTTP_${response.status}`);
+  const contentType = response.headers.get("content-type")?.toLowerCase() || "";
+  if (!contentType.includes("application/pdf"))
+    throw new MondialRelayApi2Error("LABEL_CONTENT_TYPE_INVALID");
+  const contentLength = Number(response.headers.get("content-length") || "0");
+  if (contentLength > 10_000_000)
+    throw new MondialRelayApi2Error("LABEL_TOO_LARGE");
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (
+    bytes.length < 8 ||
+    bytes.length > 10_000_000 ||
+    bytes.subarray(0, 5).toString("ascii") !== "%PDF-"
+  )
+    throw new MondialRelayApi2Error("LABEL_PDF_INVALID");
+  return bytes;
 }

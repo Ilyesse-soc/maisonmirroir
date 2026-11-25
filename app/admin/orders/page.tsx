@@ -5,25 +5,6 @@ import { fonts, pageMaxWidth, theme } from "@/lib/uiStyles";
 import type { OrderRecord, OrderStatus } from "@/lib/orderTypes";
 import { MONDIAL_RELAY_POINT_RELAIS_ID } from "@/lib/shipping";
 
-type ShipmentPreparation = {
-  mode: string;
-  apiRequestSent: boolean;
-  labelGenerated: boolean;
-  shipmentCreated: boolean;
-  realShippingEnabled: boolean;
-  readyForSandbox: boolean;
-  deliveryMode: { mode: string; location: string };
-  parcel: {
-    itemsPerParcel: number;
-    weightGrams: number | null;
-    lengthCm: number | null;
-    widthCm: number | null;
-    depthCm: number | null;
-  };
-  serviceRights: string;
-  blockers: string[];
-};
-
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: "En attente", label: "En attente" },
   { value: "Payee", label: "Payee" },
@@ -38,9 +19,11 @@ export default function AdminOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pending, setPending] = useState<string>("");
-  const [preparations, setPreparations] = useState<
-    Record<string, ShipmentPreparation>
+  const [shipmentMessages, setShipmentMessages] = useState<
+    Record<string, string>
   >({});
+  const [productionShipmentReady, setProductionShipmentReady] =
+    useState(false);
 
   const hasOrders = useMemo(() => orders.length > 0, [orders]);
 
@@ -59,6 +42,25 @@ export default function AdminOrdersPage() {
       })
       .finally(() => {
         if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/admin/shipping-settings", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Chargement impossible.");
+        if (active)
+          setProductionShipmentReady(
+            data.readiness?.shipmentCreationEnabled === true,
+          );
+      })
+      .catch(() => {
+        if (active) setProductionShipmentReady(false);
       });
     return () => {
       active = false;
@@ -96,28 +98,70 @@ export default function AdminOrdersPage() {
     }
   };
 
-  const prepareShipment = async (orderId: string) => {
+  const refreshOrders = async () => {
+    const response = await fetch("/api/admin/orders", { cache: "no-store" });
+    if (!response.ok) throw new Error("Impossible de recharger les commandes.");
+    const data = await response.json();
+    setOrders(Array.isArray(data.orders) ? data.orders : []);
+  };
+
+  const createShipment = async (orderId: string) => {
+    if (
+      !window.confirm(
+        "Créer une expédition Mondial Relay réelle et une étiquette facturable pour cette commande ? Cette action est irréversible.",
+      )
+    )
+      return;
     setPending(orderId);
     setError("");
     try {
       const response = await fetch(
-        `/api/admin/orders/${orderId}/mondial-relay/prepare`,
+        `/api/admin/orders/${orderId}/mondial-relay/create`,
         { method: "POST" },
       );
-      const data = (await response.json()) as
-        | ShipmentPreparation
-        | { error?: string };
-      if (!response.ok || !("deliveryMode" in data))
-        throw new Error(
-          "error" in data ? data.error || "Préparation impossible." : "Préparation impossible.",
-        );
-      setPreparations((current) => ({ ...current, [orderId]: data }));
-    } catch (prepareError) {
-      setError(
-        prepareError instanceof Error
-          ? prepareError.message
-          : "Préparation de l’expédition impossible.",
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(data.error || "Création de l’expédition impossible.");
+      setShipmentMessages((current) => ({
+        ...current,
+        [orderId]: "Expédition créée. L’étiquette est disponible.",
+      }));
+      await refreshOrders();
+    } catch (shipmentError) {
+      const message =
+        shipmentError instanceof Error
+          ? shipmentError.message
+          : "Création de l’expédition impossible.";
+      setShipmentMessages((current) => ({ ...current, [orderId]: message }));
+    } finally {
+      setPending("");
+    }
+  };
+
+  const refreshTracking = async (orderId: string) => {
+    setPending(orderId);
+    setShipmentMessages((current) => ({ ...current, [orderId]: "" }));
+    try {
+      const response = await fetch(
+        `/api/admin/orders/${orderId}/mondial-relay/tracking`,
+        { method: "POST" },
       );
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(data.error || "Suivi Mondial Relay indisponible.");
+      await refreshOrders();
+      setShipmentMessages((current) => ({
+        ...current,
+        [orderId]: "Suivi mis à jour.",
+      }));
+    } catch (trackingError) {
+      setShipmentMessages((current) => ({
+        ...current,
+        [orderId]:
+          trackingError instanceof Error
+            ? trackingError.message
+            : "Suivi Mondial Relay indisponible.",
+      }));
     } finally {
       setPending("");
     }
@@ -309,8 +353,6 @@ export default function AdminOrdersPage() {
                       {order.shipping.relayPoint.address.join(", ")},{" "}
                       {order.shipping.relayPoint.postalCode}{" "}
                       {order.shipping.relayPoint.city}
-                      {order.shipping.relayPoint.source === "simulation" &&
-                        " - SIMULATION"}
                     </div>
                   )}
                   <div>
@@ -388,40 +430,88 @@ export default function AdminOrdersPage() {
                     className="admin-card"
                     style={{ marginTop: 16, padding: 16 }}
                   >
-                    <h3>Préparation Mondial Relay</h3>
+                    <h3>Expédition Mondial Relay</h3>
                     <p className="admin-muted">
-                      Préparation en simulation uniquement. Aucun appel de
-                      création, aucune étiquette et aucune expédition ne seront
-                      envoyés.
+                      La création contacte l’API2 de production et peut facturer
+                      une étiquette. Vérifiez la commande et l’adresse avant de
+                      confirmer.
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => prepareShipment(order.orderId)}
-                      disabled={pending === order.orderId}
-                    >
-                      {pending === order.orderId
-                        ? "Préparation…"
-                        : "Préparer l’expédition (simulation)"}
-                    </button>
-                    {preparations[order.orderId] && (
-                      <div role="status" style={{ marginTop: 12 }}>
-                        <p>
-                          DeliveryMode.mode :{" "}
-                          {preparations[order.orderId].deliveryMode.mode}
-                          {" - "}
-                          DeliveryMode.location :{" "}
-                          {preparations[order.orderId].deliveryMode.location}
+                    {order.shipping.mondialRelayShipment?.shipmentNumber ? (
+                      <div>
+                        <p role="status">
+                          Numéro d’expédition :{" "}
+                          {order.shipping.mondialRelayShipment.shipmentNumber}
                         </p>
-                        <p>
-                          Droit de service :{" "}
-                          {preparations[order.orderId].serviceRights}
-                        </p>
-                        <ul>
-                          {preparations[order.orderId].blockers.map((blocker) => (
-                            <li key={blocker}>{blocker}</li>
-                          ))}
-                        </ul>
+                        {order.shipping.mondialRelayShipment.labelAvailable && (
+                          <a
+                            href={`/api/admin/orders/${order.orderId}/mondial-relay/label`}
+                          >
+                            Télécharger l’étiquette PDF
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => refreshTracking(order.orderId)}
+                          disabled={pending === order.orderId}
+                          style={{ marginLeft: 12 }}
+                        >
+                          {pending === order.orderId
+                            ? "Recherche du suivi…"
+                            : "Actualiser le suivi"}
+                        </button>
+                        {order.shipping.mondialRelayShipment.trackingSummary && (
+                          <p>
+                            Suivi :{" "}
+                            {order.shipping.mondialRelayShipment.trackingSummary}
+                          </p>
+                        )}
+                        {order.shipping.mondialRelayShipment.trackingEvents?.map(
+                          (event, index) => (
+                            <p key={`${event.date}-${event.time}-${index}`}>
+                              {event.date} {event.time} - {event.label}
+                              {event.location ? ` (${event.location})` : ""}
+                            </p>
+                          ),
+                        )}
                       </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => createShipment(order.orderId)}
+                        disabled={
+                          pending === order.orderId ||
+                          !productionShipmentReady ||
+                          Boolean(
+                            order.shipping.mondialRelayShipment?.status,
+                          )
+                        }
+                      >
+                        {pending === order.orderId
+                          ? "Création de l’expédition…"
+                          : order.shipping.mondialRelayShipment?.status ===
+                              "unknown"
+                            ? "Vérification manuelle requise"
+                            : "Créer l’expédition réelle"}
+                      </button>
+                    )}
+                    {!productionShipmentReady &&
+                      !order.shipping.mondialRelayShipment && (
+                        <p className="admin-muted" role="status">
+                          La configuration de production n’est pas encore prête.
+                        </p>
+                      )}
+                    {order.shipping.mondialRelayShipment?.status ===
+                      "unknown" && (
+                      <p className="admin-error" role="alert">
+                        L’état de création est incertain. Vérifiez-le dans
+                        Mondial Relay avant toute action. Le système bloque un
+                        nouvel envoi pour éviter un doublon.
+                      </p>
+                    )}
+                    {shipmentMessages[order.orderId] && (
+                      <p className="admin-muted" role="status">
+                        {shipmentMessages[order.orderId]}
+                      </p>
                     )}
                   </section>
                 )}

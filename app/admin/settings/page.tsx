@@ -41,24 +41,18 @@ export default function AdminSettingsPage() {
   const [shippingMessage, setShippingMessage] = useState("");
   const [shippingBusy, setShippingBusy] = useState(false);
   const [relayStatus, setRelayStatus] = useState({
-    api1: false,
-    api2: false,
-    api1SandboxEnabled: false,
-    api2SandboxEnabled: false,
+    api1Configured: false,
+    api2Configured: false,
+    api1Enabled: false,
+    api2Enabled: false,
+    api2EndpointConfigured: false,
+    providerConfirmed: false,
+    senderConfigured: false,
+    collectionModeConfigured: false,
   });
-  const [relayMode, setRelayMode] = useState<"simulation" | "sandbox">(
-    "simulation",
-  );
-  const [api2Test, setApi2Test] = useState<{
-    attempted: boolean;
-    createdAt?: string | null;
-    shipmentNumber?: string;
-    labelUrl?: string;
-    outcome?: string | null;
-  }>({ attempted: false });
-  const [api2TestMessage, setApi2TestMessage] = useState("");
-  const [api2TestBusy, setApi2TestBusy] = useState(false);
-  const [api2TestError, setApi2TestError] = useState(false);
+  const [relayReadiness, setRelayReadiness] = useState<
+    Record<string, boolean>
+  >({});
 
   useEffect(() => {
     let active = true;
@@ -81,7 +75,7 @@ export default function AdminSettingsPage() {
         if (active) {
           setShipping(data.settings);
           setRelayStatus(data.credentialsConfigured);
-          setRelayMode(data.mode);
+          setRelayReadiness(data.readiness || {});
         }
       })
       .catch((error) => {
@@ -89,20 +83,6 @@ export default function AdminSettingsPage() {
           setShippingMessage(
             error instanceof Error ? error.message : "Chargement impossible.",
           );
-      });
-    fetch("/api/admin/shipping-settings/test-shipment", { cache: "no-store" })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Chargement impossible.");
-        if (active) setApi2Test(data);
-      })
-      .catch((error) => {
-        if (active) {
-          setApi2TestMessage(
-            error instanceof Error ? error.message : "Chargement impossible.",
-          );
-          setApi2TestError(true);
-        }
       });
     return () => { active = false; };
   }, []);
@@ -147,7 +127,7 @@ export default function AdminSettingsPage() {
         throw new Error(data.error || "Enregistrement impossible.");
       setShipping(data.settings);
       setShippingMessage(
-        "Paramètres enregistrés. La simulation reste active et aucune expédition réelle n’est possible.",
+        "Paramètres contractuels enregistrés. Les commandes et expéditions restent soumises aux garde-fous de production.",
       );
     } catch (error) {
       setShippingMessage(
@@ -155,37 +135,6 @@ export default function AdminSettingsPage() {
       );
     } finally {
       setShippingBusy(false);
-    }
-  }
-
-  async function runApi2SandboxTest() {
-    setApi2TestBusy(true);
-    setApi2TestMessage("");
-    setApi2TestError(false);
-    try {
-      const response = await fetch(
-        "/api/admin/shipping-settings/test-shipment",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
-        },
-      );
-      const data = await response.json();
-      if (data.attempted) setApi2Test(data);
-      if (!response.ok)
-        throw new Error(data.error || "Le test API2 a échoué.");
-      setApi2Test(data);
-      setApi2TestMessage(
-        "Étiquette de test sandbox créée avec des coordonnées fictives. Aucun client ni paiement n’a été utilisé.",
-      );
-    } catch (error) {
-      setApi2TestMessage(
-        error instanceof Error ? error.message : "Le test API2 a échoué.",
-      );
-      setApi2TestError(true);
-    } finally {
-      setApi2TestBusy(false);
     }
   }
 
@@ -305,13 +254,12 @@ export default function AdminSettingsPage() {
                   value={rate.serviceCode}
                   onChange={(event) =>
                     updateRate(key, index, {
-                      serviceCode:
-                        event.target.value === "24L" ? "24L" : "24R",
+                      serviceCode: event.target.value as ShippingRate["serviceCode"],
                     })
                   }
                 >
-                  <option value="24R">24R - Point Relais classique</option>
-                  <option value="24L">24L - Point Relais grand format</option>
+                  <option value="24R/MED">24R/MED - Point Relais</option>
+                  <option value="24R/APM">24R/APM - Locker</option>
                 </select>
               </label>
               <label>
@@ -332,7 +280,7 @@ export default function AdminSettingsPage() {
                 Tarif par colis (€)
                 <input
                   type="number"
-                  min="0"
+                  min="0.01"
                   max="1000"
                   step="0.01"
                   value={(rate.priceCents / 100).toFixed(2)}
@@ -421,123 +369,45 @@ export default function AdminSettingsPage() {
           </p>
         )}
         <div role="status" className="admin-muted">
-          API1 test : {relayStatus.api1 ? "identifiants configurés" : "non configuré"}
+          API1 production : {relayStatus.api1Configured ? "identifiants configurés" : "non configuré"}
           {" - "}
-          API2 test : {relayStatus.api2 ? "identifiants configurés" : "non configuré"}
+          API2 production : {relayStatus.api2Configured ? "identifiants configurés" : "non configuré"}
           {" - "}
-          {" - "}mode : {relayMode === "sandbox" ? "sandbox API1" : "simulation"}
-          {" - "}service 24R : droit du compte non vérifié
+          endpoint API2 : {relayStatus.api2EndpointConfigured ? "configuré" : "à confirmer"}
+          {" - "}
+          contrat fournisseur : {relayStatus.providerConfirmed ? "confirmé" : "non confirmé"}
         </div>
         <p className="admin-error" role="note">
-          Les commandes, paiements et expéditions réelles restent désactivés.
-          Le test API2 ci-dessous utilise uniquement le sandbox et des données fictives.
+          Les clés restent dans l’environnement serveur. Aucun test, paiement,
+          commande ou envoi réel n’est effectué depuis cette page.
         </p>
-        <section
-          aria-labelledby="mondial-relay-api2-test-title"
-          style={{ marginTop: 18, borderTop: "1px solid #e5ddd2", paddingTop: 16 }}
-        >
-          <h3 id="mondial-relay-api2-test-title">Étiquette API2 sandbox</h3>
-          <p className="admin-muted">
-            Une seule tentative sera autorisée pour éviter les doublons. Elle
-            utilise un Point Relais et des coordonnées de test documentés, sans
-            commande ni donnée client. L’API2 de production n’est jamais appelée.
-          </p>
-          {api2TestMessage && (
-            <p className={api2TestError ? "admin-error" : "admin-success"} role="status">
-              {api2TestMessage}
-            </p>
-          )}
-          {api2Test.attempted && (
-            <p className="admin-muted" role="status">
-              Une tentative sandbox est déjà réservée
-              {api2Test.createdAt
-                ? ` le ${new Date(api2Test.createdAt).toLocaleString("fr-FR")}`
-                : ""}
-              . Aucune seconde création ne sera envoyée.
-            </p>
-          )}
-          {api2Test.outcome && (
-            <p className="admin-muted" role="status">
-              Résultat technique journalisé sans secret :{" "}
-              <code>{api2Test.outcome}</code>
-            </p>
-          )}
-          {api2Test.shipmentNumber && (
-            <p role="status">
-              Référence d’expédition de test : {api2Test.shipmentNumber}
-              {api2Test.labelUrl && (
-                <>
-                  {" "}
-                  <a
-                    href={api2Test.labelUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Ouvrir l’étiquette PDF
-                  </a>
-                </>
-              )}
-            </p>
-          )}
-          {!relayStatus.api2SandboxEnabled && (
-            <p className="admin-muted">
-              Test inactif : activez uniquement
-              {" "}
-              <code>MONDIAL_RELAY_API2_TEST_ENABLED=true</code>
-              {" "}
-              dans l’environnement serveur après le déploiement.
-            </p>
-          )}
-          <button
-            type="button"
-            disabled={
-              api2TestBusy ||
-              api2Test.attempted ||
-              !relayStatus.api2 ||
-              !relayStatus.api2SandboxEnabled
-            }
-            onClick={runApi2SandboxTest}
-            style={{ marginTop: 8 }}
-          >
-            {api2TestBusy
-              ? "Création du test sandbox…"
-              : api2Test.attempted
-                ? "Test déjà réservé"
-                : "Créer l’unique étiquette de test"}
-          </button>
-        </section>
+        <div role="status" className="admin-muted">
+          Recherche API1 : {relayReadiness.searchEnabled ? "prête" : "désactivée"}
+          {" - "}
+          Création API2 : {relayReadiness.shipmentCreationEnabled ? "prête" : "désactivée"}
+          {" - "}
+          Paiement et livraison : {relayReadiness.checkoutShippingReady ? "prêts" : "désactivés"}
+        </div>
         <form onSubmit={saveShipping}>
           <label style={{ display: "block", maxWidth: 360, marginTop: 16 }}>
-            Code de service utilisé
+            Service contractuel autorisé
             <select
               value={shipping.serviceCode}
               onChange={(event) =>
                 setShipping((current) => ({
                   ...current,
-                  serviceCode:
-                    event.target.value === "24L" ? "24L" : "24R",
+                  serviceCode: event.target.value as ShippingRate["serviceCode"],
                 }))
               }
             >
-              <option value="24R">24R - Point Relais classique</option>
-              <option value="24L">24L - Point Relais grand format</option>
+              <option value="24R/MED">24R/MED - Point Relais</option>
+              <option value="24R/APM">24R/APM - Locker</option>
             </select>
           </label>
-          {parcelFields(
-            "Colis de test uniquement - valeurs provisoires fictives",
-            "testParcel",
-            shipping.testParcel,
-          )}
           {parcelFields(
             "Profil colis contractuel - à renseigner après confirmation",
             "contractParcel",
             shipping.contractParcel,
-          )}
-          {rateFields(
-            "Tarifs provisoires de test",
-            "testRates",
-            shipping.testRates,
-            "Le tarif initial de 4,10 € est fictif et réservé aux simulations. Il ne représente pas le contrat Mondial Relay.",
           )}
           {rateFields(
             "Grille tarifaire contractuelle",

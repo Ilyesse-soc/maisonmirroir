@@ -33,11 +33,44 @@ export type ShippingSelection = Pick<
   | "label"
   | "shortLabel"
   | "carrier"
-  | "price"
   | "estimatedDelay"
   | "trackingBaseUrl"
 > & {
+  price: number;
   relayPoint?: RelayPoint;
+  mondialRelayShipment?: MondialRelayShipment;
+};
+
+export type MondialRelayTrackingEvent = {
+  label: string;
+  date: string;
+  time: string;
+  location: string;
+  relayNumber?: string;
+  country?: string;
+};
+
+export type MondialRelayShipmentStatus =
+  | "creating"
+  | "created"
+  | "unknown"
+  | "tracking";
+
+export type MondialRelayShipment = {
+  status: MondialRelayShipmentStatus;
+  attemptId: string;
+  trackingAttemptId?: string;
+  reservedAt: string;
+  shipmentNumber?: string;
+  labelUrl?: string;
+  labelAvailable?: boolean;
+  providerErrorCode?: string;
+  trackingEvents?: MondialRelayTrackingEvent[];
+  trackingSummary?: string;
+  trackingRelayNumber?: string;
+  trackingRelayLabel?: string;
+  trackingCheckedAt?: string;
+  trackingErrorCode?: string;
 };
 
 export type OrderPayload = {

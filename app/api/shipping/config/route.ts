@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import {
   getMondialRelaySettings,
-  getMondialRelayTestCredentialStatus,
+  getMondialRelayProductionReadiness,
 } from "@/lib/mondialRelaySettings";
+import { getPayPalProductionStatus } from "@/lib/commerceSecurity";
 import { securityEvent } from "@/lib/observability";
 
 export const runtime = "nodejs";
@@ -10,15 +11,30 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const credentials = getMondialRelayTestCredentialStatus();
+    const settings = await getMondialRelaySettings();
+    const relay = getMondialRelayProductionReadiness(settings);
+    const paypal = getPayPalProductionStatus();
+    const paymentsEnabled =
+      process.env.REAL_PAYMENTS_ENABLED === "true" && paypal.configured;
+    const realShippingEnabled = relay.checkoutShippingReady;
+    const realShipmentCreationEnabled = relay.shipmentCreationEnabled;
+    const shopOpen =
+      process.env.SHOP_OPEN === "true" &&
+      paymentsEnabled &&
+      realShippingEnabled &&
+      realShipmentCreationEnabled;
     return NextResponse.json(
       {
-        settings: await getMondialRelaySettings(),
-        mode: credentials.api1 && credentials.api1SandboxEnabled ? "sandbox" : "simulation",
-        shopOpen: process.env.SHOP_OPEN === "true",
-        paymentsEnabled: process.env.REAL_PAYMENTS_ENABLED === "true",
-        realShippingEnabled: false,
-        realShipmentCreationEnabled: false,
+        settings: {
+          serviceCode: settings.serviceCode,
+          contractParcel: settings.contractParcel,
+          contractRates: settings.contractRates,
+        },
+        shopOpen,
+        paymentsEnabled,
+        realShippingEnabled,
+        realShipmentCreationEnabled,
+        paypalClientId: paymentsEnabled && shopOpen ? paypal.clientId : "",
       },
       { headers: { "Cache-Control": "no-store" } },
     );

@@ -23,45 +23,27 @@ export async function GET() {
       paymentsEnabled &&
       realShippingEnabled &&
       realShipmentCreationEnabled;
-    const publicRates = relay.checkoutShippingReady
-      ? [
-          ...settings.contractRates,
-          ...(settings.proposedRate.confirmed &&
-          settings.proposedRate.maxWeightGrams &&
-          settings.proposedRate.priceBasis !== "unknown" &&
-          settings.proposedRate.customerPriceCents !== null
-            ? [
-                {
-                  ...settings.proposedRate,
-                  maxWeightGrams: settings.proposedRate.maxWeightGrams,
-                  customerPriceCents:
-                    settings.proposedRate.customerPriceCents,
-                },
-              ]
-            : []),
-        ]
-          .filter(
-            (rate) =>
-              rate.confirmed &&
-              rate.serviceCode === settings.serviceCode &&
-              rate.priceBasis !== "unknown" &&
-              rate.customerPriceCents !== null &&
-              rate.customerPriceCents > 0,
-          )
-          .map(({ serviceCode, maxWeightGrams, priceBasis, customerPriceCents, confirmed }) => ({
-            serviceCode,
-            maxWeightGrams,
-            priceBasis,
-            customerPriceCents,
-            confirmed,
-          }))
+    const publicShippingTiers = relay.checkoutShippingReady
+      ? settings.shippingTiers.filter(
+          (tier) =>
+            tier.confirmed &&
+            typeof tier.weightGrams === "number" &&
+            tier.weightGrams > 0 &&
+            typeof tier.lengthCm === "number" &&
+            tier.lengthCm > 0 &&
+            typeof tier.widthCm === "number" &&
+            tier.widthCm > 0 &&
+            typeof tier.depthCm === "number" &&
+            tier.depthCm > 0 &&
+            typeof tier.customerPriceCents === "number" &&
+            tier.customerPriceCents > 0,
+        )
       : [];
     return NextResponse.json(
       {
         settings: {
           serviceCode: settings.serviceCode,
-          contractParcel: settings.contractParcel,
-          contractRates: publicRates,
+          shippingTiers: publicShippingTiers,
         },
         shopOpen,
         paymentsEnabled,

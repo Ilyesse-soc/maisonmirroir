@@ -180,7 +180,7 @@ export function CartProvider({
   const [shippingConfig, setShippingConfig] = useState<{
     settings: Pick<
       MondialRelaySettings,
-      "serviceCode" | "contractParcel" | "contractRates"
+      "serviceCode" | "shippingTiers"
     >;
     shopOpen: boolean;
     paymentsEnabled: boolean;

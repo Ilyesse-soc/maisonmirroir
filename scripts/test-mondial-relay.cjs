@@ -485,6 +485,7 @@ const shipmentRoute = readFileSync(
 );
 assert.match(publicSettings, /SHOP_OPEN/);
 assert.match(publicSettings, /REAL_PAYMENTS_ENABLED/);
+assert.match(publicSettings, /shippingTiers/);
 assert.match(paypalOrderRoute, /prepareCheckoutOrder/);
 assert.match(orderRoute, /verifyCommerceCheckoutProof/);
 assert.match(orderRoute, /captureAndVerifyPayPalOrder/);

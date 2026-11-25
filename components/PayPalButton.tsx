@@ -170,7 +170,7 @@ export default function PayPalButton({
         <PayPalButtons
           style={{ layout: "vertical" }}
           disabled={status === "processing" || !acceptTerms || !cgvVersion}
-          forceReRender={[acceptTerms, cgvVersion, order.shipping.id, order.product.quantity]}
+          forceReRender={[acceptTerms, cgvVersion, order.shipping.id, order.product.quantity, order.promotionCode, displayAmount]}
           createOrder={async () => {
             if (!acceptTerms || !cgvVersion) throw new Error("CGV_ACCEPTANCE_REQUIRED");
             checkoutProofRef.current = "";

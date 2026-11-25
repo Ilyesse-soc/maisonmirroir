@@ -190,6 +190,7 @@ export function CartProvider({
     settings: Pick<
       MondialRelaySettings,
       | "fulfillmentMode"
+      | "manualConnectConfirmed"
       | "serviceCode"
       | "shippingTiers"
       | "homeDeliveryEnabled"

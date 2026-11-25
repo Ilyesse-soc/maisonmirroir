@@ -213,12 +213,13 @@ export function getHomeDeliveryPriceCents(
   settings: Pick<
     MondialRelaySettings,
     "homeDeliveryEnabled" | "homeDeliveryContractConfirmed" | "homeShippingTiers"
-  >,
+  > & Partial<Pick<MondialRelaySettings, "fulfillmentMode" | "manualConnectConfirmed">>,
   itemCount: number,
 ): number | null {
   if (
     !settings.homeDeliveryEnabled ||
-    !settings.homeDeliveryContractConfirmed ||
+    !(settings.homeDeliveryContractConfirmed ||
+      (settings.fulfillmentMode === "manual_connect" && settings.manualConnectConfirmed)) ||
     !Number.isInteger(itemCount) ||
     itemCount < 1 ||
     itemCount > 30
@@ -244,12 +245,13 @@ export function getHomeDeliveryParcelProfile(
   settings: Pick<
     MondialRelaySettings,
     "homeDeliveryEnabled" | "homeDeliveryContractConfirmed" | "homeShippingTiers"
-  >,
+  > & Partial<Pick<MondialRelaySettings, "fulfillmentMode" | "manualConnectConfirmed">>,
   itemCount: number,
 ): ResolvedParcelProfile | null {
   if (
     !settings.homeDeliveryEnabled ||
-    !settings.homeDeliveryContractConfirmed ||
+    !(settings.homeDeliveryContractConfirmed ||
+      (settings.fulfillmentMode === "manual_connect" && settings.manualConnectConfirmed)) ||
     !Number.isInteger(itemCount) ||
     itemCount < 1 ||
     itemCount > 30

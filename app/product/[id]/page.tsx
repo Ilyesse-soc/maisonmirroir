@@ -7,6 +7,7 @@ import {
   type OptionChoice,
   type Product,
 } from "@/lib/products";
+import { useCartPromotion } from "@/components/useCartPromotion";
 import PayPalButton from "@/components/PayPalButton";
 import ProductImageGallery from "@/components/ProductImageGallery";
 import { useCart } from "@/components/CartProvider";
@@ -120,6 +121,11 @@ function ProductDetails({ productId }: { productId: string }) {
   );
   const [error, setError] = useState("");
 
+  const {
+    promotionInput, setPromotionInput, applyPromotion, promotionBusy,
+    promotionMessage, currentPromotionCode, currentPromotionDiscount,
+  } = useCartPromotion([{ productId: product?.id || "", quantity: Math.max(1, Math.trunc(Number(quantity) || 1)), unitPrice: product ? getProductPrice(product.id, product.price) : 0 }]);
+
   if (!product)
     return (
       <div
@@ -217,6 +223,7 @@ function ProductDetails({ productId }: { productId: string }) {
 
   const unitPrice = computeUnitPrice();
   const qty = parseQuantity(quantity);
+
   const availableShippingMethods = SHIPPING_METHODS.filter(
     method => availableShippingMethodIds.includes(method.id) &&
       getShippingPriceQuote(method.id, qty ?? 1).price !== null,
@@ -230,7 +237,7 @@ function ProductDetails({ productId }: { productId: string }) {
     qty ?? 1,
   );
   const shippingPrice = shippingQuote.price ?? 0;
-  const total = qty ? subtotal + shippingPrice : 0;
+  const total = qty ? subtotal + shippingPrice - currentPromotionDiscount / 100 : 0;
   const subtotalDisplayAmount = qty ? formatProductAmount(subtotal) : "-";
   const displayAmount =
     qty && shippingQuote.price !== null ? formatProductAmount(total) : "-";
@@ -1438,6 +1445,17 @@ function ProductDetails({ productId }: { productId: string }) {
                     </div>
                   )}
                 </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <label htmlFor="product-promotion">Code promotionnel</label>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input id="product-promotion" className="mm-input" value={promotionInput}
+                      onChange={event => setPromotionInput(event.target.value)} />
+                    <button type="button" onClick={applyPromotion} disabled={promotionBusy || !promotionInput.trim()}>Appliquer</button>
+                  </div>
+                  {promotionMessage && <p role="status">{promotionMessage}</p>}
+                  {currentPromotionDiscount > 0 && <p>R&#233;duction {currentPromotionCode} : -{formatProductAmount(currentPromotionDiscount / 100)} &#8364;</p>}
+                  <p>Total TTC : <strong>{displayAmount} &#8364;</strong></p>
+                </div>
                 {error && (
                   <p
                     style={{
@@ -1764,6 +1782,12 @@ function ProductDetails({ productId }: { productId: string }) {
                     </span>
                   </div>
 
+                  {currentPromotionDiscount > 0 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 22px" }}>
+                      <span>R&#233;duction {currentPromotionCode}</span>
+                      <span>-{formatProductAmount(currentPromotionDiscount / 100)} &#8364;</span>
+                    </div>
+                  )}
                   {/* Subtotal */}
                   <div
                     style={{
@@ -1945,6 +1969,7 @@ function ProductDetails({ productId }: { productId: string }) {
                             },
                           ]
                         : [],
+                      promotionCode: currentPromotionCode || undefined,
                       customer: address,
                       shipping: {
                         id: selectedShipping?.id || "",

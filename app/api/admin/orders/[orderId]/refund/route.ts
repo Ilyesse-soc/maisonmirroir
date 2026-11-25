@@ -57,7 +57,8 @@ export async function POST(
     const requestId = body.idempotencyKey.toLowerCase();
     const prepared = await transaction(async (db) => {
       const financeResult = await db.query(
-        `SELECT order_id,paypal_capture_id,payment_status,total_cents,refunded_cents
+        `SELECT order_id,paypal_capture_id,payment_status,total_cents,refunded_cents,
+          return_status
          FROM mm_commerce_order_financials WHERE order_id=$1 FOR UPDATE`,
         [orderId],
       );
@@ -80,6 +81,8 @@ export async function POST(
       }
       if (!["paid", "partially_refunded"].includes(String(finance.payment_status)))
         throw new Error("REFUND_PAYMENT_NOT_REFUNDABLE");
+      if (String(finance.return_status) !== "received")
+        throw new Error("REFUND_RETURN_NOT_RECEIVED");
       if (typeof finance.paypal_capture_id !== "string" || !finance.paypal_capture_id)
         throw new Error("REFUND_CAPTURE_MISSING");
       const activeRefund = await db.query(
@@ -106,6 +109,12 @@ export async function POST(
          VALUES($1,$2,$3,$4,$5,'pending',$6,$7)`,
         [refund.refund_id, requestId, orderId, refund.paypal_capture_id,
           refund.amount_cents, refund.reason, session.user.id],
+      );
+      await db.query(
+        `UPDATE mm_commerce_order_financials
+         SET return_status='refund_in_progress',return_updated_at=now(),updated_at=now()
+         WHERE order_id=$1`,
+        [orderId],
       );
       return { refund, finance, shouldCall: true, verifyRefundId: null as string | null };
     });
@@ -146,6 +155,13 @@ export async function POST(
         [prepared.refund.refund_id, uncertain ? "unknown" : "failed",
           uncertain ? "PAYPAL_REFUND_UNKNOWN" : "PAYPAL_REFUND_REJECTED"],
       );
+      if (!uncertain)
+        await database().query(
+          `UPDATE mm_commerce_order_financials
+           SET return_status='received',return_updated_at=now(),updated_at=now()
+           WHERE order_id=$1 AND return_status='refund_in_progress'`,
+          [orderId],
+        );
       return NextResponse.json(
         { error: uncertain
           ? "État PayPal incertain. Réessayez uniquement avec la même requête."
@@ -160,6 +176,12 @@ export async function POST(
         `UPDATE mm_commerce_refunds SET status='failed',paypal_refund_id=$2,
           error_code=$3,updated_at=now() WHERE refund_id=$1 AND status IN ('pending','unknown')`,
         [prepared.refund.refund_id, provider.refundId, `PAYPAL_${provider.status}`],
+      );
+      await database().query(
+        `UPDATE mm_commerce_order_financials
+         SET return_status='received',return_updated_at=now(),updated_at=now()
+         WHERE order_id=$1 AND return_status='refund_in_progress'`,
+        [orderId],
       );
       return NextResponse.json({ error: "PayPal n’a pas confirmé le remboursement.", retrySameKey: false }, { status: 502, headers: noStore });
     }
@@ -181,7 +203,7 @@ export async function POST(
         [prepared.refund.refund_id],
       )).rows[0] as RefundRow;
       const finance = (await db.query(
-        `SELECT total_cents,refunded_cents,payment_status
+        `SELECT total_cents,refunded_cents,payment_status,return_status
          FROM mm_commerce_order_financials WHERE order_id=$1 FOR UPDATE`,
         [orderId],
       )).rows[0];
@@ -191,7 +213,9 @@ export async function POST(
           throw new Error("REFUND_AMOUNT_EXCEEDS_BALANCE");
         const paymentStatus = nextRefunded === Number(finance.total_cents) ? "refunded" : "partially_refunded";
         await db.query(
-          `UPDATE mm_commerce_order_financials SET refunded_cents=$2,payment_status=$3,updated_at=now()
+          `UPDATE mm_commerce_order_financials
+           SET refunded_cents=$2,payment_status=$3,return_status='refunded',
+             return_updated_at=now(),updated_at=now()
            WHERE order_id=$1`,
           [orderId, nextRefunded, paymentStatus],
         );
@@ -224,6 +248,7 @@ export async function POST(
       REFUND_IDEMPOTENCY_CONFLICT: [409, "Cette clé a déjà été utilisée avec d’autres paramètres."],
       REFUND_PAYMENT_NOT_REFUNDABLE: [409, "Cette commande n’a pas de paiement remboursable."],
       REFUND_CAPTURE_MISSING: [409, "La capture PayPal vérifiée est absente."],
+      REFUND_RETURN_NOT_RECEIVED: [409, "Le colis retourné doit être réceptionné avant le remboursement."],
       REFUND_PENDING: [409, "Un remboursement est déjà en cours ou son état doit être réconcilié."],
       REFUND_AMOUNT_EXCEEDS_BALANCE: [409, "Le montant dépasse le solde remboursable."],
     };

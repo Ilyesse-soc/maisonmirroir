@@ -77,6 +77,9 @@ export const orderPatchSchema = z
       .max(100)
       .regex(/^[A-Za-z0-9 -]*$/)
       .optional(),
+    returnStatus: z
+      .enum(["requested", "accepted", "awaiting_receipt", "received"])
+      .optional(),
   })
   .strict()
-  .refine((v) => Boolean(v.status || v.trackingNumber));
+  .refine((v) => Boolean(v.status || v.trackingNumber || v.returnStatus));

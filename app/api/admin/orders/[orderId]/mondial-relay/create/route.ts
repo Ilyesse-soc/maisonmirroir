@@ -15,7 +15,10 @@ import {
 import { mutationAllowed } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
 import { MONDIAL_RELAY_POINT_RELAIS_ID } from "@/lib/shipping";
-import { isMondialRelayServiceAllowed } from "@/lib/mondialRelayTypes";
+import {
+  getMondialRelayParcelProfile,
+  isMondialRelayServiceAllowed,
+} from "@/lib/mondialRelayTypes";
 import type { ShipmentAddress } from "@/lib/mondialRelayApi2";
 
 export const runtime = "nodejs";
@@ -104,25 +107,22 @@ export async function POST(
         { error: "MONDIAL_RELAY_SHIPMENT_NOT_READY", readiness },
         { status: 503 },
       );
+    const itemCount = order.items.reduce(
+      (total, item) => total + item.quantity,
+      0,
+    );
+    const parcel = getMondialRelayParcelProfile(settings, itemCount);
     if (
       !isMondialRelayServiceAllowed(settings, point.serviceCode) ||
       point.serviceCode !== settings.serviceCode ||
-      !settings.contractParcel.weightGrams ||
-      !settings.contractParcel.lengthCm ||
-      !settings.contractParcel.widthCm ||
-      !settings.contractParcel.depthCm
+      !parcel
     )
       return NextResponse.json(
         { error: "CONTRACT_SHIPMENT_PROFILE_MISMATCH" },
         { status: 409 },
       );
-    const itemCount = order.items.reduce(
-      (total, item) => total + item.quantity,
-      0,
-    );
     if (
       itemCount < 1 ||
-      itemCount > settings.contractParcel.itemsPerParcel ||
       itemCount > 30
     )
       return NextResponse.json(
@@ -186,10 +186,10 @@ export async function POST(
           parcels: [
             {
               content: order.items.map((item) => item.name).join(", ").slice(0, 60),
-              weightGrams: settings.contractParcel.weightGrams,
-              lengthCm: settings.contractParcel.lengthCm,
-              widthCm: settings.contractParcel.widthCm,
-              depthCm: settings.contractParcel.depthCm,
+              weightGrams: parcel.weightGrams,
+              lengthCm: parcel.lengthCm,
+              widthCm: parcel.widthCm,
+              depthCm: parcel.depthCm,
             },
           ],
         },

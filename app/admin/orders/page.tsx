@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { fonts, pageMaxWidth, theme } from "@/lib/uiStyles";
-import type { OrderRecord, OrderStatus } from "@/lib/orderTypes";
+import type {
+  OrderRecord,
+  OrderReturnStatus,
+  OrderStatus,
+} from "@/lib/orderTypes";
 import { MONDIAL_RELAY_POINT_RELAIS_ID } from "@/lib/shipping";
 
 type AdminOrderRecord = OrderRecord & {
@@ -12,6 +16,8 @@ type AdminOrderRecord = OrderRecord & {
   refundedCents?: number;
   discountCents?: number;
   totalCents?: number;
+  returnStatus?: OrderReturnStatus;
+  returnUpdatedAt?: string | null;
   refundEligible?: boolean;
   refundAttempt?: null | { idempotencyKey: string; amountCents: number; status: string };
   refundHistory?: Array<{ refundId: string; amountCents: number; status: string; reason: string; createdAt: string; completedAt: string | null }>;
@@ -49,6 +55,34 @@ export default function AdminOrdersPage() {
   const [refundReasons, setRefundReasons] = useState<Record<string, string>>({});
   const [refundMessages, setRefundMessages] = useState<Record<string, string>>({});
   const [refundKeys, setRefundKeys] = useState<Record<string, string>>({});
+
+  const returnLabels: Record<OrderReturnStatus, string> = {
+    none: "Aucun retour",
+    requested: "Retour demandé",
+    accepted: "Retour accepté",
+    awaiting_receipt: "En attente de réception",
+    received: "Retour réceptionné",
+    refund_in_progress: "Remboursement en cours",
+    refunded: "Remboursé",
+  };
+  type ManualReturnStatus = Exclude<
+    OrderReturnStatus,
+    "none" | "refund_in_progress" | "refunded"
+  >;
+  const nextReturnStatus: Partial<
+    Record<OrderReturnStatus, { value: ManualReturnStatus; label: string }>
+  > = {
+    none: { value: "requested", label: "Enregistrer la demande de retour" },
+    requested: { value: "accepted", label: "Accepter le retour" },
+    accepted: {
+      value: "awaiting_receipt",
+      label: "Confirmer l’attente du colis",
+    },
+    awaiting_receipt: {
+      value: "received",
+      label: "Confirmer la réception du retour",
+    },
+  };
 
   const visibleOrders = useMemo(() => orders.filter((order) => {
     const extended = order as AdminOrderRecord;
@@ -104,7 +138,11 @@ export default function AdminOrdersPage() {
 
   const updateOrder = async (
     orderId: string,
-    patch: { status?: OrderStatus; trackingNumber?: string },
+    patch: {
+      status?: OrderStatus;
+      trackingNumber?: string;
+      returnStatus?: ManualReturnStatus;
+    },
   ) => {
     setPending(orderId);
     setError("");
@@ -116,6 +154,7 @@ export default function AdminOrdersPage() {
       });
       const data = (await res.json()) as {
         order?: OrderRecord;
+        returnStatus?: OrderReturnStatus;
         error?: string;
       };
       if (!res.ok || !data.order)
@@ -123,7 +162,15 @@ export default function AdminOrdersPage() {
 
       setOrders((prev) =>
         prev.map((item) =>
-          item.orderId === data.order?.orderId ? { ...item, ...data.order } : item,
+          item.orderId === data.order?.orderId
+            ? {
+                ...item,
+                ...data.order,
+                ...(patch.returnStatus
+                  ? { returnStatus: data.returnStatus || patch.returnStatus }
+                  : {}),
+              }
+            : item,
         ),
       );
     } catch {
@@ -334,7 +381,10 @@ export default function AdminOrdersPage() {
         )}
 
         <div style={{ display: "grid", gap: 16 }}>
-          {visibleOrders.map((order) => (
+          {visibleOrders.map((order) => {
+            const currentReturnStatus = order.returnStatus || "none";
+            const nextReturn = nextReturnStatus[currentReturnStatus];
+            return (
             <div
               key={order.orderId}
               style={{
@@ -508,6 +558,34 @@ export default function AdminOrdersPage() {
               </section>
 
               <section className="admin-card" style={{ marginBottom: 14, padding: 14 }}>
+                <h3>Retour et remboursement</h3>
+                <p className="admin-muted">
+                  Statut : {returnLabels[currentReturnStatus]}
+                  {order.returnUpdatedAt
+                    ? ` - mis à jour le ${new Date(order.returnUpdatedAt).toLocaleString("fr-FR")}`
+                    : ""}
+                </p>
+                <p className="admin-muted">
+                  Vérifiez l’état du colis reçu avant de modifier le stock dans
+                  l’onglet Stocks. Le retour ne déclenche aucun remboursement
+                  automatique.
+                </p>
+                {nextReturn && (
+                  <button
+                    type="button"
+                    disabled={pending === order.orderId}
+                    onClick={() =>
+                      updateOrder(order.orderId, {
+                        returnStatus: nextReturn.value,
+                      })
+                    }
+                  >
+                    {nextReturn.label}
+                  </button>
+                )}
+              </section>
+
+              <section className="admin-card" style={{ marginBottom: 14, padding: 14 }}>
                 <h3>Remboursement PayPal Live</h3>
                 <p className="admin-muted">Le remboursement ne modifie pas le stock. Un retour confirmé doit être enregistré séparément avant toute remise en stock.</p>
                 {order.refundAttempt ? (
@@ -517,7 +595,7 @@ export default function AdminOrdersPage() {
                       {pending === order.orderId ? "Vérification…" : "Vérifier le même remboursement"}
                     </button>
                   </div>
-                ) : order.refundEligible ? (
+                ) : order.refundEligible && currentReturnStatus === "received" ? (
                   <div className="admin-form-grid">
                     <label>Montant (€), maximum {(Math.max(0, (order.totalCents ?? Math.round(order.total * 100)) - (order.refundedCents || 0)) / 100).toFixed(2)}
                       <input type="number" min="0.01" step="0.01" max={(Math.max(0, (order.totalCents ?? Math.round(order.total * 100)) - (order.refundedCents || 0)) / 100).toFixed(2)}
@@ -532,6 +610,8 @@ export default function AdminOrdersPage() {
                       {pending === order.orderId ? "Remboursement…" : refundKeys[order.orderId] ? "Réessayer la même demande" : "Rembourser via PayPal"}
                     </button>
                   </div>
+                ) : order.refundEligible ? (
+                  <p>Le remboursement manuel sera disponible après réception du colis retourné.</p>
                 ) : <p>Aucun solde actuellement remboursable ou capture PayPal vérifiée manquante.</p>}
                 {!!order.refundHistory?.length && <ul aria-label="Historique des remboursements">
                   {order.refundHistory.map((refund) => <li key={refund.refundId}>
@@ -688,7 +768,8 @@ export default function AdminOrdersPage() {
                   </section>
                 )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

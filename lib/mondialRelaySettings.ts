@@ -7,9 +7,11 @@ import {
   isSupportedMondialRelayService,
   type MondialRelaySettings,
   type ShippingRate,
+  type ShippingTier,
 } from "@/lib/mondialRelayTypes";
 
 const serviceCodeSchema = z.enum(["24R/MED", "24R/APM"]);
+const collectionModeSchema = z.literal("REL");
 const profileSchema = z
   .object({
     itemsPerParcel: z.number().int().min(1).max(30),
@@ -19,6 +21,45 @@ const profileSchema = z
     depthCm: z.number().int().min(1).max(200).nullable(),
   })
   .strict();
+const shippingTierSchema = z
+  .object({
+    quantity: z.number().int().min(1).max(30),
+    weightGrams: z.number().int().min(1).max(30000).nullable(),
+    lengthCm: z.number().int().min(1).max(200).nullable(),
+    widthCm: z.number().int().min(1).max(200).nullable(),
+    depthCm: z.number().int().min(1).max(200).nullable(),
+    customerPriceCents: z.number().int().min(0).max(100000).nullable(),
+    confirmed: z.boolean(),
+  })
+  .strict();
+const shippingTiersSchema = z
+  .array(shippingTierSchema)
+  .max(30)
+  .superRefine((tiers, context) => {
+    const quantities = new Set<number>();
+    tiers.forEach((tier, index) => {
+      if (quantities.has(tier.quantity))
+        context.addIssue({
+          code: "custom",
+          message: "Chaque quantité ne peut avoir qu'un seul palier.",
+          path: [index, "quantity"],
+        });
+      quantities.add(tier.quantity);
+      if (
+        tier.confirmed &&
+        (!tier.weightGrams ||
+          !tier.lengthCm ||
+          !tier.widthCm ||
+          !tier.depthCm ||
+          !tier.customerPriceCents)
+      )
+        context.addIssue({
+          code: "custom",
+          message: "Un palier confirmé doit avoir un colis complet et un tarif client.",
+          path: [index, "confirmed"],
+        });
+    });
+  });
 const senderSchema = z
   .object({
     company: z.string().max(120),
@@ -61,16 +102,37 @@ export const mondialRelaySettingsSchema = z
     allowedServices: z.array(serviceCodeSchema).max(2),
     contractConfirmed: z.boolean(),
     serviceConfirmed: z.boolean(),
-    collectionMode: z.string().trim().max(20),
+    collectionMode: collectionModeSchema,
     collectionModeConfirmed: z.boolean(),
     sender: senderSchema,
     testParcel: profileSchema,
     contractParcel: profileSchema,
+    shippingTiers: shippingTiersSchema,
     testRates: ratesSchema,
     contractRates: ratesSchema,
     proposedRate: proposedRateSchema,
   })
-  .strict();
+  .strict()
+  .superRefine((settings, context) => {
+    if (settings.serviceCode !== "24R/MED")
+      context.addIssue({
+        code: "custom",
+        message: "La boutique est configurée en Point Relais uniquement.",
+        path: ["serviceCode"],
+      });
+    if (settings.allowedServices.some((service) => service !== "24R/MED"))
+      context.addIssue({
+        code: "custom",
+        message: "Seul le service Point Relais 24R/MED est autorisé.",
+        path: ["allowedServices"],
+      });
+    if (settings.proposedRate.serviceCode !== "24R/MED")
+      context.addIssue({
+        code: "custom",
+        message: "Le tarif proposé doit concerner le service Point Relais.",
+        path: ["proposedRate", "serviceCode"],
+      });
+  });
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -119,24 +181,27 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
   const parsed = mondialRelaySettingsSchema.safeParse(value);
   if (parsed.success) return parsed.data;
   const source = isRecord(value) ? value : {};
-  const serviceCode = isSupportedMondialRelayService(source.serviceCode)
+  const serviceCode = source.serviceCode === "24R/MED"
     ? source.serviceCode
     : DEFAULT_MONDIAL_RELAY_SETTINGS.serviceCode;
   const storedSender = senderSchema.safeParse(source.sender);
   const storedProposed = proposedRateSchema.safeParse(source.proposedRate);
+  const storedShippingTiers = shippingTiersSchema.safeParse(source.shippingTiers);
+  const storedCollectionMode = collectionModeSchema.safeParse(source.collectionMode);
   const allowedServices = Array.isArray(source.allowedServices)
-    ? source.allowedServices.filter(isSupportedMondialRelayService)
+    ? source.allowedServices.filter((service) => service === "24R/MED")
     : [];
   return {
     serviceCode,
     allowedServices: [...new Set(allowedServices)],
     contractConfirmed: source.contractConfirmed === true,
-    serviceConfirmed: source.serviceConfirmed === true,
-    collectionMode:
-      typeof source.collectionMode === "string"
-        ? source.collectionMode.trim().slice(0, 20)
-        : "",
-    collectionModeConfirmed: source.collectionModeConfirmed === true,
+    serviceConfirmed:
+      source.serviceCode === "24R/MED" && source.serviceConfirmed === true,
+    collectionMode: storedCollectionMode.success
+      ? storedCollectionMode.data
+      : DEFAULT_MONDIAL_RELAY_SETTINGS.collectionMode,
+    collectionModeConfirmed:
+      storedCollectionMode.success && source.collectionModeConfirmed === true,
     sender: storedSender.success
       ? storedSender.data
       : { ...EMPTY_MONDIAL_RELAY_SENDER },
@@ -148,10 +213,19 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
       source.contractParcel,
       DEFAULT_MONDIAL_RELAY_SETTINGS.contractParcel,
     ),
+    shippingTiers: storedShippingTiers.success
+      ? storedShippingTiers.data as ShippingTier[]
+      : DEFAULT_MONDIAL_RELAY_SETTINGS.shippingTiers.map((tier) => ({ ...tier })),
     testRates: legacyRates(source.testRates),
     contractRates: legacyRates(source.contractRates),
     proposedRate: storedProposed.success
-      ? storedProposed.data
+      ? {
+          ...storedProposed.data,
+          serviceCode: "24R/MED",
+          confirmed:
+            storedProposed.data.serviceCode === "24R/MED" &&
+            storedProposed.data.confirmed,
+        }
       : { ...DEFAULT_MONDIAL_RELAY_SETTINGS.proposedRate },
   };
 }
@@ -212,7 +286,7 @@ export function getMondialRelayProductionCredentialStatus(
       process.env.MONDIAL_RELAY_PRODUCTION_CONFIRMED === "true",
     senderConfigured,
     collectionModeConfigured:
-      Boolean(settings.collectionMode.trim()) &&
+      settings.collectionMode === "REL" &&
       settings.collectionModeConfirmed,
   };
 }
@@ -224,16 +298,31 @@ export function getMondialRelayProductionReadiness(
   const contractConfirmed = settings.contractConfirmed;
   const serviceAllowed =
     settings.serviceConfirmed &&
+    settings.serviceCode === "24R/MED" &&
     isSupportedMondialRelayService(settings.serviceCode) &&
     settings.allowedServices.includes(settings.serviceCode);
-  const parcel = settings.contractParcel;
-  const parcelConfigured = Boolean(
-    parcel.weightGrams &&
-      parcel.lengthCm &&
-      parcel.widthCm &&
-      parcel.depthCm &&
-      parcel.itemsPerParcel,
+  const shippingTiers = Array.isArray(settings.shippingTiers)
+    ? settings.shippingTiers
+    : [];
+  const completeTiers = shippingTiers.filter(
+    (tier) =>
+      tier.confirmed &&
+      tier.weightGrams &&
+      tier.lengthCm &&
+      tier.widthCm &&
+      tier.depthCm,
   );
+  const parcel = settings.contractParcel;
+  const parcelConfigured =
+    shippingTiers.length > 0
+      ? completeTiers.length > 0
+      : Boolean(
+          parcel.weightGrams &&
+            parcel.lengthCm &&
+            parcel.widthCm &&
+            parcel.depthCm &&
+            parcel.itemsPerParcel,
+        );
   const activeRates = [
     ...settings.contractRates,
     ...(settings.proposedRate.confirmed &&
@@ -249,16 +338,23 @@ export function getMondialRelayProductionReadiness(
         ]
       : []),
   ];
-  const rateConfigured = activeRates.some(
-    (rate) =>
-      rate.serviceCode === settings.serviceCode &&
-      rate.confirmed &&
-      typeof rate.priceCents === "number" &&
-      rate.priceCents > 0 &&
-      rate.priceBasis !== "unknown" &&
-      rate.customerPriceCents !== null &&
-      rate.customerPriceCents > 0,
-  );
+  const rateConfigured =
+    shippingTiers.length > 0
+      ? completeTiers.some(
+          (tier) =>
+            tier.customerPriceCents !== null &&
+            tier.customerPriceCents > 0,
+        )
+      : activeRates.some(
+          (rate) =>
+            rate.serviceCode === settings.serviceCode &&
+            rate.confirmed &&
+            typeof rate.priceCents === "number" &&
+            rate.priceCents > 0 &&
+            rate.priceBasis !== "unknown" &&
+            rate.customerPriceCents !== null &&
+            rate.customerPriceCents > 0,
+        );
   const api1Ready =
     credentials.providerConfirmed &&
     credentials.api1Configured &&

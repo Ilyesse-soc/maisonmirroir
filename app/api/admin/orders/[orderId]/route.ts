@@ -64,7 +64,8 @@ export async function GET(
     try {
       finance = (await database().query(
         `SELECT payment_status,shipment_status,subtotal_cents,discount_cents,
-          shipping_cents,total_cents,refunded_cents,internal_notes,created_at,updated_at
+          shipping_cents,total_cents,refunded_cents,internal_notes,created_at,updated_at,
+          return_status,return_updated_at
          FROM mm_commerce_order_financials WHERE order_id=$1`,
         [orderId],
       )).rows[0] || null;
@@ -94,6 +95,7 @@ export async function PATCH(
     await adminAudit("ORDER_UPDATE_REQUESTED", orderId);
 
     const nextStatus = body.status;
+    const nextReturnStatus = body.returnStatus;
     const nextTracking = isNonEmptyString(body.trackingNumber)
       ? body.trackingNumber.trim()
       : "";
@@ -127,6 +129,7 @@ export async function PATCH(
       process.env.NODE_ENV === "production",
     );
     let previousShipmentStatus = "";
+    let updatedReturnStatus = "none";
     let updated: OrderRecord | null;
     if (durable) {
       const committed = await transaction(async (db) => {
@@ -137,9 +140,41 @@ export async function PATCH(
         if (!row) return null;
         const before = row.record as OrderRecord;
         const finance = (await db.query(
-          "SELECT shipment_status FROM mm_commerce_order_financials WHERE order_id=$1 FOR UPDATE",
+          "SELECT shipment_status,payment_status,return_status FROM mm_commerce_order_financials WHERE order_id=$1 FOR UPDATE",
           [orderId],
         )).rows[0];
+        if (nextReturnStatus) {
+          if (!finance) throw new Error("RETURN_ORDER_FINANCIALS_MISSING");
+          const currentReturnStatus = String(finance.return_status || "none");
+          const nextReturnByStatus: Record<string, string[]> = {
+            none: ["requested"],
+            requested: ["accepted"],
+            accepted: ["awaiting_receipt"],
+            awaiting_receipt: ["received"],
+            received: [],
+          };
+          if (
+            nextReturnStatus !== currentReturnStatus &&
+            !nextReturnByStatus[currentReturnStatus]?.includes(nextReturnStatus)
+          )
+            throw new Error("RETURN_STATUS_TRANSITION_INVALID");
+          if (
+            !["paid", "partially_refunded"].includes(
+              String(finance.payment_status),
+            )
+          )
+            throw new Error("RETURN_PAYMENT_NOT_PAID");
+          if (nextReturnStatus !== currentReturnStatus)
+            await db.query(
+              `UPDATE mm_commerce_order_financials
+               SET return_status=$2,return_updated_at=now(),updated_at=now()
+               WHERE order_id=$1`,
+              [orderId, nextReturnStatus],
+            );
+          updatedReturnStatus = nextReturnStatus;
+        } else {
+          updatedReturnStatus = String(finance?.return_status || "none");
+        }
         const statusShipmentMap: Record<string, string> = {
           "En preparation": "preparing", Expediee: "shipped",
           Livree: "delivered", Annulee: "cancelled",
@@ -164,6 +199,7 @@ export async function PATCH(
       updated = committed;
     } else {
       updated = await updateOrder(orderId, patch);
+      updatedReturnStatus = nextReturnStatus || "none";
     }
     if (!updated) {
       return NextResponse.json(
@@ -200,7 +236,10 @@ export async function PATCH(
         },
       };
     }
-    return NextResponse.json({ success: true, order: safeOrder }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json(
+      { success: true, order: safeOrder, returnStatus: updatedReturnStatus },
+      { headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     if (error instanceof InputError) return NextResponse.json(
       { error: "Requête invalide." },
@@ -208,6 +247,12 @@ export async function PATCH(
     );
     if (error instanceof Error && error.message === "SHIPPED_ORDER_CANCELLATION_BLOCKED")
       return NextResponse.json({ error: "Une commande expédiée ou livrée ne peut pas être annulée ici." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+    if (error instanceof Error && error.message === "RETURN_STATUS_TRANSITION_INVALID")
+      return NextResponse.json({ error: "Le statut de retour ne peut pas suivre cette transition." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+    if (error instanceof Error && error.message === "RETURN_PAYMENT_NOT_PAID")
+      return NextResponse.json({ error: "Un retour ne peut être suivi que sur une commande payée." }, { status: 409, headers: { "Cache-Control": "no-store" } });
+    if (error instanceof Error && error.message === "RETURN_ORDER_FINANCIALS_MISSING")
+      return NextResponse.json({ error: "Le dossier financier de cette commande est introuvable." }, { status: 409, headers: { "Cache-Control": "no-store" } });
     return NextResponse.json(
       { error: "Echec de mise a jour" },
       { status: 500, headers: { "Cache-Control": "no-store" } },

@@ -7,7 +7,11 @@ import {
   getMondialRelayProductionReadiness,
   getMondialRelaySettings,
 } from "@/lib/mondialRelaySettings";
-import { isMondialRelayServiceAllowed } from "@/lib/mondialRelayTypes";
+import {
+  getMondialRelayParcelProfile,
+  getMondialRelayQuote,
+  isMondialRelayServiceAllowed,
+} from "@/lib/mondialRelayTypes";
 import { clientIp } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
 import { signMondialRelayPoint } from "@/lib/mondialRelayPointProof";
@@ -65,12 +69,18 @@ export async function GET(request: NextRequest) {
         { error: "Confirmez un service Mondial Relay autorisé dans l’administration." },
         { status: 409 },
       );
+    const parcel = getMondialRelayParcelProfile(settings, quantity);
+    if (!parcel || !getMondialRelayQuote(settings, quantity))
+      return NextResponse.json(
+        { error: "Le profil colis ou le tarif de livraison n’est pas configuré pour cette quantité." },
+        { status: 409 },
+      );
     const points = await searchMondialRelayPoints({
       shop: process.env.MONDIAL_RELAY_API1_PROD_SHOP || "",
       privateKey: process.env.MONDIAL_RELAY_API1_PROD_PRIVATE_KEY || "",
       postalCode,
       city,
-      weightGrams: settings.contractParcel.weightGrams || 0,
+      weightGrams: parcel.weightGrams || 0,
       serviceCode: settings.serviceCode,
     });
     return NextResponse.json(

@@ -80,7 +80,7 @@ const expectedSearchSignature = createHash("md5")
       "",
       "",
       "500",
-      "24R/MED",
+      "MED",
       "",
       "",
       "",
@@ -91,9 +91,42 @@ const expectedSearchSignature = createHash("md5")
   )
   .digest("hex")
   .toUpperCase();
-assert.match(searchRequest, /<Action>24R\/MED<\/Action>/);
+assert.match(searchRequest, /<Action>MED<\/Action>/);
 assert.match(searchRequest, /<NACE><\/NACE>/);
 assert.match(searchRequest, new RegExp(`<Security>${expectedSearchSignature}</Security>`));
+const lockerSearchRequest = api1.buildApi1PointSearchRequest({
+  shop: "ABCD1234",
+  privateKey: "test-key",
+  postalCode: "78300",
+  city: "Poissy",
+  weightGrams: 500,
+  serviceCode: "24R/APM",
+});
+assert.match(lockerSearchRequest, /<Action>APM<\/Action>/);
+const expectedLockerSignature = createHash("md5")
+  .update(
+    [
+      "ABCD1234",
+      "FR",
+      "",
+      "Poissy",
+      "78300",
+      "",
+      "",
+      "",
+      "500",
+      "APM",
+      "",
+      "",
+      "",
+      "10",
+      "test-key",
+    ].join(""),
+    "utf8",
+  )
+  .digest("hex")
+  .toUpperCase();
+assert.match(lockerSearchRequest, new RegExp(`<Security>${expectedLockerSignature}</Security>`));
 
 const successfulSearch = `<Response><STAT>0</STAT><PointsRelais>
   <PointRelais_Details><Num>123456</Num><Localisation1>Relais &amp; boutique</Localisation1>
@@ -158,7 +191,7 @@ const shipmentRequest = api2.buildApi2ProductionRequest(
     customerNo: "MM-2026-12345678",
     serviceCode: "24R/MED",
     relayLocation: "FR-123456",
-    collectionMode: "CCC",
+    collectionMode: "REL",
     sender: {
       firstName: "Maison",
       lastName: "Miroir",
@@ -192,7 +225,8 @@ const shipmentRequest = api2.buildApi2ProductionRequest(
 );
 assert.match(shipmentRequest, /<Login>test&amp;login<\/Login>/);
 assert.match(shipmentRequest, /<Password>test&lt;password&gt;<\/Password>/);
-assert.match(shipmentRequest, /<DeliveryMode Mode="24R\/MED" Location="FR-123456"/);
+assert.match(shipmentRequest, /<DeliveryMode Mode="24R" Location="FR-123456"/);
+assert.match(shipmentRequest, /<CollectionMode Mode="REL" Location=""/);
 assert.match(shipmentRequest, /<Content>Sac Maison Miroir<\/Content>/);
 assert.match(shipmentRequest, /<HouseNo>2<\/HouseNo>/);
 assert.match(api2.API2_PRODUCTION_URL || api2Source(), /api\/shipment/i);
@@ -360,6 +394,26 @@ assert.equal(
   ),
   null,
 );
+const quantitySettings = {
+  ...quoteSettings,
+  shippingTiers: relayTypes.DEFAULT_MONDIAL_RELAY_SETTINGS.shippingTiers,
+};
+assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 1).priceCents, 410);
+assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 2), null);
+assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 3), null);
+const confirmedTwoBagTier = {
+  ...quantitySettings,
+  shippingTiers: quantitySettings.shippingTiers.map((tier) =>
+    tier.quantity === 2
+      ? { ...tier, lengthCm: 30, widthCm: 21, depthCm: 6, confirmed: true }
+      : tier,
+  ),
+};
+assert.equal(relayTypes.getMondialRelayQuote(confirmedTwoBagTier, 2).priceCents, 454);
+assert.equal(
+  relayTypes.getMondialRelayParcelProfile(confirmedTwoBagTier, 2).weightGrams,
+  1000,
+);
 const legacySettings = relaySettings.parseMondialRelaySettings({
   serviceCode: "24R/MED",
   testParcel: {
@@ -408,6 +462,12 @@ const migration = readFileSync(
 );
 assert.match(migration, /CREATE TABLE IF NOT EXISTS mm_shipping_settings/);
 assert.doesNotMatch(migration, /\b(?:DROP|TRUNCATE|DELETE)\b/i);
+const returnsMigration = readFileSync(
+  "migrations/010_commerce_returns.sql",
+  "utf8",
+);
+assert.match(returnsMigration, /ADD COLUMN IF NOT EXISTS return_status/);
+assert.doesNotMatch(returnsMigration, /\b(?:DROP|TRUNCATE|DELETE)\b/i);
 const publicSettings = readFileSync(
   "app/api/shipping/config/route.ts",
   "utf8",

@@ -46,6 +46,7 @@ export function readCart(): CartSnapshot {
       items,
       shippingMethodId: shipping?.id || empty.shippingMethodId,
       relayPoint: isRelayPoint(parsed.relayPoint) ? parsed.relayPoint : null,
+      promotionCode: typeof parsed.promotionCode === "string" ? parsed.promotionCode.slice(0, 80) : "",
     };
   } catch {
     cached = empty;

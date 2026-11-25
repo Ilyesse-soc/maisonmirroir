@@ -25,6 +25,7 @@ export type CartSnapshot = {
   items: CartItem[];
   shippingMethodId: string;
   relayPoint: RelayPoint | null;
+  promotionCode?: string;
 };
 
 export const CART_STORAGE_KEY = "mm:cart:v1";

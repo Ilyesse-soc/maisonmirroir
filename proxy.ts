@@ -45,6 +45,7 @@ export function proxy(request: NextRequest) {
     path.startsWith("/api") ||
     path.startsWith("/connexion") ||
     path.startsWith("/newsletter")
+    || path === "/panier" || path === "/checkout"
   ) {
     response.headers.set("Cache-Control", "private, no-store");
     response.headers.set("X-Robots-Tag", "noindex, nofollow");

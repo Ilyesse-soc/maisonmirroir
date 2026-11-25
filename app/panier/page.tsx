@@ -499,7 +499,7 @@ export default function CartPage() {
                 <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7 }}>
                   Préparation sous {preparationDays} jours ouvrés après paiement.
                   {" "}
-                  <Link href="/livraison">Consulter la politique de livraison</Link>.
+                  <Link prefetch={false} href="/livraison">Consulter la politique de livraison</Link>.
                 </p>
               </div>
 

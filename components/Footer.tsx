@@ -55,7 +55,7 @@ export default function Footer({
     >
       <div className="storefront-footer-main">
         <div className="storefront-footer-brand">
-          <Link
+          <Link prefetch={false}
             href="/"
             className="storefront-footer-wordmark"
             aria-label="MAISON MIROIR, accueil"
@@ -110,7 +110,7 @@ export default function Footer({
           <h2>Découvrir</h2>
           <nav aria-label="Découvrir">
             {discoveryLinks.map(({ href, label }) => (
-              <Link key={href} href={href}>
+              <Link prefetch={false} key={href} href={href}>
                 {label}
               </Link>
             ))}
@@ -121,7 +121,7 @@ export default function Footer({
           <h2>Informations</h2>
           <nav aria-label="Informations">
             {informationLinks.map(({ href, label }) => (
-              <Link key={href} href={href}>
+              <Link prefetch={false} key={href} href={href}>
                 {label}
               </Link>
             ))}

@@ -13,9 +13,14 @@ export const metadata = {
 
 export default async function LegalNotice() {
   let professionalPhone = "";
+  let sellerName = "";
+  let termsConfirmed = false;
   let phoneSettingsUnavailable = false;
   try {
-    professionalPhone = (await getBrandSettings()).professional_phone.trim();
+    const settings = await getBrandSettings();
+    professionalPhone = settings.professional_phone.trim();
+    sellerName = settings.legal_seller_name.trim();
+    termsConfirmed = settings.legal_terms_confirmed === "true";
   } catch {
     securityEvent("LEGAL_PHONE_SETTINGS_READ_FAILED", "warn");
     phoneSettingsUnavailable = true;
@@ -27,6 +32,7 @@ export default async function LegalNotice() {
       <p>Le site https://maison-miroir.fr est édité par MAISON MIROIR.</p>
       <ul>
         <li>Nom commercial : MAISON MIROIR</li>
+        {sellerName && <li>Entrepreneuse individuelle : {sellerName}</li>}
         <li>Statut juridique : Entreprise individuelle, micro-entreprise</li>
         <li>SIREN : 102 982 576</li>
         <li>SIRET : 102 982 576 00013</li>
@@ -67,9 +73,9 @@ export default async function LegalNotice() {
         </a>
         .
       </p>
-      <p>
+      {!termsConfirmed && <p>
         Cette page ne constitue pas une version juridiquement finalisée.
-      </p>
+      </p>}
       <p>
         Consultez également les{" "}
         <Link href="/conditions-de-vente">Conditions générales de vente</Link>, la{" "}

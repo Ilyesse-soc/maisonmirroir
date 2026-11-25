@@ -7,6 +7,8 @@ import {
   getMondialRelayProductionReadiness,
   mondialRelaySettingsSchema,
   saveMondialRelaySettings,
+  saveMondialRelaySender,
+  senderSchema,
 } from "@/lib/mondialRelaySettings";
 import { mutationAllowed, readJson, InputError, inputResponse } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
@@ -60,7 +62,8 @@ export async function PUT(request: NextRequest) {
       );
     await adminAudit("MONDIAL_RELAY_SETTINGS_UPDATE_REQUESTED");
     await saveMondialRelaySettings(settings, session.user.id);
-    return NextResponse.json({ settings });
+    const persisted = await getMondialRelaySettings();
+    return NextResponse.json({ settings: persisted }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof InputError) return inputResponse(error);
     securityEvent("MONDIAL_RELAY_SETTINGS_WRITE_FAILED");
@@ -68,5 +71,24 @@ export async function PUT(request: NextRequest) {
       { error: "Enregistrement des paramètres impossible." },
       { status: 503 },
     );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  const denied = await adminDenied();
+  if (denied) return denied;
+  const originDenied = mutationAllowed(request);
+  if (originDenied) return originDenied;
+  try {
+    const sender = await readJson(request, senderSchema, 6000);
+    const session = await adminSession();
+    if (!session) return NextResponse.json({ error: "Authentification requise." }, { status: 401 });
+    await adminAudit("MONDIAL_RELAY_SENDER_UPDATE_REQUESTED");
+    const settings = await saveMondialRelaySender(sender, session.user.id);
+    return NextResponse.json({ settings }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    if (error instanceof InputError) return inputResponse(error);
+    securityEvent("MONDIAL_RELAY_SENDER_WRITE_FAILED");
+    return NextResponse.json({ error: "Enregistrement du profil expéditeur impossible." }, { status: 503 });
   }
 }

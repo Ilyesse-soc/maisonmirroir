@@ -87,7 +87,7 @@ export async function GET() {
         realShipmentCreationEnabled,
         manualShippingReady,
         fulfillmentReady,
-        paypalClientId: paymentsEnabled && shopOpen ? paypal.clientId : "",
+        paypalClientId: paymentsEnabled ? paypal.clientId : "",
       },
       { headers: { "Cache-Control": "no-store" } },
     );

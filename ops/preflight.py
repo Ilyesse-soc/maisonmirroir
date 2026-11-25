@@ -7,10 +7,24 @@ def env(path):
     for line in path.read_text().splitlines():
         if line.strip() and not line.lstrip().startswith('#'):
             key, value = line.split('=', 1)
+            if key in result: raise RuntimeError('DUPLICATE_CONFIGURATION_KEY_' + key)
             result[key] = value.strip().strip('"').strip("'")
     return result
 config = env(ROOT / '.env')
 app = env(ROOT / 'secrets' / 'app.env')
+# Resolve the exact Compose invocation used by mm-release without reading or
+# printing secret values. Examples must never become runtime env files.
+compose = json.loads(subprocess.check_output([
+    'docker','compose','--env-file',str(ROOT/'.env'),'-f',str(ROOT/'compose.yml'),
+    'config','--no-env-resolution','--format','json'], text=True))
+for service in ['app', 'worker']:
+    spec = compose['services'][service]
+    files = [entry['path'] if isinstance(entry, dict) else entry for entry in spec.get('env_file', [])]
+    if [str(pathlib.Path(file).resolve()) for file in files] != [str(ROOT/'secrets'/'app.env')]:
+        raise RuntimeError('INVALID_RUNTIME_ENV_FILE_' + service)
+    for key, value in spec.get('environment', {}).items():
+        if key.startswith(('PAYPAL_', 'MONDIAL_RELAY_', 'REAL_', 'SHOP_OPEN')) and key in app and str(value) != app[key]:
+            raise RuntimeError('COMMERCE_ENVIRONMENT_OVERRIDE_' + service + '_' + key)
 required = ['NEWSLETTER_DATABASE_URL','NEWSLETTER_SITE_URL','BETTER_AUTH_URL','BETTER_AUTH_SECRET','NEWSLETTER_HASH_SECRET','NEWSLETTER_WORKER_SECRET','ADMIN_EMAIL']
 for key in required:
     if not app.get(key) or re.search(r'REPLACE|PROVIDE|GENERATE_', app[key]): raise RuntimeError('MISSING_REQUIRED_CONFIGURATION_' + key)

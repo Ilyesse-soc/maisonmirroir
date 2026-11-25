@@ -21,6 +21,11 @@ const settingsSchema = z.object({
   brand_name: z.string().trim().min(1).max(120),
   contact_email: z.string().trim().email().max(254),
   professional_phone: z.string().trim().max(30),
+  legal_seller_name: z.string().trim().max(200).optional(),
+  mediator_name: z.string().trim().max(200).optional(),
+  mediator_address: z.string().trim().max(500).optional(),
+  mediator_url: httpsUrl.optional(),
+  legal_terms_confirmed: z.enum(["", "true"]).optional(),
   instagram_url: httpsUrl,
   tiktok_url: httpsUrl,
   welcome_copy: z.string().trim().min(1).max(4000),
@@ -77,7 +82,7 @@ export async function PUT(request: NextRequest) {
         );
       }
     });
-    return NextResponse.json({ settings });
+    return NextResponse.json({ settings: await getBrandSettings() }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof InputError) return inputResponse(error);
     securityEvent("ADMIN_SETTINGS_WRITE_FAILED");

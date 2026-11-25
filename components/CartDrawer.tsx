@@ -1,10 +1,10 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { useCart } from "@/components/CartProvider";
 import { getCartItemSubtotal, getCartSubtotal } from "@/lib/cart";
+import { useCartPromotion } from "@/components/useCartPromotion";
 
 const euro = new Intl.NumberFormat("fr-FR", {
   style: "currency",
@@ -43,6 +43,7 @@ export default function CartDrawer() {
     selectedShippingPrice,
     selectedShippingPriceLabel,
   } = useCart();
+  const { currentPromotionCode, currentPromotionDiscount } = useCartPromotion();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -277,6 +278,7 @@ export default function CartDrawer() {
                 <dt>Sous-total</dt>
                 <dd>{euro.format(subtotal)}</dd>
               </div>
+              {currentPromotionDiscount > 0 && <div><dt>Réduction {currentPromotionCode}</dt><dd>-{euro.format(currentPromotionDiscount / 100)}</dd></div>}
               <div>
                 <dt>Livraison</dt>
                 <dd>{items.length === 0 ? euro.format(0) : selectedShippingPriceLabel}</dd>
@@ -286,36 +288,36 @@ export default function CartDrawer() {
                 <dd>
                   {items.length === 0 ? euro.format(0) : selectedShippingPrice === null
                     ? "Livraison indisponible"
-                    : euro.format(subtotal + selectedShippingPrice)}
+                    : euro.format(subtotal - currentPromotionDiscount / 100 + selectedShippingPrice)}
                 </dd>
               </div>
             </dl>
             <div className="mm-cart-footer-actions">
-              <Link
+              <a
                 href="/panier"
                 className="mm-cart-view"
                 onClick={closeDrawer}
               >
                 VOIR LE PANIER
-              </Link>
+              </a>
               {checkoutEnabled ? (
-                <Link
+                <a
                   href="/checkout"
                   className="mm-cart-checkout"
                   onClick={closeDrawer}
                 >
                   PASSER AU PAIEMENT
-                </Link>
+                </a>
               ) : (
                 <>
-                  <Link
+                  <a
                     href="/checkout"
                     className="mm-cart-checkout"
                     onClick={closeDrawer}
                     aria-describedby="cart-orders-notice"
                   >
                     PRÉPARER MA COMMANDE
-                  </Link>
+                  </a>
                   <p id="cart-orders-notice">
                     Les commandes ouvriront prochainement.
                   </p>

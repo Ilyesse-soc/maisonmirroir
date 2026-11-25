@@ -3,9 +3,11 @@ import Image from "next/image";
 
 import Link from "next/link";
 import { useCart } from "@/components/CartProvider";
+import { useCartPromotion } from "@/components/useCartPromotion";
 import {
   MONDIAL_RELAY_POINT_RELAIS_ID,
   SHIPPING_METHODS,
+  formatEuro,
 } from "@/lib/shipping";
 import { getCartItemSubtotal, getCartSubtotal } from "@/lib/cart";
 import {
@@ -33,6 +35,10 @@ export default function CartPage() {
     getShippingPriceQuote,
     preparationDays,
   } = useCart();
+  const {
+    promotionInput, setPromotionInput, currentPromotionCode, currentPromotionDiscount,
+    promotionMessage, promotionBusy, applyPromotion,
+  } = useCartPromotion();
   const unavailableItems = items.filter(
     (item) => !isProductAvailable(item.productId, true),
   );
@@ -44,7 +50,7 @@ export default function CartPage() {
 
   const subtotal = getCartSubtotal(items);
   const shippingPrice = items.length > 0 ? selectedShippingPrice : 0;
-  const total = shippingPrice === null ? null : subtotal + shippingPrice;
+  const total = shippingPrice === null ? null : subtotal - currentPromotionDiscount / 100 + shippingPrice;
 
   return (
     <div
@@ -362,8 +368,11 @@ export default function CartPage() {
                   style={{ display: "flex", justifyContent: "space-between" }}
                 >
                   <span>Sous-total produits</span>
-                  <span>{subtotal.toFixed(2)} €</span>
+                  <span>{formatEuro(subtotal)}</span>
                 </div>
+                {currentPromotionDiscount > 0 && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>Réduction {currentPromotionCode}</span><span>-{formatEuro(currentPromotionDiscount / 100)}</span>
+                </div>}
                 <div
                   style={{ display: "flex", justifyContent: "space-between" }}
                 >
@@ -400,8 +409,17 @@ export default function CartPage() {
                   }}
                 >
                   <span>Total TTC</span>
-                  <span>{total === null ? "À confirmer" : `${total.toFixed(2)} €`}</span>
+                  <span>{total === null ? "À confirmer" : formatEuro(total)}</span>
                 </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 8, marginTop: 18 }}>
+                <label htmlFor="cart-promotion-code" style={{ fontFamily: fonts.body, fontSize: 11, letterSpacing: "0.16em", textTransform: "uppercase", color: theme.textMid }}>Code promotionnel</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input id="cart-promotion-code" value={promotionInput} onChange={event => setPromotionInput(event.target.value)} maxLength={80} style={{ ...buttonOutlineGoldStyle(), minWidth: 0, flex: 1 }} />
+                  <button type="button" onClick={applyPromotion} disabled={promotionBusy || !promotionInput.trim()} style={buttonOutlineGoldStyle({ fullWidth: false })}>{promotionBusy ? "Vérification…" : "Appliquer"}</button>
+                </div>
+                {promotionMessage && <p role="status" style={{ margin: 0, fontSize: 12 }}>{promotionMessage}</p>}
               </div>
 
               <div style={{ ...dividerStyle(100), margin: "18px 0" }} />

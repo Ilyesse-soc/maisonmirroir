@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import CartReminderConsent from "@/components/CartReminderConsent";
 import CartCheckoutButton from "@/components/CartCheckoutButton";
+import { useCartPromotion } from "@/components/useCartPromotion";
 import { useCart } from "@/components/CartProvider";
 import {
   MONDIAL_RELAY_POINT_RELAIS_ID,
@@ -42,12 +43,10 @@ export default function CheckoutPage() {
   const [relaySearchError, setRelaySearchError] = useState("");
   const [relaySearchMessage, setRelaySearchMessage] = useState("");
   const [relaySearchBusy, setRelaySearchBusy] = useState(false);
-  const [promotionInput, setPromotionInput] = useState("");
-  const [promotionCode, setPromotionCode] = useState("");
-  const [promotionDiscountCents, setPromotionDiscountCents] = useState(0);
-  const [promotionCartKey, setPromotionCartKey] = useState("");
-  const [promotionMessage, setPromotionMessage] = useState("");
-  const [promotionBusy, setPromotionBusy] = useState(false);
+  const {
+    promotionInput, setPromotionInput, currentPromotionCode, currentPromotionDiscount,
+    promotionMessage, promotionBusy, applyPromotion,
+  } = useCartPromotion();
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [address, setAddress] = useState({
     firstName: "",
@@ -76,64 +75,10 @@ export default function CheckoutPage() {
   const selectedShippingPriceLabel = selectedShippingQuote.label;
 
   const subtotal = getCartSubtotal(items);
-  const currentCartKey = items
-    .map((item) => `${item.productId}:${item.quantity}:${item.unitPrice}`)
-    .join("|");
-  const currentPromotionDiscount =
-    promotionCartKey === currentCartKey ? promotionDiscountCents : 0;
-  const currentPromotionCode =
-    promotionCartKey === currentCartKey ? promotionCode : "";
   const total =
     subtotal -
     currentPromotionDiscount / 100 +
     (selectedShippingPrice ?? 0);
-
-  async function applyPromotion() {
-    setPromotionBusy(true);
-    setPromotionMessage("");
-    try {
-      const response = await fetch("/api/promotions/validate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({
-          code: promotionInput.trim(),
-          items: items.map((item) => ({
-            id: item.productId,
-            quantity: item.quantity,
-          })),
-        }),
-      });
-      const data = (await response.json()) as {
-        code?: string;
-        discountCents?: number;
-        message?: string;
-        error?: string;
-      };
-      if (!response.ok || typeof data.discountCents !== "number")
-        throw new Error(
-          data.message ||
-            (data.error === "FIRSTPRINCESS1_EXHAUSTED"
-              ? "Cette offre a atteint sa limite d’utilisation."
-              : "Ce code promotionnel est invalide."),
-        );
-      setPromotionCode(data.code || promotionInput.trim().toUpperCase());
-      setPromotionDiscountCents(data.discountCents);
-      setPromotionCartKey(currentCartKey);
-      setPromotionMessage("Code promotionnel appliqué.");
-    } catch (error) {
-      setPromotionCode("");
-      setPromotionDiscountCents(0);
-      setPromotionCartKey("");
-      setPromotionMessage(
-        error instanceof Error
-          ? error.message
-          : "Ce code promotionnel est invalide.",
-      );
-    } finally {
-      setPromotionBusy(false);
-    }
-  }
 
   if (items.length === 0) {
     return (
@@ -653,13 +598,7 @@ export default function CheckoutPage() {
                 <input
                   id="checkout-promotion-code"
                   value={promotionInput}
-                  onChange={(event) => {
-                    setPromotionInput(event.target.value);
-                    setPromotionCode("");
-                    setPromotionDiscountCents(0);
-                    setPromotionCartKey("");
-                    setPromotionMessage("");
-                  }}
+                  onChange={(event) => setPromotionInput(event.target.value)}
                   maxLength={80}
                   style={{ ...buttonOutlineGoldStyle(), minWidth: 0, flex: 1 }}
                 />

@@ -43,6 +43,8 @@ type CartContextValue = {
   shippingConfigurationError: boolean;
   checkoutEnabled: boolean;
   paypalClientId: string;
+  promotionCode: string;
+  setPromotionCode: (code: string) => void;
   availableShippingMethodIds: string[];
   preparationDays: number;
   cgvVersion: string;
@@ -77,7 +79,7 @@ export function CartProvider({
   children: React.ReactNode;
   syncEnabled?: boolean;
 }) {
-  const { items, shippingMethodId, relayPoint } = useSyncExternalStore(
+  const { items, shippingMethodId, relayPoint, promotionCode } = useSyncExternalStore(
     subscribeCart,
     readCart,
     serverCart,
@@ -319,6 +321,10 @@ export function CartProvider({
         shippingConfig?.availableShippingMethodIds.includes(shippingMethodId),
       ),
     paypalClientId: shippingConfig?.paypalClientId || "",
+    promotionCode: promotionCode || "",
+    setPromotionCode(code) {
+      writeCart({ ...readCart(), promotionCode: code.trim().slice(0, 80) });
+    },
     catalogLoaded,
     getProductPrice(id, fallback) {
       return publicCatalog[id]?.price ?? fallback;
@@ -370,7 +376,7 @@ export function CartProvider({
       });
     },
     clearCart() {
-      writeCart({ ...readCart(), items: [], relayPoint: null });
+      writeCart({ ...readCart(), items: [], relayPoint: null, promotionCode: "" });
     },
     setShippingMethodId(id) {
       if (getShippingMethodById(id)) {

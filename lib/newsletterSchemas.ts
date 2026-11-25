@@ -66,6 +66,7 @@ export const orderPatchSchema = z
         "En attente",
         "Payee",
         "En preparation",
+        "Prete a expedier",
         "Expediee",
         "Livree",
         "Annulee",

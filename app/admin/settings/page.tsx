@@ -233,6 +233,61 @@ export default function AdminSettingsPage() {
     }));
   }
 
+  function updateHomeShippingTier(
+    index: number,
+    patch: Partial<ShippingTier>,
+  ) {
+    setShipping((current) => ({
+      ...current,
+      homeShippingTiers: current.homeShippingTiers.map((tier, tierIndex) =>
+        tierIndex === index
+          ? {
+              ...tier,
+              ...patch,
+              ...(Object.keys(patch).length === 1 && "confirmed" in patch
+                ? {}
+                : { confirmed: false }),
+            }
+          : tier,
+      ),
+    }));
+  }
+
+  function addHomeShippingTier() {
+    setShipping((current) => {
+      const quantities = new Set(
+        current.homeShippingTiers.map((tier) => tier.quantity),
+      );
+      let quantity = 1;
+      while (quantities.has(quantity) && quantity <= 30) quantity += 1;
+      if (quantity > 30) return current;
+      return {
+        ...current,
+        homeShippingTiers: [
+          ...current.homeShippingTiers,
+          {
+            quantity,
+            weightGrams: null,
+            lengthCm: null,
+            widthCm: null,
+            depthCm: null,
+            customerPriceCents: null,
+            confirmed: false,
+          },
+        ].sort((left, right) => left.quantity - right.quantity),
+      };
+    });
+  }
+
+  function removeHomeShippingTier(index: number) {
+    setShipping((current) => ({
+      ...current,
+      homeShippingTiers: current.homeShippingTiers.filter(
+        (_, tierIndex) => tierIndex !== index,
+      ),
+    }));
+  }
+
   function addShippingTier() {
     setShipping((current) => {
       const quantities = new Set(current.shippingTiers.map((tier) => tier.quantity));
@@ -778,6 +833,189 @@ export default function AdminSettingsPage() {
             </label>
           </section>
           {shippingTierFields()}
+          <section style={{ marginTop: 22 }}>
+            <h3>Livraison à domicile Mondial Relay</h3>
+            <p className="admin-muted">
+              API2 utilise le mode HOM et le dépôt REL. Le contrat de production
+              doit autoriser HOM. Le mode reste indisponible tant que cette
+              autorisation n’est pas confirmée et qu’un palier colis complet
+              n’est pas enregistré.
+            </p>
+            <label style={{ display: "block", marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={shipping.homeDeliveryContractConfirmed}
+                onChange={(event) =>
+                  setShipping((current) => ({
+                    ...current,
+                    homeDeliveryContractConfirmed: event.target.checked,
+                    homeDeliveryEnabled: event.target.checked
+                      ? current.homeDeliveryEnabled
+                      : false,
+                  }))
+                }
+              />{" "}
+              Je confirme que le service API2 HOM est autorisé par mon contrat
+              de production.
+            </label>
+            <label style={{ display: "block", marginBottom: 14 }}>
+              <input
+                type="checkbox"
+                checked={shipping.homeDeliveryEnabled}
+                disabled={!shipping.homeDeliveryContractConfirmed}
+                onChange={(event) =>
+                  setShipping((current) => ({
+                    ...current,
+                    homeDeliveryEnabled: event.target.checked,
+                  }))
+                }
+              />{" "}
+              Activer la livraison à domicile au checkout
+            </label>
+            <div className="admin-form-grid" style={{ marginBottom: 14 }}>
+              <label>
+                Délai de préparation (jours ouvrés)
+                <input
+                  type="number"
+                  min="1"
+                  max="30"
+                  step="1"
+                  value={shipping.preparationDays}
+                  onChange={(event) =>
+                    setShipping((current) => ({
+                      ...current,
+                      preparationDays: Number(event.target.value),
+                    }))
+                  }
+                />
+              </label>
+            </div>
+            <div style={{ display: "grid", gap: 14 }}>
+              {shipping.homeShippingTiers.map((tier, index) => {
+                const complete =
+                  Boolean(tier.weightGrams) &&
+                  Boolean(tier.lengthCm) &&
+                  Boolean(tier.widthCm) &&
+                  Boolean(tier.depthCm) &&
+                  Boolean(tier.customerPriceCents);
+                return (
+                  <fieldset
+                    key={`home-quantity-tier-${index}`}
+                    className="admin-form-grid"
+                    style={{ alignItems: "end" }}
+                  >
+                    <legend>
+                      Domicile - {tier.quantity} sac
+                      {tier.quantity === 1 ? "" : "s"}
+                    </legend>
+                    <label>
+                      Quantité exacte
+                      <input
+                        type="number"
+                        min="1"
+                        max="30"
+                        step="1"
+                        value={tier.quantity}
+                        onChange={(event) =>
+                          updateHomeShippingTier(index, {
+                            quantity: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      Poids colis (g)
+                      <input
+                        type="number"
+                        min="1"
+                        max="30000"
+                        step="1"
+                        value={tier.weightGrams ?? ""}
+                        onChange={(event) =>
+                          updateHomeShippingTier(index, {
+                            weightGrams:
+                              event.target.value === ""
+                                ? null
+                                : Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                    {([
+                      ["lengthCm", "Longueur (cm)"],
+                      ["widthCm", "Largeur (cm)"],
+                      ["depthCm", "Hauteur (cm)"],
+                    ] as const).map(([fieldName, label]) => (
+                      <label key={fieldName}>
+                        {label}
+                        <input
+                          type="number"
+                          min="1"
+                          max="200"
+                          step="1"
+                          value={tier[fieldName] ?? ""}
+                          onChange={(event) =>
+                            updateHomeShippingTier(index, {
+                              [fieldName]:
+                                event.target.value === ""
+                                  ? null
+                                  : Number(event.target.value),
+                            })
+                          }
+                        />
+                      </label>
+                    ))}
+                    <label>
+                      Livraison facturée TTC (€)
+                      <input
+                        type="number"
+                        min="0.01"
+                        max="1000"
+                        step="0.01"
+                        value={
+                          tier.customerPriceCents === null
+                            ? ""
+                            : (tier.customerPriceCents / 100).toFixed(2)
+                        }
+                        onChange={(event) =>
+                          updateHomeShippingTier(index, {
+                            customerPriceCents:
+                              event.target.value === ""
+                                ? null
+                                : Math.round(Number(event.target.value) * 100),
+                          })
+                        }
+                      />
+                    </label>
+                    <label>
+                      <span>
+                        <input
+                          type="checkbox"
+                          checked={tier.confirmed}
+                          disabled={!complete}
+                          onChange={(event) =>
+                            updateHomeShippingTier(index, {
+                              confirmed: event.target.checked,
+                            })
+                          }
+                        />{" "}
+                        Colis et tarif confirmés
+                      </span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => removeHomeShippingTier(index)}
+                    >
+                      Supprimer ce palier
+                    </button>
+                  </fieldset>
+                );
+              })}
+            </div>
+            <button type="button" onClick={addHomeShippingTier}>
+              Ajouter un palier domicile
+            </button>
+          </section>
           <details style={{ marginTop: 18 }}>
             <summary>Paramètres historiques par poids</summary>
             <p className="admin-muted">

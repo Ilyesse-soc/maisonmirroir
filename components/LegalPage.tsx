@@ -4,9 +4,11 @@ import "@/app/legal.css";
 export default function LegalPage({
   title,
   children,
+  updatedAt,
 }: {
   title: string;
   children: React.ReactNode;
+  updatedAt?: string;
 }) {
   return (
     <div className="launch legal-shell">
@@ -16,7 +18,11 @@ export default function LegalPage({
         </Link>
         <p className="legal-eyebrow">MAISON MIROIR</p>
         <h1>{title}</h1>
-        <p className="legal-date">Informations à valider avant l’ouverture</p>
+        <p className="legal-date">
+          {updatedAt
+            ? `Dernière mise à jour : ${updatedAt}. Version provisoire, informations juridiques à valider.`
+            : "Informations à valider avant l’ouverture"}
+        </p>
         {children}
       </div>
     </div>

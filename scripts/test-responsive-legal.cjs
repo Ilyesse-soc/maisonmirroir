@@ -141,7 +141,7 @@ async function main() {
           height: viewportHeight,
         });
         const response = await page.goto("http://127.0.0.1:43819", {
-          waitUntil: "networkidle",
+          waitUntil: "domcontentloaded",
         });
         assert.equal(response.status(), 200);
         await page.evaluate(() => document.fonts.ready);
@@ -160,7 +160,12 @@ async function main() {
         assert(
           await page
             .locator(".storefront-showcase-slide.is-active video")
-            .evaluate((video) => video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA),
+            .evaluate(
+              (video) =>
+                Boolean(video.getAttribute("poster")) &&
+                Boolean(video.querySelector("source[src]")),
+            ),
+          "active showcase video has a poster and source",
         );
         const overflow = await page.evaluate(() =>
           Array.from(document.querySelectorAll("main *"))
@@ -219,7 +224,7 @@ async function main() {
     for (const width of [320, 375, 390, 430, 768, 1024, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       const response = await page.goto("http://127.0.0.1:43819/newsletter", {
-        waitUntil: "networkidle",
+        waitUntil: "domcontentloaded",
       });
       assert.equal(response.status(), 200);
       assert.equal(await page.locator(".launch").count(), 1);
@@ -300,7 +305,7 @@ async function main() {
     for (const [width, height] of cartViewports) {
       await page.setViewportSize({ width, height });
       await page.goto("http://127.0.0.1:43819/newsletter", {
-        waitUntil: "networkidle",
+        waitUntil: "domcontentloaded",
       });
       await openCartDrawer(width);
       const dialog = page.getByRole("dialog", { name: "PANIER" });
@@ -394,10 +399,10 @@ async function main() {
 
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("http://127.0.0.1:43819/newsletter", {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
     });
     await seedCartWithCatalogProducts();
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await openCartDrawer(1440);
     assert.equal(await page.getByText("Modest Era", { exact: true }).count(), 1);
     assert.equal(await page.getByText("Paradise Way", { exact: true }).count(), 1);
@@ -460,7 +465,7 @@ async function main() {
 
     await page.setViewportSize({ width: 390, height: 844 });
     await seedCartWithCatalogProducts();
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload({ waitUntil: "domcontentloaded" });
     await openCartDrawer(390);
     await page.waitForFunction(() => {
       const images = Array.from(
@@ -500,7 +505,9 @@ async function main() {
     await page.getByRole("status").getByText(/confirmez votre inscription/i).waitFor();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("http://127.0.0.1:43819", { waitUntil: "networkidle" });
+    await page.goto("http://127.0.0.1:43819", {
+      waitUntil: "domcontentloaded",
+    });
     await page.locator(".mm-navbar-menu").click();
     assert.equal(
       await page.locator('#mm-mobile-menu a[href="/newsletter"]').count(),
@@ -522,7 +529,7 @@ async function main() {
     for (const route of publicRoutes) {
       const response = await page.goto(
         `http://127.0.0.1:43819/${route}`,
-        { waitUntil: "networkidle" },
+        { waitUntil: "domcontentloaded" },
       );
       assert.equal(response.status(), 200, route);
       assert(
@@ -538,30 +545,38 @@ async function main() {
       "conditions-de-vente",
       "livraison",
       "retours",
+      "retractation",
       "politique-de-confidentialite",
       "politique-de-cookies",
     ];
-    for (const route of legalRoutes) {
-      const response = await page.goto(
-        `http://127.0.0.1:43819/${route}`,
-        { waitUntil: "networkidle" },
-      );
-      assert.equal(response.status(), 200, route);
-      assert(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth <= innerWidth,
-        ),
-        `${route} has horizontal overflow`,
-      );
-      assert.equal(
-        await page.locator('meta[name="robots"]').getAttribute("content"),
-        "noindex, follow",
-        `${route} has noindex metadata`,
-      );
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const route of legalRoutes) {
+        const response = await page.goto(
+          `http://127.0.0.1:43819/${route}`,
+          { waitUntil: "domcontentloaded" },
+        );
+        assert.equal(response.status(), 200, route);
+        assert(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+          `${route} has horizontal overflow at ${width}px`,
+        );
+        assert.equal(
+          await page.locator('meta[name="robots"]').getAttribute("content"),
+          "noindex, follow",
+          `${route} has noindex metadata`,
+        );
+      }
     }
 
     await page.goto("http://127.0.0.1:43819/product/modest-era");
-    assert.equal(await page.locator(".product-coming-soon").count(), 1);
+    await page.locator(".product-availability").waitFor();
+    assert.equal(
+      (await page.locator(".product-availability").first().innerText()).trim(),
+      "Victime de son succès",
+    );
     assert.equal(await page.locator("form").count(), 0);
     assert.equal(await page.locator("iframe").count(), 0);
     for (const route of ["panier", "checkout"]) {

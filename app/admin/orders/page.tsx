@@ -8,7 +8,10 @@ import type {
   OrderReturnStatus,
   OrderStatus,
 } from "@/lib/orderTypes";
-import { MONDIAL_RELAY_POINT_RELAIS_ID } from "@/lib/shipping";
+import {
+  MONDIAL_RELAY_HOME_ID,
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+} from "@/lib/shipping";
 
 type AdminOrderRecord = OrderRecord & {
   paymentStatus?: string;
@@ -18,6 +21,7 @@ type AdminOrderRecord = OrderRecord & {
   totalCents?: number;
   returnStatus?: OrderReturnStatus;
   returnUpdatedAt?: string | null;
+  withdrawalRequestedAt?: string | null;
   refundEligible?: boolean;
   refundAttempt?: null | { idempotencyKey: string; amountCents: number; status: string };
   refundHistory?: Array<{ refundId: string; amountCents: number; status: string; reason: string; createdAt: string; completedAt: string | null }>;
@@ -32,11 +36,28 @@ type AdminItem = OrderRecord["items"][number] & {
 
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: "En attente", label: "En attente" },
-  { value: "En preparation", label: "En preparation" },
-  { value: "Expediee", label: "Expediee" },
-  { value: "Livree", label: "Livree" },
-  { value: "Annulee", label: "Annulee" },
+  { value: "En preparation", label: "En préparation" },
+  { value: "Prete a expedier", label: "Prête à expédier" },
+  { value: "Expediee", label: "Expédiée" },
+  { value: "Livree", label: "Livrée" },
+  { value: "Annulee", label: "Annulée" },
 ];
+
+const SHIPMENT_STATUS_LABELS: Record<string, string> = {
+  unfulfilled: "En attente d’expédition",
+  "En attente": "En attente d’expédition",
+  Payee: "En attente d’expédition",
+  preparing: "En préparation",
+  "En preparation": "En préparation",
+  ready: "Prête à expédier",
+  "Prete a expedier": "Prête à expédier",
+  shipped: "Expédiée",
+  Expediee: "Expédiée",
+  delivered: "Livrée",
+  Livree: "Livrée",
+  cancelled: "Annulée",
+  Annulee: "Annulée",
+};
 
 export default function AdminOrdersPage() {
   const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
@@ -425,6 +446,32 @@ export default function AdminOrdersPage() {
                   >
                     {new Date(order.orderDate).toLocaleString("fr-FR")}
                   </p>
+                  {order.preparationDeadline && (
+                    <p
+                      className={
+                        order.preparationDeadline <
+                          new Date().toLocaleDateString("en-CA", {
+                            timeZone: "Europe/Paris",
+                          }) &&
+                        !["Expediee", "Livree", "Annulee"].includes(order.status)
+                          ? "admin-error"
+                          : "admin-muted"
+                      }
+                      role="status"
+                    >
+                      À préparer avant le{" "}
+                      {new Date(
+                        `${order.preparationDeadline}T12:00:00+01:00`,
+                      ).toLocaleDateString("fr-FR")}
+                      {order.preparationDeadline <
+                        new Date().toLocaleDateString("en-CA", {
+                          timeZone: "Europe/Paris",
+                        }) &&
+                      !["Expediee", "Livree", "Annulee"].includes(order.status)
+                        ? " - Délai dépassé"
+                        : ""}
+                    </p>
+                  )}
                 </div>
                 <div
                   style={{
@@ -526,8 +573,21 @@ export default function AdminOrdersPage() {
                   </div>
                   <div>
                     <strong style={{ color: theme.textDark }}>Statut d’expédition:</strong>{" "}
-                    {(order as OrderRecord & { shipmentStatus?: string }).shipmentStatus || order.status}
+                    {SHIPMENT_STATUS_LABELS[
+                      (order as AdminOrderRecord).shipmentStatus || ""
+                    ] || order.status}
                   </div>
+                  {order.legalAcceptance && (
+                    <div>
+                      <strong style={{ color: theme.textDark }}>
+                        Acceptation des CGV:
+                      </strong>{" "}
+                      version {order.legalAcceptance.version}, le{" "}
+                      {new Date(
+                        order.legalAcceptance.acceptedAt,
+                      ).toLocaleString("fr-FR")}
+                    </div>
+                  )}
                   <div>
                     <strong style={{ color: theme.textDark }}>Réduction / remboursé:</strong>{" "}
                     {(((order as OrderRecord & { discountCents?: number }).discountCents || 0) / 100).toFixed(2)} € / {(((order as OrderRecord & { refundedCents?: number }).refundedCents || 0) / 100).toFixed(2)} €
@@ -559,6 +619,12 @@ export default function AdminOrdersPage() {
 
               <section className="admin-card" style={{ marginBottom: 14, padding: 14 }}>
                 <h3>Retour et remboursement</h3>
+                {order.withdrawalRequestedAt && (
+                  <p role="status" className="admin-success">
+                    Demande de rétractation en ligne reçue le{" "}
+                    {new Date(order.withdrawalRequestedAt).toLocaleString("fr-FR")}.
+                  </p>
+                )}
                 <p className="admin-muted">
                   Statut : {returnLabels[currentReturnStatus]}
                   {order.returnUpdatedAt
@@ -676,8 +742,9 @@ export default function AdminOrdersPage() {
                   }
                 />
               </div>
-              {order.shipping.id === MONDIAL_RELAY_POINT_RELAIS_ID &&
-                order.shipping.relayPoint && (
+              {((order.shipping.id === MONDIAL_RELAY_POINT_RELAIS_ID &&
+                order.shipping.relayPoint) ||
+                order.shipping.id === MONDIAL_RELAY_HOME_ID) && (
                   <section
                     className="admin-card"
                     style={{ marginTop: 16, padding: 16 }}

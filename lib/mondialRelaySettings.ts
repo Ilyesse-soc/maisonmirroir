@@ -32,6 +32,7 @@ const shippingTierSchema = z
     confirmed: z.boolean(),
   })
   .strict();
+const preparationDaysSchema = z.number().int().min(1).max(30);
 const shippingTiersSchema = z
   .array(shippingTierSchema)
   .max(30)
@@ -108,6 +109,10 @@ export const mondialRelaySettingsSchema = z
     testParcel: profileSchema,
     contractParcel: profileSchema,
     shippingTiers: shippingTiersSchema,
+    homeDeliveryEnabled: z.boolean(),
+    homeDeliveryContractConfirmed: z.boolean(),
+    homeShippingTiers: shippingTiersSchema,
+    preparationDays: preparationDaysSchema,
     testRates: ratesSchema,
     contractRates: ratesSchema,
     proposedRate: proposedRateSchema,
@@ -131,6 +136,16 @@ export const mondialRelaySettingsSchema = z
         code: "custom",
         message: "Le tarif proposé doit concerner le service Point Relais.",
         path: ["proposedRate", "serviceCode"],
+      });
+    if (
+      settings.homeDeliveryEnabled &&
+      !settings.homeDeliveryContractConfirmed
+    )
+      context.addIssue({
+        code: "custom",
+        message:
+          "La livraison à domicile ne peut être activée sans confirmation de son autorisation contractuelle.",
+        path: ["homeDeliveryEnabled"],
       });
   });
 
@@ -216,6 +231,21 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
     shippingTiers: storedShippingTiers.success
       ? storedShippingTiers.data as ShippingTier[]
       : DEFAULT_MONDIAL_RELAY_SETTINGS.shippingTiers.map((tier) => ({ ...tier })),
+    homeDeliveryEnabled:
+      source.homeDeliveryEnabled === true &&
+      source.homeDeliveryContractConfirmed === true,
+    homeDeliveryContractConfirmed:
+      source.homeDeliveryContractConfirmed === true,
+    homeShippingTiers: shippingTiersSchema.safeParse(source.homeShippingTiers)
+      .success
+      ? shippingTiersSchema.parse(source.homeShippingTiers)
+      : DEFAULT_MONDIAL_RELAY_SETTINGS.homeShippingTiers.map((tier) => ({
+          ...tier,
+        })),
+    preparationDays: preparationDaysSchema.safeParse(source.preparationDays)
+      .success
+      ? preparationDaysSchema.parse(source.preparationDays)
+      : DEFAULT_MONDIAL_RELAY_SETTINGS.preparationDays,
     testRates: legacyRates(source.testRates),
     contractRates: legacyRates(source.contractRates),
     proposedRate: storedProposed.success
@@ -366,6 +396,36 @@ export function getMondialRelayProductionReadiness(
     credentials.api2Enabled;
   const sharedContractReady =
     contractConfirmed && serviceAllowed && parcelConfigured && rateConfigured;
+  const homeShippingTiers = Array.isArray(settings.homeShippingTiers)
+    ? settings.homeShippingTiers
+    : [];
+  const homeTierReady = homeShippingTiers.some(
+    (tier) =>
+      tier.confirmed &&
+      tier.weightGrams &&
+      tier.lengthCm &&
+      tier.widthCm &&
+      tier.depthCm &&
+      tier.customerPriceCents,
+  );
+  const homeDeliveryConfigured =
+    settings.homeDeliveryEnabled === true &&
+    settings.homeDeliveryContractConfirmed === true &&
+    credentials.providerConfirmed &&
+    credentials.api1Configured &&
+    credentials.api1Enabled &&
+    credentials.api2Configured &&
+    credentials.api2EndpointConfigured &&
+    credentials.api2Enabled &&
+    credentials.senderConfigured &&
+    credentials.collectionModeConfigured &&
+    homeTierReady;
+  const homeDeliveryReady =
+    process.env.REAL_SHIPPING_ENABLED === "true" &&
+    homeDeliveryConfigured;
+  const homeShipmentCreationReady =
+    process.env.REAL_SHIPMENT_CREATION_ENABLED === "true" &&
+    homeDeliveryConfigured;
   return {
     ...credentials,
     contractConfirmed,
@@ -375,6 +435,11 @@ export function getMondialRelayProductionReadiness(
     rateConfigured,
     api1Ready,
     api2Ready,
+    homeDeliveryConfigured,
+    homeDeliveryReady,
+    homeShipmentCreationReady,
+    homeDeliveryContractConfirmed:
+      settings.homeDeliveryContractConfirmed === true,
     searchEnabled:
       process.env.REAL_SHIPPING_ENABLED === "true" &&
       api1Ready &&

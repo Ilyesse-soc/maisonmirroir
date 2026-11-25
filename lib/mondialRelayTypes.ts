@@ -90,6 +90,10 @@ export type MondialRelaySettings = {
   testParcel: ParcelProfile;
   contractParcel: ParcelProfile;
   shippingTiers: ShippingTier[];
+  homeDeliveryEnabled: boolean;
+  homeDeliveryContractConfirmed: boolean;
+  homeShippingTiers: ShippingTier[];
+  preparationDays: number;
   testRates: ShippingRate[];
   contractRates: ShippingRate[];
   proposedRate: ProposedShippingRate;
@@ -162,6 +166,29 @@ export const DEFAULT_MONDIAL_RELAY_SETTINGS: MondialRelaySettings = {
       confirmed: false,
     },
   ],
+  homeDeliveryEnabled: false,
+  homeDeliveryContractConfirmed: false,
+  homeShippingTiers: [
+    {
+      quantity: 1,
+      weightGrams: 500,
+      lengthCm: 30,
+      widthCm: 21,
+      depthCm: 6,
+      customerPriceCents: 749,
+      confirmed: true,
+    },
+    {
+      quantity: 2,
+      weightGrams: 1000,
+      lengthCm: null,
+      widthCm: null,
+      depthCm: null,
+      customerPriceCents: null,
+      confirmed: false,
+    },
+  ],
+  preparationDays: 3,
   testRates: [],
   contractRates: [],
   proposedRate: {
@@ -173,6 +200,73 @@ export const DEFAULT_MONDIAL_RELAY_SETTINGS: MondialRelaySettings = {
     confirmed: false,
   },
 };
+
+export function getHomeDeliveryPriceCents(
+  settings: Pick<
+    MondialRelaySettings,
+    "homeDeliveryEnabled" | "homeDeliveryContractConfirmed" | "homeShippingTiers"
+  >,
+  itemCount: number,
+): number | null {
+  if (
+    !settings.homeDeliveryEnabled ||
+    !settings.homeDeliveryContractConfirmed ||
+    !Number.isInteger(itemCount) ||
+    itemCount < 1 ||
+    itemCount > 30
+  )
+    return null;
+  const tier = settings.homeShippingTiers.find(
+    (candidate) => candidate.quantity === itemCount,
+  );
+  if (
+    !tier?.confirmed ||
+    !tier.weightGrams ||
+    !tier.lengthCm ||
+    !tier.widthCm ||
+    !tier.depthCm ||
+    !tier.customerPriceCents ||
+    tier.customerPriceCents < 1
+  )
+    return null;
+  return tier.customerPriceCents;
+}
+
+export function getHomeDeliveryParcelProfile(
+  settings: Pick<
+    MondialRelaySettings,
+    "homeDeliveryEnabled" | "homeDeliveryContractConfirmed" | "homeShippingTiers"
+  >,
+  itemCount: number,
+): ResolvedParcelProfile | null {
+  if (
+    !settings.homeDeliveryEnabled ||
+    !settings.homeDeliveryContractConfirmed ||
+    !Number.isInteger(itemCount) ||
+    itemCount < 1 ||
+    itemCount > 30
+  )
+    return null;
+  const tier = settings.homeShippingTiers.find(
+    (candidate) => candidate.quantity === itemCount,
+  );
+  if (
+    !tier?.confirmed ||
+    !tier.weightGrams ||
+    !tier.lengthCm ||
+    !tier.widthCm ||
+    !tier.depthCm ||
+    !tier.customerPriceCents
+  )
+    return null;
+  return {
+    itemsPerParcel: tier.quantity,
+    weightGrams: tier.weightGrams,
+    lengthCm: tier.lengthCm,
+    widthCm: tier.widthCm,
+    depthCm: tier.depthCm,
+  };
+}
 
 export function isSupportedMondialRelayService(
   value: unknown,

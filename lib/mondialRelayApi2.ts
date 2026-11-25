@@ -33,8 +33,8 @@ export type ShipmentAddress = {
 export type ProductionShipmentInput = {
   orderNo: string;
   customerNo: string;
-  serviceCode: "24R/MED" | "24R/APM";
-  relayLocation: string;
+  deliveryMode: "24R" | "HOM";
+  relayLocation?: string;
   collectionMode: "REL" | "CCC";
   sender: ShipmentAddress;
   recipient: ShipmentAddress;
@@ -154,6 +154,10 @@ export function buildApi2ProductionRequest(
   shipment: ProductionShipmentInput,
 ) {
   const value = (input: string) => escapeXml(input);
+  const deliveryMode =
+    shipment.deliveryMode === "HOM"
+      ? '<DeliveryMode Mode="HOM" />'
+      : `<DeliveryMode Mode="24R" Location="${value(shipment.relayLocation || "")}" />`;
   return `<?xml version="1.0" encoding="utf-8"?>
 <ShipmentCreationRequest xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.example.org/Request">
   <Context>
@@ -172,7 +176,7 @@ export function buildApi2ProductionRequest(
       <OrderNo>${value(shipment.orderNo)}</OrderNo>
       <CustomerNo>${value(shipment.customerNo)}</CustomerNo>
       <ParcelCount>${shipment.parcels.length}</ParcelCount>
-      <DeliveryMode Mode="24R" Location="${value(shipment.relayLocation)}" />
+      ${deliveryMode}
       <CollectionMode Mode="${value(shipment.collectionMode)}" Location="" />
       <Parcels>
         ${shipment.parcels

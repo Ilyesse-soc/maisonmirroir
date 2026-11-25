@@ -17,6 +17,8 @@ export default function CartCheckoutButton({
   shippingPrice,
   checkoutEnabled,
   promotionCode,
+  acceptTerms,
+  cgvVersion,
   attachments = [],
   onSuccess,
 }: {
@@ -27,6 +29,8 @@ export default function CartCheckoutButton({
   shippingPrice: number | null;
   checkoutEnabled: boolean;
   promotionCode?: string;
+  acceptTerms: boolean;
+  cgvVersion: string;
   attachments?: CartAttachment[];
   onSuccess?: (orderId: string) => void;
 }) {
@@ -74,6 +78,8 @@ export default function CartCheckoutButton({
     relayPoint: relayPoint || undefined,
     attachments,
     promotionCode,
+    acceptTerms,
+    cgvVersion,
     customer,
   };
 
@@ -91,6 +97,15 @@ export default function CartCheckoutButton({
       <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
         Les commandes et les paiements sont désactivés. Aucune commande ni
         expédition ne sera créée depuis cette page.
+      </p>
+    );
+  }
+
+  if (!acceptTerms || !cgvVersion) {
+    return (
+      <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
+        Veuillez lire et accepter les Conditions générales de vente avant le
+        paiement.
       </p>
     );
   }

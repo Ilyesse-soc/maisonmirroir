@@ -24,6 +24,30 @@ function loadTypeScript(file, dependencies = {}) {
 }
 
 const relayTypes = loadTypeScript("lib/mondialRelayTypes.ts");
+const homeSettings = {
+  ...relayTypes.DEFAULT_MONDIAL_RELAY_SETTINGS,
+  homeDeliveryEnabled: true,
+  homeDeliveryContractConfirmed: true,
+};
+assert.equal(relayTypes.getHomeDeliveryPriceCents(homeSettings, 1), 749);
+assert.equal(relayTypes.getHomeDeliveryPriceCents(homeSettings, 2), null);
+assert.deepEqual(
+  relayTypes.getHomeDeliveryParcelProfile(homeSettings, 1),
+  {
+    itemsPerParcel: 1,
+    weightGrams: 500,
+    lengthCm: 30,
+    widthCm: 21,
+    depthCm: 6,
+  },
+);
+assert.equal(
+  relayTypes.getHomeDeliveryPriceCents(
+    { ...homeSettings, homeDeliveryContractConfirmed: false },
+    1,
+  ),
+  null,
+);
 const relaySettings = loadTypeScript("lib/mondialRelaySettings.ts", {
   "@/lib/mondialRelayTypes": relayTypes,
   "@/lib/newsletterDb": {
@@ -229,6 +253,47 @@ assert.match(shipmentRequest, /<DeliveryMode Mode="24R" Location="FR-123456"/);
 assert.match(shipmentRequest, /<CollectionMode Mode="REL" Location=""/);
 assert.match(shipmentRequest, /<Content>Sac Maison Miroir<\/Content>/);
 assert.match(shipmentRequest, /<HouseNo>2<\/HouseNo>/);
+const homeShipmentRequest = api2.buildApi2ProductionRequest(
+  { login: "test-login", password: "test-password", customerId: "TEST01" },
+  {
+    orderNo: "MM-2026-12345679",
+    customerNo: "MM-2026-12345679",
+    deliveryMode: "HOM",
+    collectionMode: "REL",
+    sender: {
+      firstName: "Maison",
+      lastName: "Miroir",
+      street: "Rue de test",
+      houseNo: "1",
+      countryCode: "FR",
+      postalCode: "78300",
+      city: "Poissy",
+      email: "sender@example.test",
+    },
+    recipient: {
+      firstName: "Test",
+      lastName: "Client",
+      street: "Rue de test",
+      houseNo: "2",
+      countryCode: "FR",
+      postalCode: "75001",
+      city: "Paris",
+      email: "client@example.test",
+    },
+    parcels: [
+      {
+        content: "Sac Maison Miroir",
+        weightGrams: 500,
+        lengthCm: 30,
+        widthCm: 21,
+        depthCm: 6,
+      },
+    ],
+  },
+);
+assert.match(homeShipmentRequest, /<DeliveryMode Mode="HOM" \/>/);
+assert.match(homeShipmentRequest, /<CollectionMode Mode="REL" Location=""/);
+assert.doesNotMatch(homeShipmentRequest, /<DeliveryMode[^>]*Location=/);
 assert.match(api2.API2_PRODUCTION_URL || api2Source(), /api\/shipment/i);
 
 function api2Source() {

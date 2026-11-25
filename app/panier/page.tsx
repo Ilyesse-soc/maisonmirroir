@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMemo } from "react";
 import { useCart } from "@/components/CartProvider";
 import {
+  MONDIAL_RELAY_HOME_ID,
   MONDIAL_RELAY_POINT_RELAIS_ID,
   SHIPPING_METHODS,
 } from "@/lib/shipping";
@@ -30,6 +31,9 @@ export default function CartPage() {
     removeItem,
     itemCount,
     isProductAvailable,
+    availableShippingMethodIds,
+    getShippingPriceQuote,
+    preparationDays,
   } = useCart();
   const unavailableItems = items.filter(
     (item) => !isProductAvailable(item.productId, true),
@@ -424,6 +428,10 @@ export default function CartPage() {
                 </p>
                 {SHIPPING_METHODS.map((method) => {
                   const checked = shippingMethodId === method.id;
+                  const quote = getShippingPriceQuote(method.id, itemCount);
+                  const modeAvailable =
+                    availableShippingMethodIds.includes(method.id) &&
+                    quote.price !== null;
                   return (
                     <label
                       key={method.id}
@@ -446,6 +454,7 @@ export default function CartPage() {
                         <input
                           type="radio"
                           checked={checked}
+                          disabled={!modeAvailable}
                           onChange={() => setShippingMethodId(method.id)}
                         />
                         <span
@@ -456,9 +465,12 @@ export default function CartPage() {
                           }}
                         >
                           {method.shortLabel} -{" "}
-                          {method.id === MONDIAL_RELAY_POINT_RELAIS_ID
-                            ? selectedShippingPriceLabel
-                            : "À confirmer"}
+                          {quote.price !== null
+                            ? quote.label
+                            : method.id === MONDIAL_RELAY_HOME_ID &&
+                                itemCount === 1
+                              ? "7,49 € TTC, service non activé"
+                              : "Tarif ou colis à confirmer"}
                         </span>
                       </div>
                       <span
@@ -474,6 +486,11 @@ export default function CartPage() {
                     </label>
                   );
                 })}
+                <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7 }}>
+                  Préparation sous {preparationDays} jours ouvrés après paiement.
+                  {" "}
+                  <Link href="/livraison">Consulter la politique de livraison</Link>.
+                </p>
               </div>
 
               <div style={{ display: "grid", gap: 12, marginTop: 18 }}>

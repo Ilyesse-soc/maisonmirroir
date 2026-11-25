@@ -14,6 +14,7 @@ import {
   getEmailFrom,
   sendEmailOrThrow,
 } from "@/lib/email";
+import { addFrenchBusinessDays } from "@/lib/businessDays";
 
 type CheckoutInput = {
   product: ProductInfo;
@@ -29,6 +30,8 @@ type CheckoutInput = {
     base64: string;
   }>;
   promotionCode?: string;
+  acceptTerms: boolean;
+  cgvVersion: string;
 };
 
 type CanonicalItem = ProductInfo & { unitPriceCents: number };
@@ -43,6 +46,11 @@ type CheckoutSnapshot = {
   expiresAt: number;
   requestDigest: string;
   relayPoint?: CheckoutInput["relayPoint"];
+  preparationDays: number;
+  legalAcceptance: {
+    version: string;
+    acceptedAt: string;
+  };
 };
 type CommerceQueryResult = {
   rows: Array<Record<string, unknown>>;
@@ -354,6 +362,17 @@ export async function reserveCommerceCheckout(input: {
 }) {
   return transaction(async (client) => {
     await expireReservations(client);
+    const preparationDays = input.orderSnapshot.preparationDays;
+    if (
+      input.order.acceptTerms !== true ||
+      typeof input.orderSnapshot.cgvVersion !== "string" ||
+      input.order.cgvVersion !== input.orderSnapshot.cgvVersion ||
+      typeof preparationDays !== "number" ||
+      !Number.isInteger(preparationDays) ||
+      preparationDays < 1 ||
+      preparationDays > 30
+    )
+      throw new CommerceError("CGV_ACCEPTANCE_REQUIRED", 400);
     const submitted =
       input.order.items?.length ? input.order.items : [input.order.product];
     const quantities = normalizeQuantities(submitted);
@@ -399,6 +418,10 @@ export async function reserveCommerceCheckout(input: {
       items,
       promotionCode: promo.code || undefined,
     };
+    const legalAcceptance = {
+      version: input.order.cgvVersion,
+      acceptedAt: new Date().toISOString(),
+    };
     const snapshot = {
       ...input.orderSnapshot,
       order: normalizedOrder,
@@ -410,6 +433,8 @@ export async function reserveCommerceCheckout(input: {
       totalCents,
       expiresAt: expiresAt.getTime(),
       requestDigest: checkoutRequestDigest(input.order),
+      preparationDays,
+      legalAcceptance,
     } as CheckoutSnapshot;
     await client.query(
       `INSERT INTO mm_commerce_reservations
@@ -551,9 +576,16 @@ function makeOrderRecord(
     order.shippingMethodId || order.shipping?.id || "",
   );
   const items = snapshot.items as ProductInfo[];
+  const paidAt = new Date().toISOString();
   return {
     orderId,
-    orderDate: new Date().toISOString(),
+    orderDate: paidAt,
+    paidAt,
+    preparationDeadline: addFrenchBusinessDays(
+      new Date(paidAt),
+      snapshot.preparationDays,
+    ),
+    legalAcceptance: snapshot.legalAcceptance,
     paymentMethod: "PAYPAL",
     paypalOrderId,
     customer: order.customer,
@@ -710,8 +742,9 @@ export async function finalizeCommercePayment(
       `INSERT INTO mm_commerce_order_financials
         (order_id, paypal_order_id, paypal_capture_id, payment_status,
          subtotal_cents, promotion_code, discount_cents, shipping_cents,
-         total_cents)
-       VALUES ($1, $2, $3, 'paid', $4, $5, $6, $7, $8)`,
+         total_cents, paid_at, preparation_deadline, cgv_version,
+         cgv_accepted_at)
+       VALUES ($1, $2, $3, 'paid', $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [
         orderId,
         paypalOrderId,
@@ -721,6 +754,10 @@ export async function finalizeCommercePayment(
         reservation.discount_cents,
         reservation.shipping_cents,
         reservation.total_cents,
+        orderRecord.paidAt,
+        orderRecord.preparationDeadline,
+        orderRecord.legalAcceptance?.version,
+        orderRecord.legalAcceptance?.acceptedAt,
       ],
     );
     await client.query(
@@ -740,7 +777,10 @@ export async function finalizeCommercePayment(
 
 export async function sendCommerceEmailOnce(input: {
   orderId: string;
-  type: "order_confirmation" | "new_order_admin";
+  type:
+    | "order_confirmation"
+    | "new_order_admin"
+    | "withdrawal_confirmation";
   recipient: string;
   subject: string;
   html: string;
@@ -845,7 +885,7 @@ export async function sendFinalizedCommerceEmails(
   const rows = orderRecord.items
     .map(
       (item) =>
-        `<li>${escape(item.name)} × ${item.quantity} — ${(item.unitPrice * item.quantity).toFixed(2)} EUR</li>`,
+        `<li>${escape(item.name)} × ${item.quantity} - ${(item.unitPrice * item.quantity).toFixed(2)} EUR</li>`,
     )
     .join("");
   const summary = `<p>Commande ${escape(orderRecord.orderId)} payée.</p><ul>${rows}</ul><p>Sous-total : ${orderRecord.subtotal.toFixed(2)} EUR<br>Réduction : ${(Number(snapshot.discountCents || 0) / 100).toFixed(2)} EUR<br>Livraison : ${orderRecord.shipping.price.toFixed(2)} EUR<br>Total : ${orderRecord.total.toFixed(2)} EUR</p>`;

@@ -17,6 +17,7 @@ import { presentAdminOrders } from "@/lib/adminOrderPresentation";
 const STATUS_VALUES: OrderStatus[] = [
   "En attente",
   "En preparation",
+  "Prete a expedier",
   "Expediee",
   "Livree",
   "Annulee",
@@ -176,7 +177,9 @@ export async function PATCH(
           updatedReturnStatus = String(finance?.return_status || "none");
         }
         const statusShipmentMap: Record<string, string> = {
-          "En preparation": "preparing", Expediee: "shipped",
+          "En preparation": "preparing",
+          "Prete a expedier": "ready",
+          Expediee: "shipped",
           Livree: "delivered", Annulee: "cancelled",
         };
         previousShipmentStatus = String(finance?.shipment_status || statusShipmentMap[before.status] || "unfulfilled");
@@ -185,7 +188,9 @@ export async function PATCH(
         const next = { ...before, ...patch } as OrderRecord;
         await db.query("UPDATE mm_orders SET record=$2,updated_at=now() WHERE order_id=$1", [orderId, JSON.stringify(next)]);
         const shipmentStatus = ({
-          "En preparation": "preparing", Expediee: "shipped",
+          "En preparation": "preparing",
+          "Prete a expedier": "ready",
+          Expediee: "shipped",
           Livree: "delivered", Annulee: "cancelled",
         } as Record<string, string>)[String(nextStatus)];
         if (shipmentStatus) {
@@ -214,11 +219,31 @@ export async function PATCH(
       trackingNumber: nextTracking || updated.trackingNumber || "",
     });
 
+    const trackingAvailable = Boolean(
+      updated.trackingNumber ||
+        updated.shipping.mondialRelayShipment?.shipmentNumber,
+    );
+    const shipmentJustMarked =
+      nextStatus === "Expediee" && existing.status !== "Expediee";
+    const trackingAddedAfterShipment =
+      existing.status === "Expediee" &&
+      Boolean(nextTracking) &&
+      !existing.trackingNumber;
+    if (
+      durable &&
+      trackingAvailable &&
+      (shipmentJustMarked || trackingAddedAfterShipment)
+    ) {
+      await sendCommerceOrderNotification(
+        updated,
+        "shipment_confirmation",
+        "shipped",
+      );
+    }
+
     if (durable && nextStatus && existing.status !== nextStatus) {
       if (nextStatus === "Annulee") {
         await sendCommerceOrderNotification(updated, "cancellation", "cancelled");
-      } else if (nextStatus === "Expediee" || nextStatus === "Livree") {
-        await sendCommerceOrderNotification(updated, "shipment_confirmation", nextStatus);
       }
     }
 

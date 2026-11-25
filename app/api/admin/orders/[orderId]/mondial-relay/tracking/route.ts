@@ -15,6 +15,7 @@ import {
 import { mutationAllowed } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
 import type { MondialRelayShipment } from "@/lib/orderTypes";
+import { sendCommerceOrderNotification } from "@/lib/commerceNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -109,6 +110,25 @@ export async function POST(
         return NextResponse.json(
           { error: "TRACKING_RESULT_REQUIRES_RECONCILIATION" },
           { status: 503 },
+        );
+      const trackingText = [
+        tracking.summary,
+        ...tracking.events.map((event) => event.label),
+      ]
+        .join(" ")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase();
+      if (
+        updated.shipping.relayPoint &&
+        /(?:disponible (?:au|en) point relais|mis a disposition au point relais)/.test(
+          trackingText,
+        )
+      )
+        await sendCommerceOrderNotification(
+          updated,
+          "relay_available",
+          shipment.shipmentNumber,
         );
       await adminAudit("MONDIAL_RELAY_TRACKING_UPDATED", orderId);
       return NextResponse.json({

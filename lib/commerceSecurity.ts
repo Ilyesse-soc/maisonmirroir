@@ -78,6 +78,8 @@ export const orderPayloadSchema = z
     shipping: shipping.optional(),
     relayPoint: relayPoint.optional(),
     promotionCode: z.string().trim().max(80).optional(),
+    acceptTerms: z.boolean(),
+    cgvVersion: z.string().trim().min(1).max(80),
   })
   .strict();
 export const incomingOrderSchema = z

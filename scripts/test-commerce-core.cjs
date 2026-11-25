@@ -212,6 +212,8 @@ async function main() {
       country: "France",
     },
     shippingMethodId: "mondial-relay-point-relais",
+    acceptTerms: true,
+    cgvVersion: "2026-11-25-prep-3bd",
     relayPoint: {
       id: "FR-TEST-1",
       location: "Paris",
@@ -224,6 +226,10 @@ async function main() {
     },
     customValues: {},
   });
+  const orderSnapshot = {
+    cgvVersion: "2026-11-25-prep-3bd",
+    preparationDays: 3,
+  };
 
   const canonical = await inventory.canonicalCommerceItems(
     submitted("modest-era", 1),
@@ -249,7 +255,7 @@ async function main() {
       await inventory.reserveCommerceCheckout({
         order: { ...order, promotionCode: "FIRSTPRINCESS1" },
         shippingCents: 425,
-        orderSnapshot: {},
+        orderSnapshot,
       }),
     );
   }
@@ -266,7 +272,7 @@ async function main() {
         promotionCode: "FIRSTPRINCESS1",
       },
       shippingCents: 425,
-      orderSnapshot: {},
+      orderSnapshot,
     }),
     /FIRSTPRINCESS1_EXHAUSTED/,
   );
@@ -284,7 +290,7 @@ async function main() {
       inventory.reserveCommerceCheckout({
         order: orderPayload(submitted("modest-era", 1)),
         shippingCents: 425,
-        orderSnapshot: {},
+        orderSnapshot,
       })
         .then((reservation) => ({ reservation }))
         .catch((error) => ({ error })),
@@ -314,7 +320,7 @@ async function main() {
       promotionCode: "FIRSTPRINCESS1",
     },
     shippingCents: 425,
-    orderSnapshot: {},
+    orderSnapshot,
   });
   await query(
     "UPDATE mm_commerce_reservations SET expires_at=now()-interval '1 minute' WHERE reservation_id=$1",
@@ -394,7 +400,7 @@ async function main() {
         promotionCode: "FIRSTPRINCESS1",
       },
       shippingCents: 425,
-      orderSnapshot: {},
+      orderSnapshot,
     });
     assert.equal(authoritativeOrder.subtotalCents, 2990);
     assert.equal(authoritativeOrder.discountCents, 299);
@@ -468,6 +474,7 @@ async function main() {
       },
       shippingCents: 425,
       orderSnapshot: {
+        ...orderSnapshot,
         shippingMethodId: "mondial-relay-point-relais",
         relayPoint: orderPayload(submitted("paradise-way", 1)).relayPoint,
       },

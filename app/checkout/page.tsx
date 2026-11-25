@@ -6,6 +6,7 @@ import CartReminderConsent from "@/components/CartReminderConsent";
 import CartCheckoutButton from "@/components/CartCheckoutButton";
 import { useCart } from "@/components/CartProvider";
 import {
+  MONDIAL_RELAY_HOME_ID,
   MONDIAL_RELAY_POINT_RELAIS_ID,
   SHIPPING_METHODS,
 } from "@/lib/shipping";
@@ -31,6 +32,9 @@ export default function CheckoutPage() {
     selectedShippingPriceLabel,
     checkoutEnabled,
     getShippingPriceQuote,
+    availableShippingMethodIds,
+    preparationDays,
+    cgvVersion,
   } = useCart();
   const [relayPoints, setRelayPoints] = useState<RelayPoint[]>([]);
   const [relaySearchError, setRelaySearchError] = useState("");
@@ -42,6 +46,7 @@ export default function CheckoutPage() {
   const [promotionCartKey, setPromotionCartKey] = useState("");
   const [promotionMessage, setPromotionMessage] = useState("");
   const [promotionBusy, setPromotionBusy] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [address, setAddress] = useState({
     firstName: "",
     lastName: "",
@@ -372,6 +377,10 @@ export default function CheckoutPage() {
               <div style={{ display: "grid", gap: 10 }}>
                 {SHIPPING_METHODS.map((method) => {
                   const checked = shippingMethodId === method.id;
+                  const quote = getShippingPriceQuote(method.id, itemCount);
+                  const modeAvailable =
+                    availableShippingMethodIds.includes(method.id) &&
+                    quote.price !== null;
                   return (
                     <div key={method.id}>
                       <label
@@ -394,6 +403,7 @@ export default function CheckoutPage() {
                           <input
                             type="radio"
                             checked={checked}
+                            disabled={!modeAvailable}
                             onChange={() => setShippingMethodId(method.id)}
                           />
                           <span
@@ -404,12 +414,12 @@ export default function CheckoutPage() {
                             }}
                           >
                             {method.shortLabel} -{" "}
-                            {
-                              getShippingPriceQuote(
-                                method.id,
-                                itemCount,
-                              ).label
-                            }
+                            {quote.price !== null
+                              ? quote.label
+                              : method.id === MONDIAL_RELAY_HOME_ID &&
+                                  itemCount === 1
+                                ? "7,49 € TTC, service non activé"
+                                : "Tarif ou colis à confirmer"}
                           </span>
                         </div>
                         <span
@@ -423,6 +433,17 @@ export default function CheckoutPage() {
                           Délai estimé: {method.estimatedDelay}
                         </span>
                       </label>
+                      {method.id === MONDIAL_RELAY_HOME_ID &&
+                        !modeAvailable && (
+                          <p
+                            className="admin-muted"
+                            role="note"
+                            style={{ margin: "8px 0 0", fontSize: 12 }}
+                          >
+                            Le service HOM ne sera proposé qu’après confirmation
+                            de son autorisation dans le contrat Mondial Relay.
+                          </p>
+                        )}
                       {checked && method.id === MONDIAL_RELAY_POINT_RELAIS_ID && (
                         <div
                           style={{
@@ -675,6 +696,37 @@ export default function CheckoutPage() {
 
             <div style={{ ...dividerStyle(100), margin: "18px 0" }} />
 
+            <p style={{ margin: "0 0 14px", fontSize: 12, lineHeight: 1.7 }}>
+              Préparation sous {preparationDays} jours ouvrés après confirmation
+              du paiement. Le délai d’acheminement dépend du transporteur.
+              {" "}
+              <Link href="/livraison">Consulter la politique de livraison</Link>.
+            </p>
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 9,
+                marginBottom: 14,
+                fontSize: 12,
+                lineHeight: 1.6,
+              }}
+            >
+              <input
+                type="checkbox"
+                required
+                checked={termsAccepted}
+                onChange={(event) => setTermsAccepted(event.target.checked)}
+              />
+              <span>
+                J’ai lu et j’accepte les{" "}
+                <Link href="/conditions-de-vente" target="_blank">
+                  Conditions générales de vente
+                </Link>
+                . Cette case n’est pas précochée.
+              </span>
+            </label>
+
             <div className="mm-checkout-actions">
               <CartReminderConsent email={address.email} />
               <CartCheckoutButton
@@ -685,6 +737,8 @@ export default function CheckoutPage() {
                 shippingPrice={selectedShippingPrice}
                 checkoutEnabled={checkoutEnabled}
                 promotionCode={currentPromotionCode || undefined}
+                acceptTerms={termsAccepted}
+                cgvVersion={cgvVersion}
               />
             </div>
 

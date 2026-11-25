@@ -20,13 +20,13 @@ const item = z
 const customer = z
   .object({
     firstName: z.string().trim().min(1).max(100),
-    lastName: z.string().max(100),
-    email: z.string().email().max(254),
-    phone: z.string().max(30),
-    street: z.string().max(300),
-    city: z.string().max(100),
-    zip: z.string().max(20),
-    country: z.string().max(80).optional(),
+    lastName: z.string().trim().max(100),
+    email: z.string().trim().email().max(254),
+    phone: z.string().trim().max(30),
+    street: z.string().trim().max(300),
+    city: z.string().trim().max(100),
+    zip: z.string().trim().max(20),
+    country: z.string().trim().max(80).optional(),
   })
   .strict();
 const shipping = z
@@ -49,6 +49,14 @@ const relayPoint = z
     postalCode: short,
     city: short,
     distanceKm: z.number().finite().nonnegative().optional(),
+    openingHours: z.array(z.object({
+      day: z.string().max(20),
+      periods: z.array(z.string().max(100)).max(8),
+    }).strict()).max(7).optional(),
+    coordinates: z.object({
+      latitude: z.number().finite().min(-90).max(90),
+      longitude: z.number().finite().min(-180).max(180),
+    }).strict().optional(),
     source: z.literal("production"),
     serviceCode: z.enum(["24R/MED", "24R/APM", "24R", "24L"]),
     proof: z.string().max(4096).optional(),

@@ -45,14 +45,18 @@ function elements(xml: string, name: string) {
   );
 }
 
+function plainText(value: string) {
+  return decodeXml(value).replace(/[<>]/g, "").trim();
+}
+
 function openingPeriods(details: string, field: string) {
   const raw = element(details, field);
   if (!raw) return [];
   const nested = Array.from(
     raw.matchAll(/<[^>]+>([^<>]*)<\/[^>]+>/g),
-    (match) => match[1].trim(),
+    (match) => plainText(match[1]),
   ).filter(Boolean);
-  const plain = raw.replace(/<[^>]+>/g, "").trim();
+  const plain = plainText(raw);
   return nested.length ? nested : plain ? [plain] : [];
 }
 

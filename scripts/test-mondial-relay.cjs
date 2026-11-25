@@ -174,6 +174,21 @@ assert.deepEqual(points[0].coordinates, {
   latitude: 48.9299,
   longitude: 1.9846,
 });
+const untrustedHours = api1Response.parseMondialRelayApi1Response(
+  successfulSearch.replace(
+    "</Horaires_Lundi>",
+    "&lt;script&gt;alert(1)&lt;/script&gt;</Horaires_Lundi>",
+  ),
+  "24R/MED",
+);
+assert(
+  untrustedHours.every((point) =>
+    (point.openingHours || []).every((schedule) =>
+      schedule.periods.every((period) => !/[<>]/.test(period)),
+    ),
+  ),
+  "relay opening hours must not retain HTML delimiters",
+);
 assert.deepEqual(
   api1Response.parseMondialRelayApi1Response(
     "<Response><STAT>0</STAT><PointsRelais /></Response>",

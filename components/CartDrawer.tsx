@@ -40,6 +40,8 @@ export default function CartDrawer() {
     removeItem,
     isProductAvailable,
     checkoutEnabled,
+    selectedShippingPrice,
+    selectedShippingPriceLabel,
   } = useCart();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -277,12 +279,14 @@ export default function CartDrawer() {
               </div>
               <div>
                 <dt>Livraison</dt>
-                <dd>À calculer</dd>
+                <dd>{items.length === 0 ? euro.format(0) : selectedShippingPriceLabel}</dd>
               </div>
               <div className="mm-cart-grand-total">
                 <dt>Total</dt>
                 <dd>
-                  {items.length === 0 ? euro.format(0) : "À calculer"}
+                  {items.length === 0 ? euro.format(0) : selectedShippingPrice === null
+                    ? "Livraison indisponible"
+                    : euro.format(subtotal + selectedShippingPrice)}
                 </dd>
               </div>
             </dl>
@@ -304,14 +308,14 @@ export default function CartDrawer() {
                 </Link>
               ) : (
                 <>
-                  <button
-                    type="button"
+                  <Link
+                    href="/checkout"
                     className="mm-cart-checkout"
-                    disabled
+                    onClick={closeDrawer}
                     aria-describedby="cart-orders-notice"
                   >
-                    PASSER AU PAIEMENT
-                  </button>
+                    PRÉPARER MA COMMANDE
+                  </Link>
                   <p id="cart-orders-notice">
                     Les commandes ouvriront prochainement.
                   </p>

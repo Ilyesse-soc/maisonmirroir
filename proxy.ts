@@ -26,13 +26,9 @@ export function proxy(request: NextRequest) {
   const forwarded = new Headers(request.headers);
   forwarded.set("x-nonce", nonce);
   forwarded.set("Content-Security-Policy", policy);
-  let response: NextResponse;
-  if (
-    process.env.SHOP_OPEN !== "true" &&
-    /^\/(panier|checkout)(\/|$)/.test(path)
-  )
-    response = NextResponse.redirect(new URL("/", request.url));
-  else response = NextResponse.next({ request: { headers: forwarded } });
+  // Browsing a cart is independent of enabling financial transactions. The
+  // payment APIs retain their server-side opening and fulfillment checks.
+  const response = NextResponse.next({ request: { headers: forwarded } });
   response.headers.set("Content-Security-Policy", policy);
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("Referrer-Policy", "no-referrer");

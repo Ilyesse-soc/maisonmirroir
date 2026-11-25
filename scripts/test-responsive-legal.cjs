@@ -221,6 +221,83 @@ async function main() {
       }
     }
 
+    for (const productId of ["modest-era", "paradise-way"]) {
+      for (const [width, height] of [
+        [320, 568],
+        [390, 844],
+        [768, 1024],
+        [1024, 1366],
+        [1440, 900],
+      ]) {
+        await page.setViewportSize({ width, height });
+        const response = await page.goto(
+          `http://127.0.0.1:43819/product/${productId}`,
+          { waitUntil: "domcontentloaded" },
+        );
+        assert.equal(response.status(), 200);
+        const copy = page.locator(".product-detail-copy");
+        const featureList = copy.locator(".product-feature-list");
+        await featureList.waitFor();
+        assert.equal(await page.locator(".product-availability").count(), 1);
+        assert.match(
+          await page.locator(".product-availability").innerText(),
+          /^(Disponible|Victime de son succès)$/,
+        );
+        assert.match(
+          await copy.locator(".storefront-product-price").innerText(),
+          /29,90\s*€/,
+        );
+        assert.equal(await featureList.locator("li").count(), 5);
+        assert.doesNotMatch(await featureList.innerText(), /◇|◈/);
+        assert.equal(
+          await copy.getByText(/Sous-total produits \(-/).count(),
+          0,
+        );
+        const presentation = await copy.evaluate((element) => {
+          const description = element.querySelector(".storefront-lede");
+          const price = element.querySelector(".storefront-product-price");
+          const features = element.querySelector(".product-feature-list");
+          const style = features && getComputedStyle(features);
+          return {
+            ordered:
+              Boolean(description && price && features) &&
+              (description.compareDocumentPosition(price) &
+                Node.DOCUMENT_POSITION_FOLLOWING) !==
+                0 &&
+              (price.compareDocumentPosition(features) &
+                Node.DOCUMENT_POSITION_FOLLOWING) !==
+                0,
+            priceColor: price ? getComputedStyle(price).color : "",
+            featureBorderTop: style?.borderTopStyle,
+            featureBorderColor: style?.borderTopColor,
+            featureBorderSide: style?.borderLeftWidth,
+            featureBackground: style?.backgroundColor,
+          };
+        });
+        assert.equal(presentation.ordered, true);
+        assert.equal(presentation.priceColor, "rgb(56, 38, 31)");
+        assert.equal(presentation.featureBorderTop, "solid");
+        assert.equal(presentation.featureBorderColor, "rgb(216, 203, 189)");
+        assert.equal(presentation.featureBorderSide, "0px");
+        assert.equal(presentation.featureBackground, "rgba(0, 0, 0, 0)");
+        assert(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+          `${productId} has horizontal overflow at ${width}px`,
+        );
+        if ([390, 1440].includes(width))
+          await page.screenshot({
+            path: path.join(
+              directory,
+              `product-${productId}-${width}.png`,
+            ),
+            fullPage: true,
+            animations: "disabled",
+          });
+      }
+    }
+
     for (const width of [320, 375, 390, 430, 768, 1024, 1440, 1920]) {
       await page.setViewportSize({ width, height: 900 });
       const response = await page.goto("http://127.0.0.1:43819/newsletter", {
@@ -629,7 +706,7 @@ async function main() {
       ),
     );
     console.log(
-      `PASS: ${results.length} storefront responsive checks, ${cartViewports.length} cart viewports, empty and filled cart controls, accessibility, responsive newsletter pages, safely disabled newsletter delivery and orders, no third-party requests, no emails or payments.`,
+      `PASS: ${results.length} storefront responsive checks, ${cartViewports.length} cart viewports, mobile and desktop product detail checks for Modest Era and Paradise Way, empty and filled cart controls, accessibility, responsive newsletter pages, safely disabled newsletter delivery and orders, no third-party requests, no emails or payments.`,
     );
   } finally {
     if (browser) await browser.close();

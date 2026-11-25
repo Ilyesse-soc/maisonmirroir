@@ -206,6 +206,7 @@ export default function AdminSettingsPage() {
         if (!response.ok || data.persisted !== true) throw new Error(
           response.status === 401 ? "Votre session a expiré. Reconnectez-vous avant de réessayer."
           : data.error || "Écriture en base non confirmée.");
+        return data.settings as SettingsObject;
       }));
       const { brand, relay } = await refreshSettings();
       const failed = outcomes.find(outcome => outcome.status === "rejected");
@@ -213,7 +214,14 @@ export default function AdminSettingsPage() {
       const snapshots = [brand.settings, relay.settings];
       for (let index = 0; index < patches.length; index++) {
         const patch = patches[index];
-        if (settingConflicts(snapshots[index], patch.changes, patch.changes).length)
+        const outcome = outcomes[index];
+        const committed = outcome.status === "fulfilled" ? outcome.value : undefined;
+        // Compare the fresh GET with the server's committed canonical values,
+        // including trimmed text, rather than an unnormalized browser draft.
+        const canonicalChanges = committed ? Object.fromEntries(Object.keys(patch.changes).map(key => [key,
+          key === "sender" ? Object.fromEntries(Object.keys(patch.changes.sender as SettingsObject).map(field => [field, (committed.sender as SettingsObject)[field]])) : committed[key],
+        ])) : {};
+        if (settingConflicts(snapshots[index], canonicalChanges, canonicalChanges).length)
           throw new Error("La relecture serveur ne confirme pas tous les champs. Les modifications restent dans le formulaire.");
       }
       setSettings(current => mergeSettings(brand.settings, changedSettings(current, sentBrand).changes) as Settings);

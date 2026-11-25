@@ -104,8 +104,11 @@ def main():
             AND EXISTS (SELECT 1 FROM mm_live.mm_brand_settings WHERE key='legal_terms_confirmed' AND value='true'))
           FROM mm_live.mm_shipping_settings WHERE id=1""")
         readiness = json.loads(ready) if ready else {}
-        if not readiness or not all(readiness.values()):
-            raise RuntimeError('PENDING_CONFIRMATIONS_' + ','.join(k for k in ['connect', 'sender', 'legal'] if not readiness.get(k)))
+        # Manual Connect uses the sender profile verified in Connect. Keep the
+        # application sender diagnostic, without imposing an API2 prerequisite.
+        mandatory = ['connect', 'legal']
+        if not readiness or not all(readiness.get(key) for key in mandatory):
+            raise RuntimeError('PENDING_CONFIRMATIONS_' + ','.join(k for k in mandatory if not readiness.get(k)))
         config = public_config()
         if not all(config.get(k) for k in ['paymentsEnabled', 'realShippingEnabled', 'manualShippingReady', 'fulfillmentReady']):
             raise RuntimeError('CHECKOUT_NOT_READY')

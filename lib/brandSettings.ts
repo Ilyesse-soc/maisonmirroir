@@ -8,6 +8,7 @@ export function normalizeBrandText(value: string) {
 export const BRAND_SETTING_DEFAULTS = {
   brand_name: "MAISON MIROIR",
   contact_email: "contact@maison-miroir.fr",
+  professional_phone: "",
   instagram_url: "",
   tiktok_url: "",
   welcome_copy:

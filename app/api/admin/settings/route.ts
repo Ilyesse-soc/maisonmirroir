@@ -20,6 +20,7 @@ const httpsUrl = z.union([
 const settingsSchema = z.object({
   brand_name: z.string().trim().min(1).max(120),
   contact_email: z.string().trim().email().max(254),
+  professional_phone: z.string().trim().max(30),
   instagram_url: httpsUrl,
   tiktok_url: httpsUrl,
   welcome_copy: z.string().trim().min(1).max(4000),

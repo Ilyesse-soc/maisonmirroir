@@ -276,11 +276,22 @@ function ProductDetails({ productId }: { productId: string }) {
     setRelayPoints([]);
     setRelayPoint(null);
     try {
-      const query = new URLSearchParams({
-        postalCode: address.zip.trim(),
-        city: address.city.trim(),
-        quantity: String(qty ?? 1),
-      });
+    const query = new URLSearchParams({ quantity: String(qty ?? 1) });
+    if (/^[0-9]{5}$/.test(address.zip.trim()))
+      query.set("postalCode", address.zip.trim());
+    if (address.city.trim().length >= 2)
+      query.set("city", address.city.trim());
+    if (
+      /^[0-9]{5}$/.test(address.zip.trim()) ||
+      address.city.trim().length >= 2
+    )
+      query.set(
+        "address",
+        [address.street, address.zip, address.city]
+          .map((value) => value.trim())
+          .filter(Boolean)
+          .join(", "),
+      );
       const response = await fetch(
         `/api/shipping/mondial-relay/points?${query.toString()}`,
         { cache: "no-store" },
@@ -1351,16 +1362,16 @@ function ProductDetails({ productId }: { productId: string }) {
                           : "Le tarif est calculé à partir de la grille contractuelle."}
                       </p>
                       <p style={{ margin: 0, fontSize: 12 }}>
-                        La recherche utilise le code postal et la ville de
-                        l’adresse de livraison ci-dessus.
+                        La recherche peut utiliser le code postal, la ville ou
+                        les éléments géographiques de l’adresse ci-dessus.
                       </p>
                       <button
                         type="button"
                         onClick={searchRelayPoints}
                         disabled={
                           relaySearchBusy ||
-                          address.zip.trim().length !== 5 ||
-                          address.city.trim().length < 2
+                          (!/^[0-9]{5}$/.test(address.zip.trim()) &&
+                            address.city.trim().length < 2)
                         }
                       >
                         {relaySearchBusy
@@ -1398,6 +1409,18 @@ function ProductDetails({ productId }: { productId: string }) {
                             <br />
                             {point.address.join(", ")} - {point.postalCode}{" "}
                             {point.city}
+                            {point.openingHours?.length ? (
+                              <>
+                                <br />
+                                Horaires :{" "}
+                                {point.openingHours
+                                  .map(
+                                    (entry) =>
+                                      `${entry.day} ${entry.periods.join(", ")}`,
+                                  )
+                                  .join(" ; ")}
+                              </>
+                            ) : null}
                           </span>
                         </label>
                       ))}

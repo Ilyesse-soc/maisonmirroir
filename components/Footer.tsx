@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { brandInfo } from "@/lib/brandInfo";
+import { useCart } from "@/components/CartProvider";
 
 const discoveryLinks = [
   { href: "/catalogue", label: "La collection" },
@@ -46,6 +47,7 @@ export default function Footer({
 }: {
   withNavigation: boolean;
 }) {
+  const { checkoutEnabled, shippingConfigurationLoaded } = useCart();
   return (
     <footer
       className={`storefront-footer${withNavigation ? " storefront-footer--with-nav" : ""}`}
@@ -133,10 +135,11 @@ export default function Footer({
           >
             {brandInfo.email}
           </a>
-          <p className="storefront-footer-notice">
-            Les commandes de la première collection ne sont pas encore
-            ouvertes.
-          </p>
+          {shippingConfigurationLoaded && !checkoutEnabled && (
+            <p className="storefront-footer-notice">
+              Les commandes ouvriront prochainement.
+            </p>
+          )}
         </div>
       </div>
 

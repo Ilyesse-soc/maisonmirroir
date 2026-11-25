@@ -22,8 +22,9 @@ export default function ContactPage() {
             <a href={`mailto:${brandInfo.email}`}>{brandInfo.email}</a>
           </p>
           <p>
-            Les commandes ne sont pas encore ouvertes. Consulte également la{" "}
-            <Link href="/faq">foire aux questions</Link>.
+            Pour les réponses aux questions courantes, consulte la{" "}
+            <Link href="/faq">foire aux questions</Link>. Pour une commande,
+            indique son numéro dans ton message.
           </p>
         </div>
       </div>

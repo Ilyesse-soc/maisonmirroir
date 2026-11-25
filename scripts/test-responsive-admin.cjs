@@ -94,7 +94,91 @@ async function main() {
         assert(["auto", "scroll"].includes(layout.navOverflow));
       }
     }
-    console.log("PASS: admin campaign layout at 320, 375, 390, 430, 768, 1024, 1440 and 1920 px.");
+    const chartBars = Array.from(
+      { length: 30 },
+      (_, index) =>
+        `<span class="admin-audience-chart-bar" style="height:${20 + (index % 8) * 10}%"></span>`,
+    ).join("");
+    await page.setContent(`
+      <!doctype html>
+      <html lang="fr">
+        <head><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+          html, body { margin: 0; }
+          ${styles}
+        </style></head>
+        <body>
+          <div class="admin-shell">
+            <aside class="admin-sidebar">
+              <a class="admin-brand" href="#">MAISON MIROIR</a>
+              <nav><a href="#">Audience en direct</a><a href="#">Commandes</a></nav>
+            </aside>
+            <div class="admin-content">
+              <main class="admin-page">
+                <h1>Audience en direct</h1>
+                <p class="admin-muted">Estimation fondée sur les sessions récentes.</p>
+                <section class="admin-grid" aria-label="Audience actuelle et du jour">
+                  ${Array.from({ length: 8 }, (_, index) => `
+                    <article class="admin-stat"><span>Statistique ${index + 1}</span><strong>24</strong></article>
+                  `).join("")}
+                </section>
+                <section class="admin-card admin-audience-products">
+                  <h2>Pages produits aujourd’hui</h2>
+                  <div class="admin-grid">
+                    <article class="admin-stat"><span>Modest Era</span><strong>12</strong></article>
+                    <article class="admin-stat"><span>Paradise Way</span><strong>9</strong></article>
+                  </div>
+                </section>
+                <section class="admin-card admin-audience-section">
+                  <h2>Fréquentation par heure aujourd’hui</h2>
+                  <div class="admin-audience-chart">${chartBars}</div>
+                </section>
+                <section class="admin-card admin-audience-section">
+                  <div class="admin-audience-heading">
+                    <h2>Historique de fréquentation</h2>
+                    <label>Période<select><option>7 jours</option><option>30 jours</option></select></label>
+                  </div>
+                  <div class="admin-audience-chart">${chartBars}</div>
+                  <div class="admin-table-wrap"><table>
+                    <thead><tr><th>Jour</th><th>Visiteurs</th><th>Pages consultées</th></tr></thead>
+                    <tbody><tr><td>lundi</td><td>12</td><td>31</td></tr></tbody>
+                  </table></div>
+                </section>
+              </main>
+            </div>
+          </div>
+        </body>
+      </html>
+    `);
+    for (const width of [320, 375, 390, 430, 768, 1024, 1440, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      const layout = await page.evaluate(() => {
+        const main = document.querySelector(".admin-page");
+        const mainRect = main.getBoundingClientRect();
+        const charts = [...document.querySelectorAll(".admin-audience-chart")];
+        const heading = document
+          .querySelector(".admin-audience-heading")
+          .getBoundingClientRect();
+        return {
+          viewportWidth: innerWidth,
+          documentWidth: document.documentElement.scrollWidth,
+          mainLeft: mainRect.left,
+          mainRight: mainRect.right,
+          chartsFit: charts.every(
+            (chart) => chart.scrollWidth <= chart.clientWidth,
+          ),
+          headingRight: heading.right,
+        };
+      });
+      assert(
+        layout.documentWidth <= width,
+        `Horizontal audience page overflow at ${width}px: ${layout.documentWidth}px`,
+      );
+      assert(layout.mainLeft >= 0, `Audience page is clipped at ${width}px`);
+      assert(layout.mainRight <= width, `Audience page exceeds ${width}px`);
+      assert(layout.chartsFit, `Audience chart overflows at ${width}px`);
+      assert(layout.headingRight <= width, `Audience controls exceed ${width}px`);
+    }
+    console.log("PASS: admin campaign and audience layouts at 320, 375, 390, 430, 768, 1024, 1440 and 1920 px.");
   } finally {
     await browser.close();
   }

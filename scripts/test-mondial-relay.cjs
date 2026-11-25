@@ -155,6 +155,8 @@ assert.match(lockerSearchRequest, new RegExp(`<Security>${expectedLockerSignatur
 const successfulSearch = `<Response><STAT>0</STAT><PointsRelais>
   <PointRelais_Details><Num>123456</Num><Localisation1>Relais &amp; boutique</Localisation1>
   <LgAdr1>1 rue de test</LgAdr1><CP>78300</CP><Ville>Poissy</Ville><Distance>1200</Distance>
+  <Latitude>48.9299</Latitude><Longitude>1.9846</Longitude>
+  <Horaires_Lundi><string>08:00-12:00</string><string>14:00-19:00</string></Horaires_Lundi>
   </PointRelais_Details></PointsRelais></Response>`;
 const points = api1Response.parseMondialRelayApi1Response(
   successfulSearch,
@@ -165,6 +167,28 @@ assert.equal(points[0].source, "production");
 assert.equal(points[0].serviceCode, "24R/MED");
 assert.equal(points[0].label, "Relais & boutique");
 assert.equal(points[0].distanceKm, 1.2);
+assert.deepEqual(points[0].openingHours, [
+  { day: "Lundi", periods: ["08:00-12:00", "14:00-19:00"] },
+]);
+assert.deepEqual(points[0].coordinates, {
+  latitude: 48.9299,
+  longitude: 1.9846,
+});
+const untrustedHours = api1Response.parseMondialRelayApi1Response(
+  successfulSearch.replace(
+    "</Horaires_Lundi>",
+    "&lt;script&gt;alert(1)&lt;/script&gt;</Horaires_Lundi>",
+  ),
+  "24R/MED",
+);
+assert(
+  untrustedHours.every((point) =>
+    (point.openingHours || []).every((schedule) =>
+      schedule.periods.every((period) => !/[<>]/.test(period)),
+    ),
+  ),
+  "relay opening hours must not retain HTML delimiters",
+);
 assert.deepEqual(
   api1Response.parseMondialRelayApi1Response(
     "<Response><STAT>0</STAT><PointsRelais /></Response>",

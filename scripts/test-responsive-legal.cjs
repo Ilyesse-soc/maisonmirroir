@@ -56,6 +56,9 @@ async function main() {
       executablePath: firefoxRun ? undefined : process.env.QA_BROWSER_PATH,
     });
     const context = await browser.newContext();
+    await context.addInitScript(() => {
+      localStorage.setItem("mm-audience-consent-v1", "rejected");
+    });
     const page = await context.newPage();
     const openCartDrawer = async (width) => {
       if (width < 1024) {

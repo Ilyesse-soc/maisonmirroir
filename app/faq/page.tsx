@@ -8,12 +8,12 @@ const questions = [
   {
     question: "Quand les commandes ouvriront-elles ?",
     answer:
-      "Les commandes ne sont pas encore ouvertes. La disponibilité des produits et les modalités de vente seront précisées avant l’ouverture.",
+      "La disponibilité de chaque produit est indiquée sur sa fiche. Lorsque la commande est activée, ajoutez les produits souhaités au panier et suivez les étapes du checkout.",
   },
   {
     question: "Quels sont les délais de préparation et de livraison ?",
     answer:
-      "Le délai de préparation, les options de livraison et les délais d’acheminement sont en cours de confirmation. Ils seront publiés avant l’ouverture des commandes.",
+      "La préparation prend 3 jours ouvrés après confirmation du paiement. Les options et frais de livraison applicables sont affichés avant le paiement. Consultez la politique de livraison pour les détails.",
   },
   {
     question: "Où sont confectionnés les sacs ?",
@@ -33,22 +33,22 @@ const questions = [
   {
     question: "La livraison est-elle gratuite ?",
     answer:
-      "Les frais de livraison, le seuil éventuel de gratuité, les transporteurs et les destinations desservies restent à confirmer. Les informations validées seront publiées avant l’ouverture des commandes.",
+      "Les frais dépendent du mode de livraison et de la quantité. Le montant applicable est affiché avant le paiement. Consultez la politique de livraison pour les tarifs communiqués.",
   },
   {
     question: "Quels moyens de paiement acceptez-vous ?",
     answer:
-      "Les commandes n’étant pas encore ouvertes, aucun paiement n’est actuellement proposé. Les moyens de paiement seront affichés au moment de la commande.",
+      "Les moyens de paiement disponibles sont indiqués dans le checkout avant la validation de la commande.",
   },
   {
     question: "Puis-je modifier ou annuler une commande ?",
     answer:
-      "Les commandes ne sont pas encore ouvertes. Les modalités de modification et d’annulation seront publiées avant leur ouverture.",
+      "Contactez MAISON MIROIR dès que possible en indiquant votre numéro de commande. Les possibilités dépendent de l’état de préparation ou d’expédition de la commande.",
   },
   {
     question: "Puis-je retourner un article ?",
     answer:
-      "La politique de retours et les modalités applicables seront publiées avant l’ouverture des commandes.",
+      "Les modalités de rétractation, de retour et de remboursement sont détaillées dans les pages dédiées du site.",
   },
   {
     question: "Comment contacter MAISON MIROIR ?",

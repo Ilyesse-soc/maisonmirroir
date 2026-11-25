@@ -45,7 +45,31 @@ function elements(xml: string, name: string) {
   );
 }
 
+function plainText(value: string) {
+  return decodeXml(value).replace(/[<>]/g, "").trim();
+}
+
+function openingPeriods(details: string, field: string) {
+  const raw = element(details, field);
+  if (!raw) return [];
+  const nested = Array.from(
+    raw.matchAll(/<[^>]+>([^<>]*)<\/[^>]+>/g),
+    (match) => plainText(match[1]),
+  ).filter(Boolean);
+  const plain = plainText(raw);
+  return nested.length ? nested : plain ? [plain] : [];
+}
+
 function relayPoints(xml: string, serviceCode: MondialRelayServiceCode) {
+  const hoursFields = [
+    ["Horaires_Lundi", "Lundi"],
+    ["Horaires_Mardi", "Mardi"],
+    ["Horaires_Mercredi", "Mercredi"],
+    ["Horaires_Jeudi", "Jeudi"],
+    ["Horaires_Vendredi", "Vendredi"],
+    ["Horaires_Samedi", "Samedi"],
+    ["Horaires_Dimanche", "Dimanche"],
+  ] as const;
   return Array.from(
     xml.matchAll(
       /<(?:(?:[\w.-]+):)?PointRelais_Details(?:\s[^>]*)?>([\s\S]*?)<\/(?:(?:[\w.-]+):)?PointRelais_Details\s*>/gi,
@@ -58,6 +82,18 @@ function relayPoints(xml: string, serviceCode: MondialRelayServiceCode) {
       const address = ["LgAdr1", "LgAdr2", "LgAdr3", "LgAdr4"]
         .map((name) => element(details, name))
         .filter(Boolean);
+      const openingHours = hoursFields
+        .map(([field, day]) => ({
+          day,
+          periods: openingPeriods(details, field),
+        }))
+        .filter((entry) => entry.periods.length > 0);
+      const latitudeText = element(details, "Latitude");
+      const longitudeText = element(details, "Longitude");
+      const latitude = Number(latitudeText);
+      const longitude = Number(longitudeText);
+      const distanceText = element(details, "Distance");
+      const distance = Number(distanceText);
       return {
         id,
         location: `FR-${id}`,
@@ -68,8 +104,17 @@ function relayPoints(xml: string, serviceCode: MondialRelayServiceCode) {
         address,
         postalCode: element(details, "CP"),
         city: element(details, "Ville"),
-        ...(Number.isFinite(Number(element(details, "Distance")))
-          ? { distanceKm: Number(element(details, "Distance")) / 1000 }
+        ...(openingHours.length ? { openingHours } : {}),
+        ...(latitudeText &&
+        longitudeText &&
+        Number.isFinite(latitude) &&
+        Number.isFinite(longitude) &&
+        Math.abs(latitude) <= 90 &&
+        Math.abs(longitude) <= 180
+          ? { coordinates: { latitude, longitude } }
+          : {}),
+        ...(distanceText && Number.isFinite(distance)
+          ? { distanceKm: distance / 1000 }
           : {}),
         source: "production",
         serviceCode,

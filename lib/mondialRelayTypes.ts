@@ -17,6 +17,8 @@ export type RelayPoint = {
   postalCode: string;
   city: string;
   distanceKm?: number;
+  openingHours?: { day: string; periods: string[] }[];
+  coordinates?: { latitude: number; longitude: number };
   source: RelayPointSource;
   serviceCode: MondialRelayServiceCode;
   proof?: string;

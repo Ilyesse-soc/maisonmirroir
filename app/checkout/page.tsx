@@ -192,11 +192,22 @@ export default function CheckoutPage() {
     setRelayPoints([]);
     setRelayPoint(null);
     try {
-      const query = new URLSearchParams({
-        postalCode: address.zip.trim(),
-        city: address.city.trim(),
-        quantity: String(itemCount),
-      });
+      const query = new URLSearchParams({ quantity: String(itemCount) });
+      if (/^[0-9]{5}$/.test(address.zip.trim()))
+        query.set("postalCode", address.zip.trim());
+      if (address.city.trim().length >= 2)
+        query.set("city", address.city.trim());
+      if (
+        /^[0-9]{5}$/.test(address.zip.trim()) ||
+        address.city.trim().length >= 2
+      )
+        query.set(
+          "address",
+          [address.street, address.zip, address.city]
+            .map((value) => value.trim())
+            .filter(Boolean)
+            .join(", "),
+        );
       const response = await fetch(
         `/api/shipping/mondial-relay/points?${query.toString()}`,
         { cache: "no-store" },
@@ -465,19 +476,21 @@ export default function CheckoutPage() {
                           >
                             {selectedShippingPrice === null
                               ? "Le tarif contractuel reste à confirmer. Aucun paiement ne sera proposé."
-                              : "Les commandes et paiements ne sont pas encore ouverts."}
+                              : checkoutEnabled
+                                ? "Le paiement PayPal sécurisé est proposé à l’étape suivante."
+                                : "Les commandes et paiements ne sont pas encore ouverts."}
                           </p>
                           <p style={{ margin: 0, fontSize: 12, color: theme.textMid }}>
-                            La recherche utilise le code postal et la ville
-                            saisis dans l’adresse de livraison.
+                            La recherche peut utiliser le code postal, la ville
+                            ou les éléments géographiques de l’adresse de livraison.
                           </p>
                           <button
                             type="button"
                             onClick={searchRelayPoints}
                             disabled={
                               relaySearchBusy ||
-                              address.zip.trim().length !== 5 ||
-                              address.city.trim().length < 2
+                              (!/^[0-9]{5}$/.test(address.zip.trim()) &&
+                                address.city.trim().length < 2)
                             }
                           >
                             {relaySearchBusy
@@ -521,6 +534,17 @@ export default function CheckoutPage() {
                                 {point.distanceKm !== undefined && (
                                   <span>{point.distanceKm} km</span>
                                 )}
+                                {point.openingHours?.length ? (
+                                  <span>
+                                    Horaires :{" "}
+                                    {point.openingHours
+                                      .map(
+                                        (entry) =>
+                                          `${entry.day} ${entry.periods.join(", ")}`,
+                                      )
+                                      .join(" ; ")}
+                                  </span>
+                                ) : null}
                               </span>
                             </label>
                           ))}

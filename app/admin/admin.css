@@ -189,6 +189,46 @@
   display: grid;
   gap: 12px;
 }
+.admin-audience-products,
+.admin-audience-section {
+  margin-top: 18px;
+}
+.admin-audience-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.admin-audience-heading label {
+  display: grid;
+  gap: 4px;
+  min-width: 130px;
+}
+.admin-audience-chart {
+  display: grid;
+  grid-template-columns: repeat(30, minmax(0, 1fr));
+  align-items: end;
+  gap: 4px;
+  min-height: 150px;
+  border-bottom: 1px solid #d8c6aa;
+}
+.admin-audience-chart-bar {
+  display: block;
+  min-height: 0;
+  border-radius: 3px 3px 0 0;
+  background: #8c6d14;
+}
+.admin-audience-chart-labels {
+  display: flex;
+  justify-content: space-between;
+  min-height: 22px;
+  padding-top: 4px;
+  color: #5a4a2e;
+  font-size: 11px;
+}
+.admin-audience-section h2 {
+  margin-top: 0;
+}
 .admin-event {
   border-left: 3px solid #c9a227;
   background: #fffdfa;
@@ -308,6 +348,14 @@
   }
   .admin-page {
     padding-top: 26px;
+  }
+  .admin-audience-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .admin-audience-chart {
+    gap: 2px;
+    min-height: 120px;
   }
   .miroir-ai-intro {
     align-items: flex-start;

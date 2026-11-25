@@ -23,6 +23,7 @@ export default async function AdminLayout({
             <Link href="/admin/calendar">Calendrier</Link>
             <Link href="/admin/settings">Paramètres</Link>
             <Link href="/admin/orders">Commandes</Link>
+            <Link href="/admin/audience">Audience en direct</Link>
             <Link href="/admin/inventory">Stocks</Link>
             <Link href="/admin/promotions">Promotions</Link>
             <Link href="/admin/customers">Clients</Link>

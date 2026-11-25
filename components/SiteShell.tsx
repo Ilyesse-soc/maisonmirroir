@@ -3,6 +3,8 @@
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import CartDrawer from "@/components/CartDrawer";
+import AudienceConsent from "@/components/AudienceConsent";
+import AudienceTracker from "@/components/AudienceTracker";
 import { CartProvider } from "@/components/CartProvider";
 import { usePathname } from "next/navigation";
 
@@ -26,6 +28,8 @@ export default function SiteShell({
         <Navbar />
         {children}
         <CartDrawer />
+        <AudienceTracker />
+        <AudienceConsent />
       </CartProvider>
     );
 
@@ -46,6 +50,8 @@ export default function SiteShell({
         <Footer withNavigation={showNavigation} />
       </div>
       {showNavigation && <CartDrawer />}
+      <AudienceTracker />
+      <AudienceConsent />
     </CartProvider>
   );
 }

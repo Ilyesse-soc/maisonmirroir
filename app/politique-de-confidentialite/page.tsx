@@ -31,6 +31,15 @@ export default function PrivacyPolicy() {
         et destinataires des données restent à valider avant l’ouverture des
         commandes.
       </p>
+      <h2>Mesure d’audience facultative</h2>
+      <p>
+        Si vous l’autorisez, des identifiants aléatoires de visiteur et de
+        session servent à produire des statistiques de fréquentation et de
+        navigation. Les pages consultées et l’étape du parcours sont
+        enregistrées sans adresse IP, nom, coordonnées ou contenu de panier.
+        Les événements sont supprimés au plus tard après 30 jours. Vous pouvez
+        retirer votre accord depuis « Préférences statistiques ».
+      </p>
     </LegalPage>
   );
 }

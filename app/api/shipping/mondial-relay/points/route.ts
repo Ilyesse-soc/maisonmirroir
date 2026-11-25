@@ -20,19 +20,47 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const postalCode = (request.nextUrl.searchParams.get("postalCode") || "").trim();
-  const city = (request.nextUrl.searchParams.get("city") || "").trim();
+  const rawPostalCode = (
+    request.nextUrl.searchParams.get("postalCode") || ""
+  ).trim();
+  const rawCity = (request.nextUrl.searchParams.get("city") || "").trim();
+  const address = (request.nextUrl.searchParams.get("address") || "").trim();
+  const addressPostalCode = address.match(/\b([0-9]{5})\b/);
+  const addressCity =
+    addressPostalCode?.index === undefined
+      ? ""
+      : address
+          .slice(addressPostalCode.index + addressPostalCode[1].length)
+          .split(",")[0]
+          .trim();
+  const addressLooksLikeStreet =
+    /^\s*\d/.test(address) ||
+    /\b(rue|avenue|av\.|boulevard|bd|chemin|impasse|place|route|allée)\b/i.test(
+      address,
+    );
+  const postalCode =
+    /^[0-9]{5}$/.test(rawPostalCode)
+      ? rawPostalCode
+      : addressPostalCode?.[1] || "";
+  const cityCandidate =
+    rawCity ||
+    addressCity ||
+    (!rawPostalCode && !addressPostalCode && !addressLooksLikeStreet
+      ? address
+      : "");
+  const city =
+    cityCandidate.length >= 2 && cityCandidate.length <= 80
+      ? cityCandidate
+      : "";
   const quantity = Number(request.nextUrl.searchParams.get("quantity") || "1");
   if (
-    !/^[0-9]{5}$/.test(postalCode) ||
-    city.length < 2 ||
-    city.length > 80 ||
+    (!postalCode && !city) ||
     !Number.isInteger(quantity) ||
     quantity < 1 ||
     quantity > 30
   )
     return NextResponse.json(
-      { error: "Indiquez un code postal français et une ville valides." },
+      { error: "Indiquez un code postal français ou une ville valides." },
       { status: 400 },
     );
 
@@ -79,7 +107,7 @@ export async function GET(request: NextRequest) {
       shop: process.env.MONDIAL_RELAY_API1_PROD_SHOP || "",
       privateKey: process.env.MONDIAL_RELAY_API1_PROD_PRIVATE_KEY || "",
       postalCode,
-      city,
+      city: city || "",
       weightGrams: parcel.weightGrams || 0,
       serviceCode: settings.serviceCode,
     });
@@ -95,13 +123,22 @@ export async function GET(request: NextRequest) {
     if (
       error instanceof MondialRelayApi1ResponseError &&
       error.code.startsWith("STAT_")
-    )
+    ) {
+      if (error.code === "STAT_49")
+        return NextResponse.json(
+          {
+            error:
+              "Mondial Relay refuse l’action de recherche demandée (STAT 49). Vérifiez l’action autorisée pour le contrat API1.",
+          },
+          { status: 502, headers: { "Cache-Control": "no-store" } },
+        );
       return NextResponse.json(
         {
           error: `Mondial Relay a rejeté la recherche (code ${error.code.slice(5)}). Vérifiez les accès API1 et le code de service de production.`,
         },
         { status: 502, headers: { "Cache-Control": "no-store" } },
       );
+    }
     return NextResponse.json(
       { error: "Recherche des Points Relais indisponible." },
       { status: 503, headers: { "Cache-Control": "no-store" } },

@@ -247,20 +247,27 @@ async function main() {
   const settings = load("app/api/admin/settings/route.ts");
   const settingsData = await (await settings.GET()).json();
   assert.equal(settingsData.settings.brand_name, "MAISON MIROIR");
+  assert.equal(settingsData.settings.professional_phone, "");
   assert.equal(Object.hasOwn(settingsData, "resendApiKey"), false);
   const updatedSettings = await settings.PUT(req("https://example.test/api/admin/settings", "PUT", {
     ...settingsData.settings,
     brand_name: "Maison Miroir",
+    professional_phone: "+33 6 12 34 56 78",
     confirmation_copy: "Merci pour Maison Miroir.",
     instagram_url: "https://www.instagram.com/maison-miroir-test/",
   }));
   assert.equal(updatedSettings.status, 200);
   const updatedSettingsData = await updatedSettings.json();
   assert.equal(updatedSettingsData.settings.brand_name, "MAISON MIROIR");
+  assert.equal(updatedSettingsData.settings.professional_phone, "+33 6 12 34 56 78");
   assert.equal(updatedSettingsData.settings.confirmation_copy, "Merci pour MAISON MIROIR.");
   assert.equal(
     (await query("SELECT value FROM mm_brand_settings WHERE key='brand_name'")).rows[0].value,
     "MAISON MIROIR",
+  );
+  assert.equal(
+    (await query("SELECT value FROM mm_brand_settings WHERE key='professional_phone'")).rows[0].value,
+    "+33 6 12 34 56 78",
   );
   await query(
     "UPDATE mm_brand_settings SET value=$1 WHERE key='confirmation_copy'",

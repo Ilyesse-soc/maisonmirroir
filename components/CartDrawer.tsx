@@ -39,6 +39,7 @@ export default function CartDrawer() {
     updateItemQuantity,
     removeItem,
     isProductAvailable,
+    checkoutEnabled,
   } = useCart();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -293,17 +294,29 @@ export default function CartDrawer() {
               >
                 VOIR LE PANIER
               </Link>
-              <button
-                type="button"
-                className="mm-cart-checkout"
-                disabled
-                aria-describedby="cart-orders-notice"
-              >
-                PASSER AU PAIEMENT
-              </button>
-              <p id="cart-orders-notice">
-                Les commandes ouvriront prochainement.
-              </p>
+              {checkoutEnabled ? (
+                <Link
+                  href="/checkout"
+                  className="mm-cart-checkout"
+                  onClick={closeDrawer}
+                >
+                  PASSER AU PAIEMENT
+                </Link>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="mm-cart-checkout"
+                    disabled
+                    aria-describedby="cart-orders-notice"
+                  >
+                    PASSER AU PAIEMENT
+                  </button>
+                  <p id="cart-orders-notice">
+                    Les commandes ouvriront prochainement.
+                  </p>
+                </>
+              )}
             </div>
           </footer>
         </section>

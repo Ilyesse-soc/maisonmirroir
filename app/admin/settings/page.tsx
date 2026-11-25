@@ -14,6 +14,7 @@ import {
 type Settings = {
   brand_name: string;
   contact_email: string;
+  professional_phone: string;
   instagram_url: string;
   tiktok_url: string;
   welcome_copy: string;
@@ -25,6 +26,7 @@ type Settings = {
 const empty: Settings = {
   brand_name: "",
   contact_email: "",
+  professional_phone: "",
   instagram_url: "",
   tiktok_url: "",
   welcome_copy: "",
@@ -678,6 +680,7 @@ export default function AdminSettingsPage() {
         <div className="admin-form-grid">
           <label>Nom de la marque<input value={settings.brand_name} onChange={(event) => field("brand_name", event.target.value)} maxLength={120} required /></label>
           <label>Email de contact<input type="email" value={settings.contact_email} onChange={(event) => field("contact_email", event.target.value)} maxLength={254} required /></label>
+          <label>Téléphone professionnel (facultatif, publié dans les mentions légales)<input type="tel" value={settings.professional_phone} onChange={(event) => field("professional_phone", event.target.value)} maxLength={30} /></label>
           <label>Instagram (URL HTTPS)<input type="url" value={settings.instagram_url} onChange={(event) => field("instagram_url", event.target.value)} /></label>
           <label>TikTok (URL HTTPS)<input type="url" value={settings.tiktok_url} onChange={(event) => field("tiktok_url", event.target.value)} /></label>
           <label>Texte de confirmation<textarea rows={4} value={settings.confirmation_copy} onChange={(event) => field("confirmation_copy", event.target.value)} maxLength={2000} required /></label>

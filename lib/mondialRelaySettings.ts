@@ -244,6 +244,7 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
       ? storedShippingTiers.data as ShippingTier[]
       : DEFAULT_MONDIAL_RELAY_SETTINGS.shippingTiers.map((tier) => ({
           ...tier,
+          customerPriceCents: null,
           confirmed: false,
         })),
     homeDeliveryEnabled:

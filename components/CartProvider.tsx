@@ -189,6 +189,7 @@ export function CartProvider({
   const [shippingConfig, setShippingConfig] = useState<{
     settings: Pick<
       MondialRelaySettings,
+      | "fulfillmentMode"
       | "serviceCode"
       | "shippingTiers"
       | "homeDeliveryEnabled"

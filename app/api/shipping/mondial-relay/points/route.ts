@@ -8,8 +8,8 @@ import {
   getMondialRelaySettings,
 } from "@/lib/mondialRelaySettings";
 import {
-  getMondialRelayParcelProfile,
   getMondialRelayQuote,
+  getMondialRelaySearchWeightGrams,
   isSupportedMondialRelayService,
 } from "@/lib/mondialRelayTypes";
 import { clientIp } from "@/lib/requestSecurity";
@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
         { error: "Le service de recherche Mondial Relay n’est pas pris en charge." },
         { status: 409 },
       );
-    const parcel = getMondialRelayParcelProfile(settings, quantity);
-    if (!parcel || !getMondialRelayQuote(settings, quantity))
+    const weightGrams = getMondialRelaySearchWeightGrams(settings, quantity);
+    if (!weightGrams || !getMondialRelayQuote(settings, quantity))
       return NextResponse.json(
         { error: "Le profil colis ou le tarif de livraison n’est pas configuré pour cette quantité." },
         { status: 409 },
@@ -108,7 +108,7 @@ export async function GET(request: NextRequest) {
       privateKey: process.env.MONDIAL_RELAY_API1_PROD_PRIVATE_KEY || "",
       postalCode,
       city: city || "",
-      weightGrams: parcel.weightGrams || 0,
+      weightGrams,
       serviceCode: settings.serviceCode,
     });
     return NextResponse.json(

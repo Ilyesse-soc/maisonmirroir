@@ -370,6 +370,7 @@ export function getMondialRelayQuote(
     Partial<
       Pick<
         MondialRelaySettings,
+        | "fulfillmentMode"
         | "allowedServices"
         | "serviceConfirmed"
         | "contractConfirmed"
@@ -387,6 +388,31 @@ export function getMondialRelayQuote(
    !isSupportedMondialRelayService(settings.serviceCode)
  )
    return null;
+
+  if (
+    settings.fulfillmentMode === "manual_connect" &&
+    settings.shippingTiers !== undefined
+  ) {
+    const tier = settings.shippingTiers.find(
+      (candidate) => candidate.quantity === itemCount,
+    );
+    if (
+      !tier ||
+      typeof tier.weightGrams !== "number" ||
+      !Number.isInteger(tier.weightGrams) ||
+      tier.weightGrams < 1 ||
+      typeof tier.customerPriceCents !== "number" ||
+      !Number.isInteger(tier.customerPriceCents) ||
+      tier.customerPriceCents < 1
+    )
+      return null;
+    return {
+      priceCents: tier.customerPriceCents,
+      parcelCount: 1,
+      serviceCode: settings.serviceCode,
+      source: "contract",
+    };
+  }
 
  const profile = getMondialRelayParcelProfile(settings, itemCount);
  if (settings.shippingTiers !== undefined) {
@@ -453,4 +479,29 @@ export function getMondialRelayQuote(
     serviceCode: settings.serviceCode,
     source: "contract",
   };
+}
+
+export function getMondialRelaySearchWeightGrams(
+  settings: Partial<
+    Pick<
+      MondialRelaySettings,
+      "fulfillmentMode" | "contractParcel" | "shippingTiers"
+    >
+  >,
+  itemCount: number,
+): number | null {
+  if (!Number.isInteger(itemCount) || itemCount < 1 || itemCount > 30)
+    return null;
+  if (settings.fulfillmentMode === "manual_connect") {
+    const tier = settings.shippingTiers?.find(
+      (candidate) => candidate.quantity === itemCount,
+    );
+    return tier &&
+      typeof tier.weightGrams === "number" &&
+      Number.isInteger(tier.weightGrams) &&
+      tier.weightGrams > 0
+      ? tier.weightGrams
+      : null;
+  }
+  return getMondialRelayParcelProfile(settings, itemCount)?.weightGrams ?? null;
 }

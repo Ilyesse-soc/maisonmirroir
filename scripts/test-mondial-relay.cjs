@@ -593,7 +593,7 @@ const manualShipmentRoute = readFileSync(
   "utf8",
 );
 const shipmentQueueMigration = readFileSync(
-  "migrations/012_mondial_relay_shipment_queue.sql",
+  "migrations/014_mondial_relay_shipment_queue.sql",
   "utf8",
 );
 assert.match(publicSettings, /SHOP_OPEN/);

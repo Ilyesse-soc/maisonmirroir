@@ -81,8 +81,12 @@ export type MondialRelaySender = {
   email: string;
 };
 
+export type MondialRelayFulfillmentMode = "manual_connect" | "api2";
+
 export type MondialRelaySettings = {
   serviceCode: SupportedMondialRelayServiceCode;
+  fulfillmentMode: MondialRelayFulfillmentMode;
+  manualConnectConfirmed: boolean;
   allowedServices: SupportedMondialRelayServiceCode[];
   contractConfirmed: boolean;
   serviceConfirmed: boolean;
@@ -128,6 +132,8 @@ export const EMPTY_MONDIAL_RELAY_SENDER: MondialRelaySender = {
 
 export const DEFAULT_MONDIAL_RELAY_SETTINGS: MondialRelaySettings = {
   serviceCode: "24R/MED",
+  fulfillmentMode: "manual_connect",
+  manualConnectConfirmed: false,
   allowedServices: [],
   contractConfirmed: false,
   serviceConfirmed: false,
@@ -375,18 +381,15 @@ export function getMondialRelayQuote(
     >,
   itemCount: number,
 ): ShippingQuote | null {
-  if (
-    !Number.isInteger(itemCount) ||
-    itemCount < 1 ||
-    settings.contractConfirmed === false ||
-    settings.serviceConfirmed === false ||
-    (settings.allowedServices !== undefined &&
-      !settings.allowedServices.includes(settings.serviceCode))
-  )
-    return null;
+ if (
+   !Number.isInteger(itemCount) ||
+   itemCount < 1 ||
+   !isSupportedMondialRelayService(settings.serviceCode)
+ )
+   return null;
 
-  const profile = getMondialRelayParcelProfile(settings, itemCount);
-  if (settings.shippingTiers !== undefined) {
+ const profile = getMondialRelayParcelProfile(settings, itemCount);
+ if (settings.shippingTiers !== undefined) {
     const tier = settings.shippingTiers.find(
       (candidate) => candidate.quantity === itemCount,
     );
@@ -405,6 +408,13 @@ export function getMondialRelayQuote(
       source: "contract",
     };
   }
+  if (
+    settings.contractConfirmed === false ||
+    settings.serviceConfirmed === false ||
+    (settings.allowedServices !== undefined &&
+      !settings.allowedServices.includes(settings.serviceCode))
+  )
+    return null;
   if (!profile || !settings.contractRates) return null;
   const weightGrams = profile.weightGrams;
   if (!weightGrams) return null;

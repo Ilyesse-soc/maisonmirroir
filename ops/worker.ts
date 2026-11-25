@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { processQueue } from "../lib/newsletter";
+import { processMondialRelayShipmentQueue } from "../lib/mondialRelayShipmentQueue";
 import { database } from "../lib/newsletterDb";
 let stopping = false,
   failures = 0;
@@ -11,9 +12,17 @@ process.on("SIGINT", () => {
 });
 while (!stopping) {
   try {
-    const processed = process.env.NEWSLETTER_SEND_ENABLED==='false' ? 0 : await processQueue();
+    const newsletterProcessed =
+      process.env.NEWSLETTER_SEND_ENABLED === "false" ? 0 : await processQueue();
+    const shipmentProcessed = await processMondialRelayShipmentQueue();
     failures = 0;
-    console.info(JSON.stringify({ code: "WORKER_CYCLE_COMPLETED", processed }));
+    console.info(
+      JSON.stringify({
+        code: "WORKER_CYCLE_COMPLETED",
+        newsletterProcessed,
+        shipmentProcessed,
+      }),
+    );
   } catch {
     failures++;
     console.error(JSON.stringify({ code: "WORKER_CYCLE_FAILED", failures }));

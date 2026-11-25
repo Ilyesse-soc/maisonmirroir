@@ -67,8 +67,12 @@ export const orderPatchSchema = z
         "Payee",
         "En preparation",
         "Prete a expedier",
+        "Deposee chez Mondial Relay",
+        "En transit",
+        "Disponible en Point Relais",
         "Expediee",
         "Livree",
+        "Retournee",
         "Annulee",
       ])
       .optional(),

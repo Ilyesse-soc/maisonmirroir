@@ -15,6 +15,8 @@ export type AdminOrder = OrderRecord & {
   refundEligible: boolean;
   refundAttempt: null | { idempotencyKey: string; amountCents: number; status: string };
   refundHistory: Array<{ refundId: string; amountCents: number; status: string; reason: string; createdAt: string; completedAt: string | null }>;
+  shipmentJobStatus: string | null;
+  shipmentJobError: string | null;
 };
 
 const shipmentFor = (status: string) => ({
@@ -22,8 +24,12 @@ const shipmentFor = (status: string) => ({
   Payee: "unfulfilled",
   "En preparation": "preparing",
   "Prete a expedier": "ready",
+  "Deposee chez Mondial Relay": "shipped",
+  "En transit": "shipped",
+  "Disponible en Point Relais": "shipped",
   Expediee: "shipped",
   Livree: "delivered",
+  Retournee: "returned",
   Annulee: "cancelled",
 }[status] || "unknown");
 
@@ -36,6 +42,8 @@ export async function listAdminOrders(search: string, payment: string, shipment:
         `SELECT f.order_id,f.payment_status,f.shipment_status,f.refunded_cents,
           f.discount_cents,f.total_cents,f.return_status,f.return_updated_at,
           f.withdrawal_requested_at,
+          shipment_job.status AS shipment_job_status,
+          shipment_job.error_code AS shipment_job_error,
           (f.payment_status IN ('paid','partially_refunded')
             AND f.paypal_capture_id IS NOT NULL
             AND f.refunded_cents<f.total_cents
@@ -43,6 +51,8 @@ export async function listAdminOrders(search: string, payment: string, shipment:
           active_refund.idempotency_key,active_refund.amount_cents AS active_refund_cents,
           active_refund.status AS active_refund_status,refund_history.entries AS refund_history
          FROM mm_commerce_order_financials f
+         LEFT JOIN mm_mondial_relay_shipment_jobs shipment_job
+           ON shipment_job.order_id=f.order_id
          LEFT JOIN LATERAL (
            SELECT idempotency_key,amount_cents,status
            FROM mm_commerce_refunds
@@ -88,6 +98,12 @@ export async function listAdminOrders(search: string, payment: string, shipment:
         status: String(finance.active_refund_status),
       } : null,
       refundHistory: (finance?.refund_history as AdminOrder["refundHistory"] | undefined) || [],
+      shipmentJobStatus: finance?.shipment_job_status
+        ? String(finance.shipment_job_status)
+        : null,
+      shipmentJobError: finance?.shipment_job_error
+        ? String(finance.shipment_job_error)
+        : null,
     };
   }).filter((order) => {
     const matchesText = !term || [

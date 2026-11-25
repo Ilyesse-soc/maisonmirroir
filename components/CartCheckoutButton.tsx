@@ -24,7 +24,7 @@ export default function CartCheckoutButton({
 }: {
   items: CartItem[];
   customer: CustomerInfo;
-  shippingMethod: ShippingMethod;
+  shippingMethod: ShippingMethod | null;
   relayPoint: RelayPoint | null;
   shippingPrice: number | null;
   checkoutEnabled: boolean;
@@ -74,7 +74,7 @@ export default function CartCheckoutButton({
       quantity: items[0]?.quantity || 0,
       variantLabel: items[0]?.variantLabel,
     },
-    shippingMethodId: shippingMethod.id,
+    shippingMethodId: shippingMethod?.id || "",
     relayPoint: relayPoint || undefined,
     attachments,
     promotionCode,
@@ -110,11 +110,11 @@ export default function CartCheckoutButton({
     );
   }
 
-  if (shippingPrice === null) {
+  if (!shippingMethod || shippingPrice === null) {
     return (
       <p role="status" style={{ fontSize: 13, lineHeight: 1.7 }}>
-        Le tarif contractuel de livraison n’est pas configuré. Le paiement reste
-        désactivé.
+        Les options de livraison ne sont pas disponibles pour cette commande.
+        Le paiement reste indisponible.
       </p>
     );
   }
@@ -129,7 +129,7 @@ export default function CartCheckoutButton({
           lineHeight: 1.7,
         }}
       >
-        La configuration PayPal de production n’est pas encore prête.
+        Le paiement est momentanément indisponible. Réessayez plus tard.
       </div>
     );
   }
@@ -270,8 +270,6 @@ export default function CartCheckoutButton({
                         estimatedDelay: shippingMethod.estimatedDelay,
                         ...(relayPoint ? { relayPoint } : {}),
                       },
-                      customValues: {},
-                      address: customer,
                     }),
                   );
                 }

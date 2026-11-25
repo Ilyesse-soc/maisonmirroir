@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { brandInfo } from "@/lib/brandInfo";
+import ManageCookiesButton from "@/components/ManageCookiesButton";
 export default function LaunchFooter() {
   return (
     <footer className="launch-footer">
@@ -32,6 +33,7 @@ export default function LaunchFooter() {
           Politique de confidentialité
         </Link>
         <Link href="/politique-de-cookies">Politique de cookies</Link>
+        <ManageCookiesButton className="launch-footer-manage-cookies" />
       </nav>
       <p className="launch-copyright">
         © {new Date().getFullYear()} MAISON MIROIR

@@ -32,6 +32,7 @@ export async function GET() {
           readiness.homeShipmentCreationReady,
         realShippingEnabled:
           readiness.checkoutShippingReady || readiness.homeDeliveryReady,
+        manualShippingReady: readiness.manualShippingReady,
       },
       { headers: { "Cache-Control": "no-store" } },
     );

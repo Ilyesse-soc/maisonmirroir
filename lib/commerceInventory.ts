@@ -8,7 +8,11 @@ import {
 import type { PoolClient } from "pg";
 import { database, transaction } from "@/lib/newsletterDb";
 import type { CustomerInfo, OrderRecord, ProductInfo } from "@/lib/orderTypes";
-import { getShippingMethodById } from "@/lib/shipping";
+import {
+  getShippingMethodById,
+  MONDIAL_RELAY_HOME_ID,
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+} from "@/lib/shipping";
 import {
   getAdminEmail,
   getEmailFrom,
@@ -47,6 +51,7 @@ type CheckoutSnapshot = {
   requestDigest: string;
   relayPoint?: CheckoutInput["relayPoint"];
   preparationDays: number;
+  fulfillmentMode?: "manual_connect" | "api2";
   legalAcceptance: {
     version: string;
     acceptedAt: string;
@@ -603,6 +608,8 @@ function makeOrderRecord(
       price: snapshot.shippingCents / 100,
       estimatedDelay: shipping?.estimatedDelay || "",
       trackingBaseUrl: shipping?.trackingBaseUrl || "",
+      fulfillmentMode:
+        snapshot.fulfillmentMode === "api2" ? "api2" : "manual_connect",
       ...(snapshot.relayPoint ? { relayPoint: snapshot.relayPoint } : {}),
     },
     subtotal: snapshot.subtotalCents / 100,
@@ -716,6 +723,16 @@ export async function finalizeCommercePayment(
     );
     if (inserted.rowCount !== 1)
       throw new CommerceError("DUPLICATE_PAYMENT", 409);
+    if (
+      orderRecord.shipping.fulfillmentMode === "api2" &&
+      (orderRecord.shipping.id === MONDIAL_RELAY_POINT_RELAIS_ID ||
+        orderRecord.shipping.id === MONDIAL_RELAY_HOME_ID)
+    )
+      await client.query(
+        `INSERT INTO mm_mondial_relay_shipment_jobs(order_id)
+         VALUES ($1) ON CONFLICT (order_id) DO NOTHING`,
+        [orderId],
+      );
     if (reservation.promotion_code) {
       const promoUpdated = await client.query(
         `UPDATE mm_promotions

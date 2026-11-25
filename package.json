@@ -32,6 +32,7 @@
     "autoprefixer": "^10.4.27",
     "better-auth": "1.7.25",
     "next": "16.4.6",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.23.1",
     "postcss": "8.5.33",
     "react": "19.3.1",

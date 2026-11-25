@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     const payment = request.nextUrl.searchParams.get("payment") || "";
     const shipment = request.nextUrl.searchParams.get("shipment") || "";
     const paymentOptions = ["", "pending", "paid", "failed", "cancelled", "refunded", "partially_refunded"];
-    const shipmentOptions = ["", "unfulfilled", "preparing", "ready", "shipped", "delivered", "cancelled", "unknown"];
+    const shipmentOptions = ["", "unfulfilled", "preparing", "ready", "shipped", "delivered", "returned", "cancelled", "unknown"];
     if (!paymentOptions.includes(payment) || !shipmentOptions.includes(shipment))
       return NextResponse.json({ error: "Filtre de commande invalide." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     const orders = await presentAdminOrders(await listAdminOrders(search, payment, shipment));
@@ -21,14 +21,15 @@ export async function GET(request: NextRequest) {
       orders: orders.map((order) => {
         const shipment = order.shipping.mondialRelayShipment;
         if (!shipment) return order;
-        const { labelUrl, ...safeShipment } = shipment;
+        const safeShipment = { ...shipment };
+        delete safeShipment.labelUrl;
         return {
           ...order,
           shipping: {
             ...order.shipping,
             mondialRelayShipment: {
               ...safeShipment,
-              labelAvailable: Boolean(labelUrl),
+              labelAvailable: shipment.labelAvailable === true,
             },
           },
         };

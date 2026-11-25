@@ -85,6 +85,46 @@ async function main() {
   }
 
   const audience = load("lib/audience.ts");
+  const privacyConsent = load("lib/privacyConsent.ts");
+  const savedAt = Date.UTC(2026, 10, 25, 12);
+  const acceptedPreferences = privacyConsent.createPrivacyPreferences(
+    true,
+    savedAt,
+  );
+  const rejectedPreferences = privacyConsent.createPrivacyPreferences(
+    false,
+    savedAt,
+  );
+  assert.equal(acceptedPreferences.essential, true);
+  assert.equal(
+    new Date(acceptedPreferences.expiresAt).toISOString().slice(0, 10),
+    "2027-05-25",
+  );
+  assert.equal(
+    privacyConsent.parsePrivacyPreferences(
+      JSON.stringify(acceptedPreferences),
+      savedAt,
+    )?.audience,
+    true,
+  );
+  assert.equal(
+    privacyConsent.parsePrivacyPreferences(
+      JSON.stringify(rejectedPreferences),
+      acceptedPreferences.expiresAt,
+    ),
+    null,
+  );
+  assert.equal(
+    privacyConsent.parsePrivacyPreferences(
+      JSON.stringify({
+        ...acceptedPreferences,
+        audience: true,
+        essential: false,
+      }),
+      savedAt,
+    ),
+    null,
+  );
   const issued = audience.createAudienceToken();
   assert.ok(audience.verifyAudienceToken(issued.token));
   assert.equal(

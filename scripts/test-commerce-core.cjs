@@ -114,6 +114,7 @@ async function main() {
   });
   const inventory = loadInventory("lib/commerceInventory.ts");
   const mondialRelaySettings = loadInventory("lib/mondialRelaySettings.ts");
+  const mondialRelayTypes = loadInventory("lib/mondialRelayTypes.ts");
   const savedShippingEnv = {};
   const shippingEnv = {
     MONDIAL_RELAY_API1_PROD_SHOP: "test-shop",
@@ -125,7 +126,7 @@ async function main() {
       "https://connect-api.mondialrelay.com/api/shipment",
     MONDIAL_RELAY_API1_PROD_ENABLED: "true",
     MONDIAL_RELAY_API2_PROD_ENABLED: "true",
-    MONDIAL_RELAY_PRODUCTION_CONFIRMED: "true",
+    MONDIAL_RELAY_PRODUCTION_CONFIRMED: "false",
     REAL_SHIPPING_ENABLED: "true",
     REAL_SHIPMENT_CREATION_ENABLED: "true",
   };
@@ -134,7 +135,7 @@ async function main() {
     process.env[key] = value;
   }
   const relaySettings = {
-    ...mondialRelaySettings.DEFAULT_MONDIAL_RELAY_SETTINGS,
+    ...mondialRelayTypes.DEFAULT_MONDIAL_RELAY_SETTINGS,
     allowedServices: ["24R/MED"],
     contractConfirmed: true,
     serviceConfirmed: false,
@@ -178,10 +179,20 @@ async function main() {
       confirmed: false,
     },
   };
+  const api1OnlyReadiness =
+    mondialRelaySettings.getMondialRelayProductionReadiness(relaySettings);
+  assert.equal(api1OnlyReadiness.api1Ready, true);
+  assert.equal(api1OnlyReadiness.searchEnabled, true);
+  assert.equal(api1OnlyReadiness.checkoutShippingReady, true);
+  assert.equal(api1OnlyReadiness.api2Ready, false);
+  assert.equal(api1OnlyReadiness.shipmentCreationEnabled, false);
+  assert.equal(api1OnlyReadiness.manualShippingReady, false);
   assert.equal(
-    mondialRelaySettings.getMondialRelayProductionReadiness(relaySettings)
-      .checkoutShippingReady,
-    false,
+    mondialRelaySettings.getMondialRelayProductionReadiness({
+      ...relaySettings,
+      manualConnectConfirmed: true,
+    }).manualShippingReady,
+    true,
   );
   assert.equal(
     mondialRelaySettings.getMondialRelayProductionReadiness({
@@ -189,7 +200,7 @@ async function main() {
       serviceConfirmed: true,
       collectionModeConfirmed: false,
     }).checkoutShippingReady,
-    false,
+    true,
   );
   for (const key of Object.keys(shippingEnv)) {
     if (savedShippingEnv[key] === undefined) delete process.env[key];
@@ -477,6 +488,7 @@ async function main() {
         ...orderSnapshot,
         shippingMethodId: "mondial-relay-point-relais",
         relayPoint: orderPayload(submitted("paradise-way", 1)).relayPoint,
+        fulfillmentMode: "api2",
       },
     });
     await inventory.bindPayPalOrder(
@@ -534,6 +546,14 @@ async function main() {
         "SELECT count(*)::int AS count FROM mm_commerce_order_financials WHERE paypal_order_id='WEBHOOKORDER001'",
       )).rows[0].count,
       1,
+    );
+    assert.equal(
+      (await query(
+        `SELECT status FROM mm_mondial_relay_shipment_jobs
+          WHERE order_id=(SELECT order_id FROM mm_commerce_reservations
+                           WHERE paypal_order_id='WEBHOOKORDER001')`,
+      )).rows[0].status,
+      "queued",
     );
     assert.equal(
       (await query(

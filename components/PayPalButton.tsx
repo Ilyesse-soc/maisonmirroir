@@ -271,7 +271,6 @@ export default function PayPalButton({
                       JSON.stringify({
                         orderId,
                         paymentMethod,
-                        paypalOrderId: data.orderID,
                         product: {
                           id: order.product.id,
                           name: order.product.name,
@@ -283,8 +282,6 @@ export default function PayPalButton({
                           total,
                         },
                         shipping: order.shipping,
-                        customValues: order.customValues || {},
-                        address: order.customer,
                       }),
                     );
                   }

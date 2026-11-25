@@ -7,6 +7,7 @@ import {
   finishMondialRelayTrackingCheck,
   readOrders,
   reserveMondialRelayTrackingCheck,
+  syncMondialRelayOrderStatus,
 } from "@/lib/orderStore";
 import {
   getMondialRelayProductionReadiness,
@@ -16,6 +17,7 @@ import { mutationAllowed } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
 import type { MondialRelayShipment } from "@/lib/orderTypes";
 import { sendCommerceOrderNotification } from "@/lib/commerceNotifications";
+import { getMondialRelayOrderStatus } from "@/lib/mondialRelayTrackingStatus";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -119,6 +121,19 @@ export async function POST(
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "")
         .toLowerCase();
+      const carrierStatus = getMondialRelayOrderStatus(trackingText);
+      const statusUpdated = carrierStatus
+        ? await syncMondialRelayOrderStatus(orderId, carrierStatus)
+        : updated;
+      if (
+        carrierStatus === "Deposee chez Mondial Relay" ||
+        carrierStatus === "En transit"
+      )
+        await sendCommerceOrderNotification(
+          statusUpdated || updated,
+          "shipment_confirmation",
+          shipment.shipmentNumber,
+        );
       if (
         updated.shipping.relayPoint &&
         /(?:disponible (?:au|en) point relais|mis a disposition au point relais)/.test(

@@ -5,10 +5,12 @@ export default function LegalPage({
   title,
   children,
   updatedAt,
+  provisional = true,
 }: {
   title: string;
   children: React.ReactNode;
   updatedAt?: string;
+  provisional?: boolean;
 }) {
   return (
     <div className="launch legal-shell">
@@ -20,7 +22,7 @@ export default function LegalPage({
         <h1>{title}</h1>
         <p className="legal-date">
           {updatedAt
-            ? `Dernière mise à jour : ${updatedAt}. Version provisoire, informations juridiques à valider.`
+            ? `Dernière mise à jour : ${updatedAt}${provisional ? ". Version provisoire, informations juridiques à valider." : "."}`
             : "Informations à valider avant l’ouverture"}
         </p>
         {children}

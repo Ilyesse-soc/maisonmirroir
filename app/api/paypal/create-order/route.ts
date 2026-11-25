@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
         relayPoint: prepared.relayPoint,
         preparationDays: prepared.preparationDays,
         cgvVersion: prepared.cgvVersion,
+        fulfillmentMode: prepared.fulfillmentMode,
       },
     });
     let paypalOrderId: string;

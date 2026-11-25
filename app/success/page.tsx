@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import {
   buttonGoldStyle,
   buttonOutlineGoldStyle,
@@ -14,7 +14,6 @@ import {
 type LastOrder = {
   orderId: string;
   paymentMethod: "PAYPAL" | "CARD";
-  paypalOrderId?: string;
   product: {
     id: string;
     name: string;
@@ -41,17 +40,6 @@ type LastOrder = {
     price: number;
     estimatedDelay: string;
   };
-  customValues?: Record<string, string>;
-  address: {
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-    street: string;
-    city: string;
-    zip: string;
-    country?: string;
-  };
 };
 
 let orderCache: LastOrder | null = null;
@@ -63,7 +51,18 @@ function readLastOrder() {
     rawCache = raw;
     const parsed = raw ? JSON.parse(raw) : null;
     orderCache =
-      parsed && parsed.orderId && parsed.address?.email ? parsed : null;
+      parsed &&
+      typeof parsed.orderId === "string" &&
+      typeof parsed.product?.name === "string" &&
+      typeof parsed.shipping?.shortLabel === "string"
+        ? {
+            orderId: parsed.orderId,
+            paymentMethod: parsed.paymentMethod === "CARD" ? "CARD" : "PAYPAL",
+            product: parsed.product,
+            ...(Array.isArray(parsed.items) ? { items: parsed.items } : {}),
+            shipping: parsed.shipping,
+          }
+        : null;
     return orderCache;
   } catch {
     return null;
@@ -79,6 +78,25 @@ export default function SuccessPage() {
     readLastOrder,
     () => null,
   );
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("mm:lastOrder");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (
+        parsed?.address ||
+        parsed?.paypalOrderId ||
+        parsed?.customValues
+      ) {
+        const safe = readLastOrder();
+        if (safe)
+          sessionStorage.setItem("mm:lastOrder", JSON.stringify(safe));
+        else sessionStorage.removeItem("mm:lastOrder");
+      }
+    } catch {
+      sessionStorage.removeItem("mm:lastOrder");
+    }
+  }, []);
   return (
     <div
       style={{
@@ -240,64 +258,10 @@ export default function SuccessPage() {
                 <span style={{ color: theme.textDark }}>Paiement :</span>{" "}
                 {lastOrder.paymentMethod}
               </div>
-              {lastOrder.paypalOrderId && (
-                <div>
-                  <span style={{ color: theme.textDark }}>PayPal :</span>{" "}
-                  {lastOrder.paypalOrderId}
-                </div>
-              )}
               <div>
-                <span style={{ color: theme.textDark }}>Client :</span>{" "}
-                {lastOrder.address.firstName} {lastOrder.address.lastName} (
-                {lastOrder.address.email})
+                <span style={{ color: theme.textDark }}>Délai estimé :</span>{" "}
+                {lastOrder.shipping?.estimatedDelay || "À confirmer"}
               </div>
-              <div>
-                <span style={{ color: theme.textDark }}>Telephone :</span>{" "}
-                {lastOrder.address.phone}
-              </div>
-              <div>
-                <span style={{ color: theme.textDark }}>Adresse :</span>{" "}
-                {lastOrder.address.street}, {lastOrder.address.zip}{" "}
-                {lastOrder.address.city},{" "}
-                {lastOrder.address.country || "France"}
-              </div>
-              <div>
-                <span style={{ color: theme.textDark }}>Delai estime :</span>{" "}
-                {lastOrder.shipping?.estimatedDelay || "A confirmer"}
-              </div>
-
-              {lastOrder.customValues &&
-                Object.values(lastOrder.customValues).some(Boolean) && (
-                  <div>
-                    <div style={{ color: theme.textDark, marginBottom: 6 }}>
-                      Personnalisation :
-                    </div>
-                    <div style={{ display: "grid", gap: 6 }}>
-                      {Object.entries(lastOrder.customValues)
-                        .filter(([, v]) => v)
-                        .map(([k, v]) => (
-                          <div
-                            key={k}
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 12,
-                            }}
-                          >
-                            <span style={{ color: theme.textMid }}>{k}</span>
-                            <span
-                              style={{
-                                color: theme.textDark,
-                                fontStyle: "italic",
-                              }}
-                            >
-                              {v}
-                            </span>
-                          </div>
-                        ))}
-                    </div>
-                  </div>
-                )}
             </div>
           </div>
         )}

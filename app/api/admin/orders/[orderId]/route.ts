@@ -18,8 +18,12 @@ const STATUS_VALUES: OrderStatus[] = [
   "En attente",
   "En preparation",
   "Prete a expedier",
+  "Deposee chez Mondial Relay",
+  "En transit",
+  "Disponible en Point Relais",
   "Expediee",
   "Livree",
+  "Retournee",
   "Annulee",
 ];
 
@@ -179,19 +183,29 @@ export async function PATCH(
         const statusShipmentMap: Record<string, string> = {
           "En preparation": "preparing",
           "Prete a expedier": "ready",
+          "Deposee chez Mondial Relay": "shipped",
+          "En transit": "shipped",
+          "Disponible en Point Relais": "shipped",
           Expediee: "shipped",
-          Livree: "delivered", Annulee: "cancelled",
+          Livree: "delivered",
+          Retournee: "returned",
+          Annulee: "cancelled",
         };
         previousShipmentStatus = String(finance?.shipment_status || statusShipmentMap[before.status] || "unfulfilled");
-        if (nextStatus === "Annulee" && ["shipped", "delivered"].includes(previousShipmentStatus))
+        if (nextStatus === "Annulee" && ["shipped", "delivered", "returned"].includes(previousShipmentStatus))
           throw new Error("SHIPPED_ORDER_CANCELLATION_BLOCKED");
         const next = { ...before, ...patch } as OrderRecord;
         await db.query("UPDATE mm_orders SET record=$2,updated_at=now() WHERE order_id=$1", [orderId, JSON.stringify(next)]);
         const shipmentStatus = ({
           "En preparation": "preparing",
           "Prete a expedier": "ready",
+          "Deposee chez Mondial Relay": "shipped",
+          "En transit": "shipped",
+          "Disponible en Point Relais": "shipped",
           Expediee: "shipped",
-          Livree: "delivered", Annulee: "cancelled",
+          Livree: "delivered",
+          Retournee: "returned",
+          Annulee: "cancelled",
         } as Record<string, string>)[String(nextStatus)];
         if (shipmentStatus) {
           await db.query(
@@ -223,8 +237,14 @@ export async function PATCH(
       updated.trackingNumber ||
         updated.shipping.mondialRelayShipment?.shipmentNumber,
     );
+    const shipmentStatuses = [
+      "Deposee chez Mondial Relay",
+      "En transit",
+      "Expediee",
+    ];
     const shipmentJustMarked =
-      nextStatus === "Expediee" && existing.status !== "Expediee";
+      shipmentStatuses.includes(nextStatus || "") &&
+      !shipmentStatuses.includes(existing.status);
     const trackingAddedAfterShipment =
       existing.status === "Expediee" &&
       Boolean(nextTracking) &&
@@ -252,7 +272,7 @@ export async function PATCH(
     if (shipment) {
       const safeShipment = { ...shipment };
       delete safeShipment.labelUrl;
-      safeShipment.labelAvailable = Boolean(shipment.labelUrl);
+      safeShipment.labelAvailable = shipment.labelAvailable === true;
       safeOrder = {
         ...updated,
         shipping: {

@@ -4,10 +4,10 @@ import { searchMondialRelayPoints } from "@/lib/mondialRelayApi1";
 import { MondialRelayApi1ResponseError } from "@/lib/mondialRelayApi1Response";
 import { database } from "@/lib/newsletterDb";
 import {
-  getMondialRelayProductionCredentialStatus,
   getMondialRelayProductionReadiness,
   getMondialRelaySettings,
 } from "@/lib/mondialRelaySettings";
+import { isMondialRelayServiceAllowed } from "@/lib/mondialRelayTypes";
 import { clientIp } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
 import { signMondialRelayPoint } from "@/lib/mondialRelayPointProof";
@@ -55,15 +55,14 @@ export async function GET(request: NextRequest) {
 
     const settings = await getMondialRelaySettings();
     const readiness = getMondialRelayProductionReadiness(settings);
-    const credentials = getMondialRelayProductionCredentialStatus();
-    if (!readiness.searchEnabled || !credentials.api1Configured)
+    if (!readiness.searchEnabled)
       return NextResponse.json(
         { error: "La recherche Mondial Relay n’est pas encore configurée pour la production." },
         { status: 503 },
       );
-    if (settings.serviceCode !== "24R/MED" && settings.serviceCode !== "24R/APM")
+    if (!isMondialRelayServiceAllowed(settings))
       return NextResponse.json(
-        { error: "Choisissez un code de service Mondial Relay actuel dans l’administration." },
+        { error: "Confirmez un service Mondial Relay autorisé dans l’administration." },
         { status: 409 },
       );
     const points = await searchMondialRelayPoints({

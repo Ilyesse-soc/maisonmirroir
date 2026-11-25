@@ -23,12 +23,45 @@ export async function GET() {
       paymentsEnabled &&
       realShippingEnabled &&
       realShipmentCreationEnabled;
+    const publicRates = relay.checkoutShippingReady
+      ? [
+          ...settings.contractRates,
+          ...(settings.proposedRate.confirmed &&
+          settings.proposedRate.maxWeightGrams &&
+          settings.proposedRate.priceBasis !== "unknown" &&
+          settings.proposedRate.customerPriceCents !== null
+            ? [
+                {
+                  ...settings.proposedRate,
+                  maxWeightGrams: settings.proposedRate.maxWeightGrams,
+                  customerPriceCents:
+                    settings.proposedRate.customerPriceCents,
+                },
+              ]
+            : []),
+        ]
+          .filter(
+            (rate) =>
+              rate.confirmed &&
+              rate.serviceCode === settings.serviceCode &&
+              rate.priceBasis !== "unknown" &&
+              rate.customerPriceCents !== null &&
+              rate.customerPriceCents > 0,
+          )
+          .map(({ serviceCode, maxWeightGrams, priceBasis, customerPriceCents, confirmed }) => ({
+            serviceCode,
+            maxWeightGrams,
+            priceBasis,
+            customerPriceCents,
+            confirmed,
+          }))
+      : [];
     return NextResponse.json(
       {
         settings: {
           serviceCode: settings.serviceCode,
           contractParcel: settings.contractParcel,
-          contractRates: settings.contractRates,
+          contractRates: publicRates,
         },
         shopOpen,
         paymentsEnabled,

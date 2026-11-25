@@ -1,5 +1,5 @@
 import "server-only";
-import { canonicalItems } from "@/lib/commerceSecurity";
+import { canonicalCommerceItems } from "@/lib/commerceInventory";
 import {
   getMondialRelayProductionReadiness,
   getMondialRelaySettings,
@@ -17,6 +17,7 @@ import type { OrderPayload, ProductInfo } from "@/lib/orderTypes";
 
 type CheckoutPayload = OrderPayload & {
   shipping?: { id?: string };
+  promotionCode?: string;
 };
 
 export class CheckoutConfigurationError extends Error {
@@ -48,7 +49,7 @@ export async function prepareCheckoutOrder(order: CheckoutPayload) {
 
   let items: ProductInfo[];
   try {
-    items = canonicalItems(
+    items = await canonicalCommerceItems(
       (Array.isArray(order.items) && order.items.length > 0
         ? order.items
         : [order.product]) as ProductInfo[],
@@ -80,11 +81,8 @@ export async function prepareCheckoutOrder(order: CheckoutPayload) {
   if (!quote)
     throw new CheckoutConfigurationError("CONTRACT_SHIPPING_RATE_MISSING", 409);
 
-  const subtotalCents = items.reduce(
-    (sum, item) =>
-      sum + Math.round(item.unitPrice * 100) * item.quantity,
-    0,
-  );
+  const subtotalCents = items.reduce((sum, item) =>
+    sum + Math.round(item.unitPrice * 100) * item.quantity, 0);
   const shippingCents = quote.priceCents;
   return {
     items,
@@ -96,5 +94,6 @@ export async function prepareCheckoutOrder(order: CheckoutPayload) {
     subtotalCents,
     shippingCents,
     totalCents: subtotalCents + shippingCents,
+    promotionCode: order.promotionCode?.trim().toUpperCase() || undefined,
   };
 }

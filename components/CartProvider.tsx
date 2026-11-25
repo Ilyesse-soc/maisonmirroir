@@ -40,11 +40,14 @@ type CartContextValue = {
   shippingConfigurationLoaded: boolean;
   checkoutEnabled: boolean;
   paypalClientId: string;
+  catalogLoaded: boolean;
+  getProductPrice: (id: string, fallback: number) => number;
+  isProductAvailable: (id: string, fallback?: boolean) => boolean;
   getShippingPriceQuote: (
     methodId: string,
     itemCount: number,
   ) => { price: number | null; label: string };
-  addItem: (item: AddCartItemInput) => void;
+  addItem: (item: AddCartItemInput) => Promise<boolean>;
   removeItem: (key: string) => void;
   updateItemQuantity: (key: string, quantity: number) => void;
   clearCart: () => void;
@@ -92,6 +95,88 @@ export function CartProvider({
   }, [items, isReady, syncEnabled]);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false),
     [flashMessage, setFlashMessage] = useState("");
+  const [publicCatalog, setPublicCatalog] = useState<
+    Record<string, { price: number; available: boolean }>
+  >({});
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const fetchPublicCatalog = async () => {
+    const response = await fetch("/api/commerce/catalog", {
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("CATALOG_UNAVAILABLE");
+    const data = (await response.json()) as {
+      products?: Array<{ id?: string; price?: number; available?: boolean }>;
+    };
+    const catalog: Record<string, { price: number; available: boolean }> = {};
+    for (const product of data.products || []) {
+      if (
+        typeof product.id === "string" &&
+        Number.isSafeInteger(Math.round(Number(product.price) * 100)) &&
+        Number(product.price) > 0 &&
+        typeof product.available === "boolean"
+      )
+        catalog[product.id] = {
+          price: Number(product.price),
+          available: product.available,
+        };
+    }
+    setPublicCatalog(catalog);
+    setCatalogLoaded(true);
+    return catalog;
+  };
+  useEffect(() => {
+    let active = true;
+    fetch("/api/commerce/catalog", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("CATALOG_UNAVAILABLE");
+        const data = (await response.json()) as {
+          products?: Array<{
+            id?: string;
+            price?: number;
+            available?: boolean;
+          }>;
+        };
+        if (!active) return;
+        const catalog: Record<string, { price: number; available: boolean }> =
+          {};
+        for (const product of data.products || []) {
+          if (
+            typeof product.id === "string" &&
+            Number.isSafeInteger(Math.round(Number(product.price) * 100)) &&
+            Number(product.price) > 0 &&
+            typeof product.available === "boolean"
+          )
+            catalog[product.id] = {
+              price: Number(product.price),
+              available: product.available,
+            };
+        }
+        setPublicCatalog(catalog);
+      })
+      .catch(() => {
+        if (active) setPublicCatalog({});
+      })
+      .finally(() => {
+        if (active) setCatalogLoaded(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!catalogLoaded) return;
+    const nextItems = items.map((item) => {
+      const current = publicCatalog[item.productId];
+      return current ? { ...item, unitPrice: current.price } : item;
+    });
+    if (
+      nextItems.some((item, index) => item.unitPrice !== items[index]?.unitPrice)
+    )
+      writeCart({
+        ...readCart(),
+        items: nextItems,
+      });
+  }, [catalogLoaded, publicCatalog, items]);
   const [shippingConfig, setShippingConfig] = useState<{
     settings: Pick<
       MondialRelaySettings,
@@ -173,11 +258,36 @@ export function CartProvider({
       Boolean(shippingConfig?.paymentsEnabled) &&
       (!isMondialRelayMethod || Boolean(shippingConfig?.realShippingEnabled)),
     paypalClientId: shippingConfig?.paypalClientId || "",
-    addItem(item) {
+    catalogLoaded,
+    getProductPrice(id, fallback) {
+      return publicCatalog[id]?.price ?? fallback;
+    },
+    isProductAvailable(id, fallback = false) {
+      if (id === "modest-era" || id === "paradise-way")
+        return publicCatalog[id]?.available === true;
+      return publicCatalog[id]?.available ?? fallback;
+    },
+    async addItem(item) {
+      let accepted = item;
+      if (item.productId === "modest-era" || item.productId === "paradise-way") {
+        try {
+          const catalog = await fetchPublicCatalog();
+          const entry = catalog[item.productId];
+          if (!entry?.available) {
+            setFlashMessage("Victime de son succès");
+            return false;
+          }
+          accepted = { ...item, unitPrice: entry.price };
+        } catch {
+          setFlashMessage("Disponibilité momentanément indisponible");
+          return false;
+        }
+      }
       const cart = readCart();
-      writeCart({ ...cart, items: mergeCartItems(cart.items, item) });
+      writeCart({ ...cart, items: mergeCartItems(cart.items, accepted) });
       setFlashMessage("Produit ajout? au panier");
       setIsDrawerOpen(true);
+      return true;
     },
     removeItem(key) {
       const cart = readCart();

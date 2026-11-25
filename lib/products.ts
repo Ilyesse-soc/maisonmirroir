@@ -31,7 +31,7 @@ export const products: Product[] = [
     name: "Modest Era",
     category: "sacs",
     categoryLabel: "Première collection - For Modest Girls",
-    price: 29.69,
+    price: 29.9,
     images: [
       "/collection/modest-era-feature.jpeg",
       "/collection/modest-era-product.webp",
@@ -58,7 +58,7 @@ export const products: Product[] = [
     name: "Paradise Way",
     category: "sacs",
     categoryLabel: "Première collection - For Modest Girls",
-    price: 31.69,
+    price: 29.9,
     images: [
       "/collection/paradise-way-product.webp",
       "/collection/paradise-way-lifestyle-01.webp",

@@ -38,6 +38,7 @@ export default function CartDrawer() {
     itemCount,
     updateItemQuantity,
     removeItem,
+    isProductAvailable,
   } = useCart();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -195,6 +196,11 @@ export default function CartDrawer() {
                               {hasConfiguredPrice
                                 ? `${euro.format(item.unitPrice)} l’unité`
                                 : "Prix à confirmer"}
+                            </p>
+                            <p className="storefront-status" role="status">
+                              {isProductAvailable(item.productId, true)
+                                ? "Disponible"
+                                : "Victime de son succès"}
                             </p>
                           </div>
                           <span className="mm-cart-item-total">

@@ -1,13 +1,31 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { fonts, pageMaxWidth, theme } from "@/lib/uiStyles";
 import type { OrderRecord, OrderStatus } from "@/lib/orderTypes";
 import { MONDIAL_RELAY_POINT_RELAIS_ID } from "@/lib/shipping";
 
+type AdminOrderRecord = OrderRecord & {
+  paymentStatus?: string;
+  shipmentStatus?: string;
+  refundedCents?: number;
+  discountCents?: number;
+  totalCents?: number;
+  refundEligible?: boolean;
+  refundAttempt?: null | { idempotencyKey: string; amountCents: number; status: string };
+  refundHistory?: Array<{ refundId: string; amountCents: number; status: string; reason: string; createdAt: string; completedAt: string | null }>;
+  newsletterConsent?: null | {
+    status: string; consentAt: string | null; confirmedAt: string | null;
+    consentVersion: string | null; lastEvent: string | null; lastEventAt: string | null;
+  };
+};
+type AdminItem = OrderRecord["items"][number] & {
+  catalogName?: string; catalogImage?: string | null; catalogColor?: string | null;
+};
+
 const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: "En attente", label: "En attente" },
-  { value: "Payee", label: "Payee" },
   { value: "En preparation", label: "En preparation" },
   { value: "Expediee", label: "Expediee" },
   { value: "Livree", label: "Livree" },
@@ -15,7 +33,7 @@ const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
 ];
 
 export default function AdminOrdersPage() {
-  const [orders, setOrders] = useState<OrderRecord[]>([]);
+  const [orders, setOrders] = useState<AdminOrderRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pending, setPending] = useState<string>("");
@@ -24,11 +42,28 @@ export default function AdminOrdersPage() {
   >({});
   const [productionShipmentReady, setProductionShipmentReady] =
     useState(false);
+  const [search, setSearch] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("");
+  const [shipmentFilter, setShipmentFilter] = useState("");
+  const [refundAmounts, setRefundAmounts] = useState<Record<string, string>>({});
+  const [refundReasons, setRefundReasons] = useState<Record<string, string>>({});
+  const [refundMessages, setRefundMessages] = useState<Record<string, string>>({});
+  const [refundKeys, setRefundKeys] = useState<Record<string, string>>({});
 
-  const hasOrders = useMemo(() => orders.length > 0, [orders]);
+  const visibleOrders = useMemo(() => orders.filter((order) => {
+    const extended = order as AdminOrderRecord;
+    const term = search.trim().toLowerCase();
+    return (!term || [order.orderId, order.customer.email, order.customer.firstName, order.customer.lastName, order.customer.phone]
+      .some((value) => String(value || "").toLowerCase().includes(term))) &&
+      (!paymentFilter || extended.paymentStatus === paymentFilter) &&
+      (!shipmentFilter || extended.shipmentStatus === shipmentFilter);
+  }), [orders, search, paymentFilter, shipmentFilter]);
+  const hasOrders = visibleOrders.length > 0;
 
   useEffect(() => {
     let active = true;
+    const initialSearch = new URLSearchParams(window.location.search).get("search") || "";
+    setSearch(initialSearch);
     fetch("/api/admin/orders", { cache: "no-store" })
       .then(async (r) => {
         if (!r.ok) throw Error();
@@ -88,7 +123,7 @@ export default function AdminOrdersPage() {
 
       setOrders((prev) =>
         prev.map((item) =>
-          item.orderId === data.order?.orderId ? data.order : item,
+          item.orderId === data.order?.orderId ? { ...item, ...data.order } : item,
         ),
       );
     } catch {
@@ -103,6 +138,59 @@ export default function AdminOrdersPage() {
     if (!response.ok) throw new Error("Impossible de recharger les commandes.");
     const data = await response.json();
     setOrders(Array.isArray(data.orders) ? data.orders : []);
+  };
+
+  const submitRefund = async (
+    order: AdminOrderRecord,
+    retry?: AdminOrderRecord["refundAttempt"],
+  ) => {
+    const remaining = Math.max(0, (order.totalCents ?? Math.round(order.total * 100)) - (order.refundedCents || 0));
+    const amountCents = retry?.amountCents ?? Math.round(Number((refundAmounts[order.orderId] ?? (remaining / 100).toFixed(2)).replace(",", ".")) * 100);
+    if (!Number.isSafeInteger(amountCents) || amountCents < 1 || amountCents > remaining) {
+      setRefundMessages((items) => ({ ...items, [order.orderId]: "Montant invalide ou supérieur au solde remboursable." }));
+      return;
+    }
+    const reason = retry ? "Reprise idempotente du remboursement" : (refundReasons[order.orderId] || "").trim();
+    if (!retry && reason.length < 3) {
+      setRefundMessages((items) => ({ ...items, [order.orderId]: "Indiquez le motif du remboursement." }));
+      return;
+    }
+    const idempotencyKey = retry?.idempotencyKey || refundKeys[order.orderId] || crypto.randomUUID();
+    const confirmation = window.confirm(
+      `CONFIRMATION PAYPAL LIVE\nRembourser ${(amountCents / 100).toFixed(2)} € sur la commande ${order.orderId} ?\nCette action appelle PayPal réellement et ne restocke aucun article.`,
+    );
+    if (!confirmation) return;
+    setRefundKeys((items) => ({ ...items, [order.orderId]: idempotencyKey }));
+    setPending(order.orderId);
+    setRefundMessages((items) => ({ ...items, [order.orderId]: "Demande PayPal en cours…" }));
+    try {
+      const response = await fetch(`/api/admin/orders/${order.orderId}/refund`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amountCents, reason, confirmation: true, idempotencyKey,
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok && response.status !== 202) {
+        if (result.retrySameKey === false || response.status < 500)
+          setRefundKeys((items) => { const next = { ...items }; delete next[order.orderId]; return next; });
+        throw new Error(result.error || "Remboursement impossible.");
+      }
+      if (result.refund?.status === "completed") {
+        setRefundMessages((items) => ({ ...items, [order.orderId]: `Remboursement confirmé : ${(amountCents / 100).toFixed(2)} €.` }));
+        setRefundKeys((items) => { const next = { ...items }; delete next[order.orderId]; return next; });
+        setRefundAmounts((items) => ({ ...items, [order.orderId]: (Math.max(0, remaining - amountCents) / 100).toFixed(2) }));
+      } else {
+        setRefundMessages((items) => ({ ...items, [order.orderId]: "PayPal traite encore l’opération. Utilisez « Vérifier le même remboursement »; ne créez pas une nouvelle demande." }));
+      }
+      await refreshOrders();
+    } catch (refundError) {
+      setRefundMessages((items) => ({
+        ...items,
+        [order.orderId]: refundError instanceof Error ? refundError.message : "Remboursement impossible.",
+      }));
+    } finally { setPending(""); }
   };
 
   const createShipment = async (orderId: string) => {
@@ -212,6 +300,25 @@ export default function AdminOrdersPage() {
           <p style={{ color: "#dc2626", fontFamily: fonts.body }}>{error}</p>
         )}
 
+        <form className="admin-actions" onSubmit={(event) => event.preventDefault()} style={{ marginBottom: 18 }}>
+          <label style={{ flex: "1 1 240px" }}>Recherche commande, nom, email ou téléphone
+            <input value={search} onChange={(event) => setSearch(event.target.value)} />
+          </label>
+          <label style={{ flex: "0 1 190px" }}>Paiement
+            <select value={paymentFilter} onChange={(event) => setPaymentFilter(event.target.value)}>
+              <option value="">Tous</option><option value="pending">En attente</option><option value="paid">Payé</option>
+              <option value="failed">Échoué</option><option value="cancelled">Annulé</option><option value="refunded">Remboursé</option><option value="partially_refunded">Partiellement remboursé</option>
+            </select>
+          </label>
+          <label style={{ flex: "0 1 190px" }}>Expédition
+            <select value={shipmentFilter} onChange={(event) => setShipmentFilter(event.target.value)}>
+              <option value="">Toutes</option><option value="unfulfilled">Non préparée</option><option value="preparing">En préparation</option>
+              <option value="ready">Prête</option><option value="shipped">Expédiée</option><option value="delivered">Livrée</option><option value="cancelled">Annulée</option>
+            </select>
+          </label>
+          <a className="admin-button" href={`/api/admin/orders/export?${new URLSearchParams({ search, payment: paymentFilter, shipment: shipmentFilter })}`}>Exporter CSV</a>
+        </form>
+
         {!loading && !hasOrders && (
           <div
             style={{
@@ -227,7 +334,7 @@ export default function AdminOrdersPage() {
         )}
 
         <div style={{ display: "grid", gap: 16 }}>
-          {orders.map((order) => (
+          {visibleOrders.map((order) => (
             <div
               key={order.orderId}
               style={{
@@ -311,7 +418,7 @@ export default function AdminOrdersPage() {
                     {order.customer.phone}
                   </div>
                   <div>
-                    <strong style={{ color: theme.textDark }}>Adresse:</strong>{" "}
+                    <strong style={{ color: theme.textDark }}>Adresse client (checkout):</strong>{" "}
                     {order.customer.street}, {order.customer.zip}{" "}
                     {order.customer.city}, {order.customer.country || "France"}
                   </div>
@@ -327,7 +434,7 @@ export default function AdminOrdersPage() {
                 >
                   <div>
                     <strong style={{ color: theme.textDark }}>
-                      Livraison:
+                      Mode de livraison:
                     </strong>{" "}
                     {order.shipping.label}
                   </div>
@@ -346,7 +453,7 @@ export default function AdminOrdersPage() {
                   {order.shipping.relayPoint && (
                     <div>
                       <strong style={{ color: theme.textDark }}>
-                        Point Relais:
+                        Point Relais (adresse de livraison):
                       </strong>{" "}
                       {order.shipping.relayPoint.id} -{" "}
                       {order.shipping.relayPoint.label},{" "}
@@ -363,12 +470,76 @@ export default function AdminOrdersPage() {
                   </div>
                   <div>
                     <strong style={{ color: theme.textDark }}>
-                      Statut actuel:
+                      Statut de paiement:
                     </strong>{" "}
-                    {order.status}
+                    {(order as OrderRecord & { paymentStatus?: string }).paymentStatus || (order.status === "Payee" ? "paid" : "pending")}
+                  </div>
+                  <div>
+                    <strong style={{ color: theme.textDark }}>Statut d’expédition:</strong>{" "}
+                    {(order as OrderRecord & { shipmentStatus?: string }).shipmentStatus || order.status}
+                  </div>
+                  <div>
+                    <strong style={{ color: theme.textDark }}>Réduction / remboursé:</strong>{" "}
+                    {(((order as OrderRecord & { discountCents?: number }).discountCents || 0) / 100).toFixed(2)} € / {(((order as OrderRecord & { refundedCents?: number }).refundedCents || 0) / 100).toFixed(2)} €
                   </div>
                 </div>
               </div>
+
+              <section className="admin-card" style={{ marginBottom: 14, padding: 14 }}>
+                <h3>Articles de la commande</h3>
+                <div style={{ display: "grid", gap: 10 }}>
+                  {order.items.map((rawItem, index) => {
+                    const item = rawItem as AdminItem;
+                    return <div key={`${item.id}-${index}`} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      {item.catalogImage && <Image src={item.catalogImage} alt={item.catalogName || item.name} width={64} height={64} style={{ objectFit: "cover", borderRadius: 4 }} />}
+                      <div><strong>{item.catalogName || item.name}</strong>
+                        {item.catalogColor && <span> · Couleur : {item.catalogColor}</span>}
+                        <div>Quantité : {item.quantity} · Prix unitaire : {item.unitPrice.toFixed(2)} €</div>
+                      </div>
+                    </div>;
+                  })}
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <strong>Consentement newsletter déjà enregistré :</strong>{" "}
+                  {order.newsletterConsent
+                    ? `${order.newsletterConsent.status}${order.newsletterConsent.lastEvent ? ` · dernier événement : ${order.newsletterConsent.lastEvent}` : ""}${order.newsletterConsent.consentAt ? ` · consentement ${new Date(order.newsletterConsent.consentAt).toLocaleDateString("fr-FR")}` : ""}`
+                    : "aucun enregistrement trouvé; aucun abonnement n’a été créé."}
+                </div>
+              </section>
+
+              <section className="admin-card" style={{ marginBottom: 14, padding: 14 }}>
+                <h3>Remboursement PayPal Live</h3>
+                <p className="admin-muted">Le remboursement ne modifie pas le stock. Un retour confirmé doit être enregistré séparément avant toute remise en stock.</p>
+                {order.refundAttempt ? (
+                  <div className="admin-actions">
+                    <span>Remboursement {order.refundAttempt.status} · {(order.refundAttempt.amountCents / 100).toFixed(2)} €</span>
+                    <button type="button" disabled={pending === order.orderId} onClick={() => void submitRefund(order, order.refundAttempt)}>
+                      {pending === order.orderId ? "Vérification…" : "Vérifier le même remboursement"}
+                    </button>
+                  </div>
+                ) : order.refundEligible ? (
+                  <div className="admin-form-grid">
+                    <label>Montant (€), maximum {(Math.max(0, (order.totalCents ?? Math.round(order.total * 100)) - (order.refundedCents || 0)) / 100).toFixed(2)}
+                      <input type="number" min="0.01" step="0.01" max={(Math.max(0, (order.totalCents ?? Math.round(order.total * 100)) - (order.refundedCents || 0)) / 100).toFixed(2)}
+                        value={refundAmounts[order.orderId] ?? (Math.max(0, (order.totalCents ?? Math.round(order.total * 100)) - (order.refundedCents || 0)) / 100).toFixed(2)}
+                        disabled={Boolean(refundKeys[order.orderId])}
+                        onChange={(event) => setRefundAmounts((items) => ({ ...items, [order.orderId]: event.target.value }))} />
+                    </label>
+                    <label>Motif requis
+                      <input maxLength={240} value={refundReasons[order.orderId] || ""} disabled={Boolean(refundKeys[order.orderId])} onChange={(event) => setRefundReasons((items) => ({ ...items, [order.orderId]: event.target.value }))} />
+                    </label>
+                    <button type="button" disabled={pending === order.orderId} onClick={() => void submitRefund(order)}>
+                      {pending === order.orderId ? "Remboursement…" : refundKeys[order.orderId] ? "Réessayer la même demande" : "Rembourser via PayPal"}
+                    </button>
+                  </div>
+                ) : <p>Aucun solde actuellement remboursable ou capture PayPal vérifiée manquante.</p>}
+                {!!order.refundHistory?.length && <ul aria-label="Historique des remboursements">
+                  {order.refundHistory.map((refund) => <li key={refund.refundId}>
+                    {refund.status} · {(refund.amountCents / 100).toFixed(2)} € · {refund.reason} · {new Date(refund.createdAt).toLocaleString("fr-FR")}
+                  </li>)}
+                </ul>}
+                {refundMessages[order.orderId] && <p role="status">{refundMessages[order.orderId]}</p>}
+              </section>
 
               <div
                 style={{
@@ -399,7 +570,7 @@ export default function AdminOrdersPage() {
                       border: `1px solid ${theme.creamDark}`,
                       background: "#fff",
                     }}
-                    value={order.status}
+                    value={STATUS_OPTIONS.some((option) => option.value === order.status) ? order.status : ""}
                     onChange={(e) =>
                       updateOrder(order.orderId, {
                         status: e.target.value as OrderStatus,
@@ -407,6 +578,7 @@ export default function AdminOrdersPage() {
                     }
                     disabled={pending === order.orderId}
                   >
+                    {order.status === "Payee" && <option value="" disabled>Choisir une étape d’expédition</option>}
                     {STATUS_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}

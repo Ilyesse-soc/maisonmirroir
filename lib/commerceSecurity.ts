@@ -77,6 +77,7 @@ export const orderPayloadSchema = z
     shippingMethodId: short.optional(),
     shipping: shipping.optional(),
     relayPoint: relayPoint.optional(),
+    promotionCode: z.string().trim().max(80).optional(),
   })
   .strict();
 export const incomingOrderSchema = z
@@ -84,7 +85,6 @@ export const incomingOrderSchema = z
     paymentMethod: z.enum(["PAYPAL", "CARD"]),
     paypalOrderId: z.string().regex(/^[A-Z0-9]{10,32}$/),
     checkoutProof: z.string().min(1).max(8192),
-    paypalCapture: z.unknown().optional(),
     order: orderPayloadSchema.optional(),
     name: short.optional(),
     email: z.string().email().max(254).optional(),
@@ -142,7 +142,6 @@ export function canonicalItems(items: ProductInfo[]) {
 
 function paypalApiBase() {
   const environment = process.env.PAYPAL_ENV;
-  if (environment === "sandbox") return "https://api-m.sandbox.paypal.com";
   if (environment === "production") return "https://api-m.paypal.com";
   throw Error("PAYMENT_ENV_NOT_CONFIGURED");
 }
@@ -192,7 +191,9 @@ async function paypalAccessToken(base: string) {
 export async function createPayPalCheckoutOrder(input: {
   totalCents: number;
   subtotalCents: number;
+  discountCents?: number;
   shippingCents: number;
+  reservationId?: string;
   items: Array<{
     name: string;
     quantity: number;
@@ -215,6 +216,12 @@ export async function createPayPalCheckoutOrder(input: {
     intent: "CAPTURE",
     purchase_units: [
       {
+        ...(input.reservationId
+          ? {
+              custom_id: input.reservationId,
+              invoice_id: input.reservationId,
+            }
+          : {}),
         amount: {
           currency_code: "EUR",
           value: (input.totalCents / 100).toFixed(2),
@@ -227,6 +234,14 @@ export async function createPayPalCheckoutOrder(input: {
               currency_code: "EUR",
               value: (input.shippingCents / 100).toFixed(2),
             },
+            ...(input.discountCents
+              ? {
+                  discount: {
+                    currency_code: "EUR",
+                    value: (input.discountCents / 100).toFixed(2),
+                  },
+                }
+              : {}),
           },
         },
         shipping: {
@@ -280,7 +295,7 @@ export async function createPayPalCheckoutOrder(input: {
   return result.id;
 }
 
-export async function verifiedPayPalOrder(id: string, total: number) {
+export async function verifiedPayPalOrderDetails(id: string, totalCents: number) {
   const merchant = process.env.PAYPAL_MERCHANT_ID;
   if (!merchant)
     throw Error("PAYMENT_VERIFICATION_NOT_CONFIGURED");
@@ -305,6 +320,7 @@ export async function verifiedPayPalOrder(id: string, total: number) {
   )
     throw Error("PAYMENT_NOT_COMPLETED");
   let captured = 0;
+  const captureIds: string[] = [];
   for (const unit of units) {
     if (unit.payee?.merchant_id !== merchant)
       throw Error("PAYMENT_MERCHANT_MISMATCH");
@@ -321,11 +337,58 @@ export async function verifiedPayPalOrder(id: string, total: number) {
       if (!Number.isFinite(amount) || amount <= 0)
         throw Error("PAYMENT_INVALID_AMOUNT");
       captured += Math.round(amount * 100);
+      if (typeof capture.id === "string") captureIds.push(capture.id);
     }
   }
-  if (captured !== Math.round(total * 100))
+  if (captured !== totalCents)
     throw Error("PAYMENT_AMOUNT_MISMATCH");
+  if (captureIds.length !== 1)
+    throw Error("PAYMENT_CAPTURE_COUNT_INVALID");
+  return { captureId: captureIds[0] };
+}
+
+export async function verifiedPayPalOrder(id: string, total: number) {
+  try {
+    await verifiedPayPalOrderDetails(id, Math.round(total * 100));
+  } catch (error) {
+    if (
+      !(error instanceof Error) ||
+      error.message !== "PAYMENT_CAPTURE_COUNT_INVALID"
+    )
+      throw error;
+  }
   return true;
+}
+
+export async function captureAndVerifyPayPalOrder(
+  id: string,
+  totalCents: number,
+) {
+  const base = paypalApiBase();
+  const token = await paypalAccessToken(base);
+  const response = await fetch(
+    `${base}/v2/checkout/orders/${encodeURIComponent(id)}/capture`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation",
+      },
+      body: "{}",
+      cache: "no-store",
+      signal: AbortSignal.timeout(10000),
+    },
+  );
+  if (!response.ok) {
+    try {
+      const completed = await verifiedPayPalOrderDetails(id, totalCents);
+      return completed;
+    } catch {
+      throw Error("PAYMENT_CAPTURE_FAILED");
+    }
+  }
+  return verifiedPayPalOrderDetails(id, totalCents);
 }
 
 export async function verifyPayPalWebhook(

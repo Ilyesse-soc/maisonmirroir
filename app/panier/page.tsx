@@ -29,7 +29,11 @@ export default function CartPage() {
     updateItemQuantity,
     removeItem,
     itemCount,
+    isProductAvailable,
   } = useCart();
+  const unavailableItems = items.filter(
+    (item) => !isProductAvailable(item.productId, true),
+  );
 
   const selectedShipping = useMemo(
     () =>
@@ -209,6 +213,11 @@ export default function CartPage() {
                           >
                             Prix unitaire: {item.unitPrice.toFixed(2)} €
                           </p>
+                          {!isProductAvailable(item.productId, true) && (
+                            <p className="storefront-status" role="status">
+                              Victime de son succès
+                            </p>
+                          )}
                         </div>
                         <button
                           onClick={() => removeItem(item.key)}
@@ -471,14 +480,26 @@ export default function CartPage() {
                 <Link
                   href="/checkout"
                   className="btn-gold"
+                  aria-disabled={unavailableItems.length > 0}
+                  onClick={(event) => {
+                    if (unavailableItems.length > 0) event.preventDefault();
+                  }}
                   style={{
                     ...buttonGoldStyle({ fullWidth: true }),
                     textAlign: "center",
                     textDecoration: "none",
+                    ...(unavailableItems.length > 0
+                      ? { opacity: 0.5, cursor: "not-allowed" }
+                      : {}),
                   }}
                 >
                   Passer au paiement
                 </Link>
+                {unavailableItems.length > 0 && (
+                  <p role="status" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                    Retirez les articles indisponibles pour continuer.
+                  </p>
+                )}
                 <Link
                   href="/catalogue"
                   style={{

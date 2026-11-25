@@ -189,6 +189,13 @@ async function main() {
         },
       },
       "@/lib/newsletterDb": { database },
+      "@/lib/commerceInventory": {
+        CommerceError: class CommerceError extends Error {},
+        getCommerceReservation: async () => null,
+        finalizeCommercePayment: async () => ({ expired: true }),
+        releaseCommerceReservation: async () => {},
+        sendFinalizedCommerceEmails: async () => [],
+      },
       "@/lib/requestSecurity": {
         readBoundedText: async (request, maxBytes) => {
           const text = await request.text();

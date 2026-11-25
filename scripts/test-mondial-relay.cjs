@@ -24,6 +24,12 @@ function loadTypeScript(file, dependencies = {}) {
 }
 
 const relayTypes = loadTypeScript("lib/mondialRelayTypes.ts");
+const relaySettings = loadTypeScript("lib/mondialRelaySettings.ts", {
+  "@/lib/mondialRelayTypes": relayTypes,
+  "@/lib/newsletterDb": {
+    database: () => ({ query: async () => ({ rows: [] }) }),
+  },
+});
 const commerceSecurity = loadTypeScript("lib/commerceSecurity.ts", {
   "./products": {
     products: [
@@ -297,6 +303,9 @@ assert.throws(() =>
 
 const quoteSettings = {
   serviceCode: "24R/MED",
+  allowedServices: ["24R/MED"],
+  contractConfirmed: true,
+  serviceConfirmed: true,
   contractParcel: {
     itemsPerParcel: 1,
     weightGrams: 500,
@@ -305,11 +314,19 @@ const quoteSettings = {
     depthCm: 5,
   },
   contractRates: [
-    { serviceCode: "24R/MED", maxWeightGrams: 600, priceCents: 425 },
+    {
+      serviceCode: "24R/MED",
+      maxWeightGrams: 600,
+      priceCents: 425,
+      priceBasis: "TTC",
+      customerPriceCents: 499,
+      confirmed: true,
+    },
   ],
+  proposedRate: relayTypes.DEFAULT_MONDIAL_RELAY_SETTINGS.proposedRate,
 };
 assert.deepEqual(relayTypes.getMondialRelayQuote(quoteSettings, 1), {
-  priceCents: 425,
+  priceCents: 499,
   parcelCount: 1,
   serviceCode: "24R/MED",
   source: "contract",
@@ -320,6 +337,60 @@ assert.equal(
     { ...quoteSettings, contractRates: [{ ...quoteSettings.contractRates[0], priceCents: 0 }] },
     1,
   ),
+  null,
+);
+assert.equal(
+  relayTypes.getMondialRelayQuote(
+    {
+      ...quoteSettings,
+      proposedRate: {
+        ...relayTypes.DEFAULT_MONDIAL_RELAY_SETTINGS.proposedRate,
+        confirmed: false,
+      },
+      contractRates: [],
+    },
+    1,
+  ),
+  null,
+);
+assert.equal(
+  relayTypes.getMondialRelayQuote(
+    { ...quoteSettings, allowedServices: [] },
+    1,
+  ),
+  null,
+);
+const legacySettings = relaySettings.parseMondialRelaySettings({
+  serviceCode: "24R/MED",
+  testParcel: {
+    itemsPerParcel: 1,
+    weightGrams: 500,
+    lengthCm: 45,
+    widthCm: 40,
+    depthCm: 5,
+  },
+  contractParcel: {
+    itemsPerParcel: 1,
+    weightGrams: 500,
+    lengthCm: 45,
+    widthCm: 40,
+    depthCm: 5,
+  },
+  testRates: [],
+  contractRates: [
+    { serviceCode: "24R/MED", maxWeightGrams: 600, priceCents: 451 },
+  ],
+});
+assert.equal(legacySettings.contractConfirmed, false);
+assert.deepEqual(legacySettings.allowedServices, []);
+assert.equal(legacySettings.contractRates[0].confirmed, false);
+assert.equal(legacySettings.proposedRate.priceCents, 451);
+assert.equal(legacySettings.proposedRate.maxWeightGrams, null);
+assert.equal(legacySettings.proposedRate.priceBasis, "unknown");
+assert.equal(legacySettings.proposedRate.customerPriceCents, null);
+assert.equal(legacySettings.proposedRate.confirmed, false);
+assert.equal(
+  relayTypes.getMondialRelayQuote(legacySettings, 1),
   null,
 );
 assert.equal(
@@ -346,6 +417,8 @@ const paypalOrderRoute = readFileSync(
   "utf8",
 );
 const orderRoute = readFileSync("app/api/order/route.ts", "utf8");
+const checkoutQuote = readFileSync("lib/checkoutQuote.ts", "utf8");
+const relayReadiness = readFileSync("lib/mondialRelaySettings.ts", "utf8");
 const shipmentRoute = readFileSync(
   "app/api/admin/orders/[orderId]/mondial-relay/create/route.ts",
   "utf8",
@@ -353,11 +426,17 @@ const shipmentRoute = readFileSync(
 assert.match(publicSettings, /SHOP_OPEN/);
 assert.match(publicSettings, /REAL_PAYMENTS_ENABLED/);
 assert.match(paypalOrderRoute, /prepareCheckoutOrder/);
-assert.match(orderRoute, /verifyCheckoutQuoteProof/);
+assert.match(orderRoute, /verifyCommerceCheckoutProof/);
+assert.match(orderRoute, /captureAndVerifyPayPalOrder/);
+assert.match(checkoutQuote, /checkoutShippingReady/);
+assert.match(relayReadiness, /serviceAllowed/);
+assert.match(relayReadiness, /collectionModeConfigured/);
 assert.match(shipmentRoute, /reserveMondialRelayShipment/);
 assert.match(shipmentRoute, /SHIPMENT_RESULT_UNKNOWN/);
 assert.doesNotMatch(publicSettings, /simulation/);
 assert.doesNotMatch(shipmentRoute, /sandbox/i);
+assert.doesNotMatch(publicSettings, /MONDIAL_RELAY_API[12]_PROD_(?:SHOP|PRIVATE_KEY|LOGIN|PASSWORD|CUSTOMER_ID)/);
+assert.doesNotMatch(publicSettings, /sender|collectionMode|priceCents/);
 
 console.log(
   "PASS: production-only relay parsing, signed API1 search/tracking requests, contract quote fail-closed behavior, API2 request/response validation, protected checkout, shipment idempotency, and additive migration. No external API requests were made.",

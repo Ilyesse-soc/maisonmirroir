@@ -288,7 +288,7 @@ async function main() {
         id: "modest-era",
         name: "Forged",
         category: "fake",
-        unitPrice: 29.69,
+        unitPrice: 29.9,
         quantity: 1,
       },
     ]),
@@ -303,7 +303,7 @@ async function main() {
       id: "modest-era",
       name: "Forged",
       category: "fake",
-      unitPrice: 29.69,
+      unitPrice: 29.9,
       quantity: 1,
     },
   ])[0];

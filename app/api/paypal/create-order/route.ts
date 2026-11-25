@@ -9,9 +9,12 @@ import {
   prepareCheckoutOrder,
 } from "@/lib/checkoutQuote";
 import {
-  assertCheckoutQuoteProofConfigured,
-  createCheckoutQuoteProof,
-} from "@/lib/checkoutQuoteProof";
+  bindPayPalOrder,
+  CommerceError,
+  createCommerceCheckoutProof,
+  releaseCommerceReservation,
+  reserveCommerceCheckout,
+} from "@/lib/commerceInventory";
 import {
   InputError,
   inputResponse,
@@ -39,30 +42,62 @@ export async function POST(request: NextRequest) {
       ...order,
       shippingMethodId: order.shippingMethodId || "",
     });
-    assertCheckoutQuoteProofConfigured();
-    const paypalOrderId = await createPayPalCheckoutOrder({
-      totalCents: prepared.totalCents,
-      subtotalCents: prepared.subtotalCents,
+    const reservation = await reserveCommerceCheckout({
+      order: {
+        ...order,
+        shippingMethodId: order.shippingMethodId || "",
+      },
       shippingCents: prepared.shippingCents,
-      items: prepared.items.map((item) => ({
-        name: item.name,
-        quantity: item.quantity,
-        unitPriceCents: Math.round(item.unitPrice * 100),
-      })),
-      customer: order.customer,
+      orderSnapshot: {
+        shippingMethodId: prepared.shippingMethod.id,
+        shippingMethod: prepared.shippingMethod,
+        relayPoint: prepared.relayPoint,
+      },
     });
-    const checkoutProof = createCheckoutQuoteProof(
+    let paypalOrderId: string;
+    try {
+      paypalOrderId = await createPayPalCheckoutOrder({
+        reservationId: reservation.reservationId,
+        totalCents: reservation.totalCents,
+        subtotalCents: reservation.subtotalCents,
+        discountCents: reservation.discountCents,
+        shippingCents: reservation.shippingCents,
+        items: reservation.items.map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          unitPriceCents: item.unitPriceCents,
+        })),
+        customer: order.customer,
+      });
+      await bindPayPalOrder(reservation.reservationId, paypalOrderId);
+    } catch (error) {
+      await releaseCommerceReservation(reservation.reservationId).catch(() => {});
+      throw error;
+    }
+    const checkoutProof = createCommerceCheckoutProof(
+      reservation.reservationId,
       paypalOrderId,
-      order,
-      prepared,
+      reservation.expiresAt,
     );
     return NextResponse.json(
-      { id: paypalOrderId, checkoutProof },
+      {
+        id: paypalOrderId,
+        checkoutProof,
+        subtotal: (reservation.subtotalCents / 100).toFixed(2),
+        discount: (reservation.discountCents / 100).toFixed(2),
+        shipping: (reservation.shippingCents / 100).toFixed(2),
+        total: (reservation.totalCents / 100).toFixed(2),
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     if (error instanceof InputError) return inputResponse(error);
     if (error instanceof CheckoutConfigurationError)
+      return NextResponse.json(
+        { error: error.code },
+        { status: error.status },
+      );
+    if (error instanceof CommerceError)
       return NextResponse.json(
         { error: error.code },
         { status: error.status },

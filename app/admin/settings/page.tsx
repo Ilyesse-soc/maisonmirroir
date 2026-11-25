@@ -4,7 +4,9 @@ import { FormEvent, useEffect, useState } from "react";
 import {
   DEFAULT_MONDIAL_RELAY_SETTINGS,
   type MondialRelaySettings,
+  type MondialRelaySender,
   type ParcelProfile,
+  type ProposedShippingRate,
   type ShippingRate,
 } from "@/lib/mondialRelayTypes";
 
@@ -49,6 +51,8 @@ export default function AdminSettingsPage() {
     providerConfirmed: false,
     senderConfigured: false,
     collectionModeConfigured: false,
+  contractConfirmed: false,
+  serviceAllowed: false,
   });
   const [relayReadiness, setRelayReadiness] = useState<
     Record<string, boolean>
@@ -146,6 +150,7 @@ export default function AdminSettingsPage() {
     setShipping((current) => ({
       ...current,
       [key]: { ...current[key], [fieldName]: value },
+      ...(key === "contractParcel" ? { contractConfirmed: false } : {}),
     }));
   }
 
@@ -157,7 +162,15 @@ export default function AdminSettingsPage() {
     setShipping((current) => ({
       ...current,
       [key]: current[key].map((rate, rateIndex) =>
-        rateIndex === index ? { ...rate, ...patch } : rate,
+        rateIndex === index
+          ? {
+              ...rate,
+              ...patch,
+              ...(Object.keys(patch).length === 1 && "confirmed" in patch
+                ? {}
+                : { confirmed: false }),
+            }
+          : rate,
       ),
     }));
   }
@@ -171,6 +184,9 @@ export default function AdminSettingsPage() {
           serviceCode: current.serviceCode,
           maxWeightGrams: 500,
           priceCents: 0,
+          priceBasis: "unknown",
+          customerPriceCents: null,
+          confirmed: false,
         },
       ],
     }));
@@ -180,6 +196,22 @@ export default function AdminSettingsPage() {
     setShipping((current) => ({
       ...current,
       [key]: current[key].filter((_, rateIndex) => rateIndex !== index),
+    }));
+  }
+
+  function updateSender(fieldName: keyof MondialRelaySender, value: string) {
+    setShipping((current) => ({
+      ...current,
+      sender: { ...current.sender, [fieldName]: value },
+    }));
+  }
+
+  function updateProposedRate(
+    patch: Partial<ProposedShippingRate>,
+  ) {
+    setShipping((current) => ({
+      ...current,
+      proposedRate: { ...current.proposedRate, ...patch },
     }));
   }
 
@@ -277,19 +309,70 @@ export default function AdminSettingsPage() {
                 />
               </label>
               <label>
-                Tarif par colis (€)
+                Tarif transporteur / colis (€)
                 <input
                   type="number"
                   min="0.01"
                   max="1000"
                   step="0.01"
-                  value={(rate.priceCents / 100).toFixed(2)}
+                  value={((rate.priceCents || 0) / 100).toFixed(2)}
                   onChange={(event) =>
                     updateRate(key, index, {
                       priceCents: Math.round(Number(event.target.value) * 100),
                     })
                   }
                 />
+              </label>
+              <label>
+                Base du tarif transporteur
+                <select
+                  value={rate.priceBasis}
+                  onChange={(event) =>
+                    updateRate(key, index, {
+                      priceBasis: event.target.value as ShippingRate["priceBasis"],
+                    })
+                  }
+                >
+                  <option value="unknown">À confirmer</option>
+                  <option value="HT">HT</option>
+                  <option value="TTC">TTC</option>
+                </select>
+              </label>
+              <label>
+                Prix facturé au client (€)
+                <input
+                  type="number"
+                  min="0.01"
+                  max="1000"
+                  step="0.01"
+                  value={
+                    rate.customerPriceCents === null
+                      ? ""
+                      : (rate.customerPriceCents / 100).toFixed(2)
+                  }
+                  onChange={(event) =>
+                    updateRate(key, index, {
+                      customerPriceCents:
+                        event.target.value === ""
+                          ? null
+                          : Math.round(Number(event.target.value) * 100),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                <span>
+                  <input
+                    type="checkbox"
+                    checked={rate.confirmed}
+                    onChange={(event) =>
+                      updateRate(key, index, {
+                        confirmed: event.target.checked,
+                      })
+                    }
+                  />{" "}
+                  Tarif et prix client confirmés
+                </span>
               </label>
               <button
                 type="button"
@@ -356,9 +439,11 @@ export default function AdminSettingsPage() {
       <section className="admin-card" style={{ marginTop: 18 }}>
         <h2>Livraison Mondial Relay</h2>
         <p className="admin-muted">
-          Les clés ne sont jamais saisies ni affichées ici. Elles doivent rester
-          dans l’environnement sécurisé du serveur. Aucun tarif contractuel
-          n’est confirmé.
+          Les clés et identifiants API restent uniquement dans l’environnement
+          serveur et ne sont jamais affichés ici. Les coordonnées d’expédition
+          non secrètes et les paramètres de contrat sont conservés dans la
+          configuration sécurisée de la boutique. Toute autorisation reste à
+          confirmer explicitement.
         </p>
         {shippingMessage && (
           <p
@@ -389,32 +474,235 @@ export default function AdminSettingsPage() {
           Paiement et livraison : {relayReadiness.checkoutShippingReady ? "prêts" : "désactivés"}
         </div>
         <form onSubmit={saveShipping}>
-          <label style={{ display: "block", maxWidth: 360, marginTop: 16 }}>
-            Service contractuel autorisé
-            <select
-              value={shipping.serviceCode}
-              onChange={(event) =>
-                setShipping((current) => ({
-                  ...current,
-                  serviceCode: event.target.value as ShippingRate["serviceCode"],
-                }))
-              }
-            >
-              <option value="24R/MED">24R/MED - Point Relais</option>
-              <option value="24R/APM">24R/APM - Locker</option>
-            </select>
-          </label>
+          <section style={{ marginTop: 18 }}>
+            <h3>Expéditeur et collecte</h3>
+            <p className="admin-muted">
+              Saisissez les coordonnées d’expédition communiquées par votre
+              entreprise. Aucun mode ni pays n’est pré-sélectionné comme
+              autorisé. Le mode de collecte doit correspondre à votre contrat.
+            </p>
+            <div className="admin-form-grid">
+              <label>Entreprise<input value={shipping.sender.company} maxLength={120} onChange={(event) => updateSender("company", event.target.value)} /></label>
+              <label>Prénom<input value={shipping.sender.firstName} maxLength={80} onChange={(event) => updateSender("firstName", event.target.value)} /></label>
+              <label>Nom<input value={shipping.sender.lastName} maxLength={80} onChange={(event) => updateSender("lastName", event.target.value)} /></label>
+              <label>Adresse / rue<input value={shipping.sender.street} maxLength={120} onChange={(event) => updateSender("street", event.target.value)} /></label>
+              <label>Numéro<input value={shipping.sender.houseNo} maxLength={20} onChange={(event) => updateSender("houseNo", event.target.value)} /></label>
+              <label>Code postal<input value={shipping.sender.postalCode} maxLength={12} onChange={(event) => updateSender("postalCode", event.target.value)} /></label>
+              <label>Ville<input value={shipping.sender.city} maxLength={80} onChange={(event) => updateSender("city", event.target.value)} /></label>
+              <label>Pays (code ISO à deux lettres, FR requis actuellement)<input value={shipping.sender.countryCode} maxLength={2} onChange={(event) => updateSender("countryCode", event.target.value.toUpperCase())} /></label>
+              <label>Téléphone<input type="tel" value={shipping.sender.phone} maxLength={30} onChange={(event) => updateSender("phone", event.target.value)} /></label>
+              <label>Email<input type="email" value={shipping.sender.email} maxLength={254} onChange={(event) => updateSender("email", event.target.value)} /></label>
+              <label>Mode de collecte fourni par Mondial Relay<input value={shipping.collectionMode} maxLength={20} onChange={(event) => setShipping((current) => ({ ...current, collectionMode: event.target.value, collectionModeConfirmed: false }))} placeholder="À renseigner après confirmation" /></label>
+            </div>
+            <label style={{ display: "block", marginTop: 12 }}>
+              <input
+                type="checkbox"
+                checked={shipping.collectionModeConfirmed}
+                onChange={(event) =>
+                  setShipping((current) => ({
+                    ...current,
+                    collectionModeConfirmed: event.target.checked,
+                  }))
+                }
+              />{" "}
+              Je confirme que ce mode de collecte est autorisé par mon contrat.
+            </label>
+          </section>
+          <section style={{ marginTop: 20 }}>
+            <h3>Contrat et services autorisés</h3>
+            <p className="admin-muted">
+              Seuls 24R/MED (Point Relais) et 24R/APM (Locker) sont pris en
+              charge par l’intégration actuelle. Leur présence ici ne signifie
+              pas qu’ils sont inclus dans votre contrat. Laissez les services
+              décochés jusqu’à confirmation écrite de Mondial Relay.
+            </p>
+            <div className="admin-form-grid">
+              <label>
+                Service utilisé pour la recherche et les expéditions
+                <select
+                  value={shipping.serviceCode}
+                  onChange={(event) =>
+                    setShipping((current) => ({
+                      ...current,
+                      serviceCode: event.target.value as ShippingRate["serviceCode"],
+                      serviceConfirmed: false,
+                    }))
+                  }
+                >
+                  <option value="24R/MED">24R/MED - Point Relais</option>
+                  <option value="24R/APM">24R/APM - Locker</option>
+                </select>
+              </label>
+              <div>
+                {(["24R/MED", "24R/APM"] as const).map((service) => (
+                  <label key={service} style={{ display: "block" }}>
+                    <input
+                      type="checkbox"
+                      checked={shipping.allowedServices.includes(service)}
+                      onChange={(event) =>
+                        setShipping((current) => ({
+                          ...current,
+                          allowedServices: event.target.checked
+                            ? [...new Set([...current.allowedServices, service])]
+                            : current.allowedServices.filter((item) => item !== service),
+                          serviceConfirmed: false,
+                        }))
+                      }
+                    />{" "}
+                    {service} autorisé par mon contrat
+                  </label>
+                ))}
+              </div>
+            </div>
+            <label style={{ display: "block", marginTop: 12 }}>
+              <input
+                type="checkbox"
+                checked={shipping.contractConfirmed}
+                onChange={(event) =>
+                  setShipping((current) => ({
+                    ...current,
+                    contractConfirmed: event.target.checked,
+                  }))
+                }
+              />{" "}
+              Je confirme que le contrat de production Mondial Relay est actif
+              et que ces paramètres ont été vérifiés auprès du fournisseur.
+            </label>
+            <label style={{ display: "block", marginTop: 8 }}>
+              <input
+                type="checkbox"
+                checked={shipping.serviceConfirmed}
+                onChange={(event) =>
+                  setShipping((current) => ({
+                    ...current,
+                    serviceConfirmed: event.target.checked,
+                  }))
+                }
+              />{" "}
+              Je confirme la sélection ci-dessus des seuls services autorisés
+              par ce contrat.
+            </label>
+          </section>
           {parcelFields(
-            "Profil colis contractuel - à renseigner après confirmation",
+            "Profil colis contractuel",
             "contractParcel",
             shipping.contractParcel,
           )}
+          <p className="admin-muted">
+            Le poids et les dimensions doivent décrire le colis réellement
+            emballé. « Articles par colis » fixe la limite d’articles couverts
+            par ce profil.
+          </p>
           {rateFields(
-            "Grille tarifaire contractuelle",
+            "Grille tarifaire par poids",
             "contractRates",
             shipping.contractRates,
-            "Saisissez uniquement des montants confirmés par le contrat. Ces tarifs ne peuvent pas activer les paiements ou les expéditions réelles.",
+            "Pour chaque palier, saisissez le coût transporteur et précisez s’il est HT ou TTC, puis le prix TTC facturé au client. Un palier n’est utilisable qu’après confirmation explicite et avec tous ses paramètres renseignés.",
           )}
+          <section style={{ marginTop: 22 }}>
+            <h3>Tarif proposé à confirmer</h3>
+            <p className="admin-muted">
+              Le montant communiqué de 4,51 € est conservé comme proposition
+              uniquement. Son poids de référence, sa base HT/TTC et le prix
+              facturé au client sont inconnus. Il ne devient jamais un devis
+              tant que tous ces éléments et le tarif ne sont pas confirmés.
+            </p>
+            <div className="admin-form-grid">
+              <label>
+                Service du tarif proposé
+                <select
+                  value={shipping.proposedRate.serviceCode}
+                  onChange={(event) =>
+                    updateProposedRate({
+                      serviceCode: event.target.value as ProposedShippingRate["serviceCode"],
+                      confirmed: false,
+                    })
+                  }
+                >
+                  <option value="24R/MED">24R/MED - Point Relais</option>
+                  <option value="24R/APM">24R/APM - Locker</option>
+                </select>
+              </label>
+              <label>
+                Poids maximal correspondant (g)
+                <input
+                  type="number"
+                  min="1"
+                  max="30000"
+                  value={shipping.proposedRate.maxWeightGrams ?? ""}
+                  onChange={(event) =>
+                    updateProposedRate({
+                      maxWeightGrams:
+                        event.target.value === "" ? null : Number(event.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Tarif transporteur (€)
+                <input
+                  type="number"
+                  min="0"
+                  max="1000"
+                  step="0.01"
+                  value={(shipping.proposedRate.priceCents / 100).toFixed(2)}
+                  onChange={(event) =>
+                    updateProposedRate({
+                      priceCents: Math.round(Number(event.target.value) * 100),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Base
+                <select
+                  value={shipping.proposedRate.priceBasis}
+                  onChange={(event) =>
+                    updateProposedRate({
+                      priceBasis: event.target.value as ProposedShippingRate["priceBasis"],
+                    })
+                  }
+                >
+                  <option value="unknown">Inconnue / à confirmer</option>
+                  <option value="HT">HT</option>
+                  <option value="TTC">TTC</option>
+                </select>
+              </label>
+              <label>
+                Prix TTC facturé au client (€)
+                <input
+                  type="number"
+                  min="0.01"
+                  max="1000"
+                  step="0.01"
+                  value={
+                    shipping.proposedRate.customerPriceCents === null
+                      ? ""
+                      : (shipping.proposedRate.customerPriceCents / 100).toFixed(2)
+                  }
+                  onChange={(event) =>
+                    updateProposedRate({
+                      customerPriceCents:
+                        event.target.value === ""
+                          ? null
+                          : Math.round(Number(event.target.value) * 100),
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <label style={{ display: "block", marginTop: 12 }}>
+              <input
+                type="checkbox"
+                checked={shipping.proposedRate.confirmed}
+                onChange={(event) =>
+                  updateProposedRate({ confirmed: event.target.checked })
+                }
+              />{" "}
+              Je confirme ce palier, sa base de prix et le montant facturé au
+              client.
+            </label>
+          </section>
           <div className="admin-actions" style={{ marginTop: 18 }}>
             <button disabled={shippingBusy}>
               {shippingBusy ? "Enregistrement…" : "Enregistrer les paramètres de livraison"}

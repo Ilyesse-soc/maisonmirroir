@@ -12,7 +12,7 @@ export async function GET() {
   if (denied) return denied;
   try {
     const db = database();
-    const [subscribers, signups, campaigns, activity, worker, resend] =
+    const [subscribers, signups, campaigns, activity, worker, resend, commerce] =
       await Promise.all([
         db.query(
           `SELECT count(*)::int AS total,
@@ -60,6 +60,32 @@ export async function GET() {
         db.query(
           `SELECT max(occurred_at) AS last_event FROM mm_webhook_receipts`,
         ),
+        db.query(
+          `WITH paid AS (
+             SELECT o.order_id,
+               COALESCE(f.subtotal_cents,round((o.record->>'subtotal')::numeric*100)::bigint,0) AS subtotal_cents,
+               COALESCE(f.shipping_cents,round((o.record->'shipping'->>'price')::numeric*100)::bigint,0) AS shipping_cents,
+               COALESCE(f.discount_cents,
+                 greatest(0,round(((o.record->>'subtotal')::numeric
+                   +(o.record->'shipping'->>'price')::numeric
+                   -(o.record->>'total')::numeric)*100)::bigint),0) AS discount_cents,
+               COALESCE(f.refunded_cents,0) AS refunded_cents
+             FROM mm_orders o LEFT JOIN mm_commerce_order_financials f ON f.order_id=o.order_id
+             WHERE f.payment_status IN ('paid','refunded','partially_refunded')
+               OR (f.order_id IS NULL AND o.record->>'status'='Payee')
+           ), stock AS (
+             SELECT count(*)::int AS products,
+               COALESCE(sum(quantity_on_hand-reserved_quantity),0)::int AS available
+             FROM mm_commerce_products WHERE active=true
+           )
+           SELECT (SELECT count(*)::int FROM paid) AS "paidOrders",
+             COALESCE((SELECT sum(subtotal_cents) FROM paid),0)::bigint AS "productSalesCents",
+             COALESCE((SELECT sum(shipping_cents) FROM paid),0)::bigint AS "shippingCents",
+             COALESCE((SELECT sum(discount_cents) FROM paid),0)::bigint AS "discountsCents",
+             COALESCE((SELECT sum(refunded_cents) FROM paid),0)::bigint AS "refundsCents",
+             stock.products AS "inventoryProducts",stock.available AS "unitsAvailable"
+           FROM stock`,
+        ),
       ]);
     return NextResponse.json(
       {
@@ -76,10 +102,21 @@ export async function GET() {
           worker: worker.rows[0] || null,
           lastResendEventAt: resend.rows[0]?.last_event || null,
         },
+        paypalLive: {
+          environmentConfigured: Boolean(process.env.PAYPAL_ENV?.trim()),
+          productionEnvironment: process.env.PAYPAL_ENV === "production",
+          clientIdConfigured: Boolean(process.env.PAYPAL_CLIENT_ID?.trim()),
+          clientSecretConfigured: Boolean(process.env.PAYPAL_CLIENT_SECRET?.trim()),
+          merchantIdConfigured: Boolean(process.env.PAYPAL_MERCHANT_ID?.trim()),
+          webhookIdConfigured: Boolean(process.env.PAYPAL_WEBHOOK_ID?.trim()),
+          paymentsEnabled: process.env.REAL_PAYMENTS_ENABLED === "true",
+          shopOpen: process.env.SHOP_OPEN === "true",
+        },
         metricsAvailability: {
           opens: false,
           clicks: false,
         },
+        commerce: commerce.rows[0],
       },
       { headers: { "Cache-Control": "no-store" } },
     );

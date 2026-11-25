@@ -3,7 +3,6 @@ import { z } from "zod";
 import { database } from "@/lib/newsletterDb";
 import {
   DEFAULT_MONDIAL_RELAY_SETTINGS,
-  EMPTY_MONDIAL_RELAY_SENDER,
   isSupportedMondialRelayService,
   type MondialRelaySettings,
   type ShippingRate,
@@ -62,7 +61,7 @@ const shippingTiersSchema = z
         });
     });
   });
-const senderSchema = z
+export const senderSchema = z
   .object({
     company: z.string().max(120),
     firstName: z.string().max(80),
@@ -202,7 +201,15 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
   const serviceCode = source.serviceCode === "24R/MED"
     ? source.serviceCode
     : DEFAULT_MONDIAL_RELAY_SETTINGS.serviceCode;
-  const storedSender = senderSchema.safeParse(source.sender);
+  // Older records may contain only part of the sender profile. Preserve every
+  // valid stored field instead of replacing the entire profile with blanks.
+  const senderSource = isRecord(source.sender) ? source.sender : {};
+  const storedSender = Object.fromEntries(
+    Object.entries(senderSchema.shape).map(([key, schema]) => {
+      const field = schema.safeParse(senderSource[key]);
+      return [key, field.success ? field.data : ""];
+    }),
+  ) as MondialRelaySettings["sender"];
   const storedProposed = proposedRateSchema.safeParse(source.proposedRate);
   const storedShippingTiers = shippingTiersSchema.safeParse(source.shippingTiers);
   const storedCollectionMode = collectionModeSchema.safeParse(source.collectionMode);
@@ -223,9 +230,7 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
       : DEFAULT_MONDIAL_RELAY_SETTINGS.collectionMode,
     collectionModeConfirmed:
       storedCollectionMode.success && source.collectionModeConfirmed === true,
-    sender: storedSender.success
-      ? storedSender.data
-      : { ...EMPTY_MONDIAL_RELAY_SENDER },
+    sender: storedSender,
     testParcel: legacyProfile(
       source.testParcel,
       DEFAULT_MONDIAL_RELAY_SETTINGS.testParcel,
@@ -290,6 +295,25 @@ export async function saveMondialRelaySettings(
        updated_by=EXCLUDED.updated_by,updated_at=now()`,
     [JSON.stringify(validated), userId],
   );
+}
+
+export async function saveMondialRelaySender(
+  sender: MondialRelaySettings["sender"],
+  userId: string,
+) {
+  const validated = senderSchema.parse(sender);
+  // Merge in PostgreSQL so concurrent edits to tariffs or Connect are retained.
+  const result = await database().query(
+    `INSERT INTO mm_shipping_settings(id,settings,updated_by)
+     VALUES(1,$1,$2)
+     ON CONFLICT(id) DO UPDATE SET
+       settings=jsonb_set(mm_shipping_settings.settings,'{sender}',$3::jsonb),
+       updated_by=EXCLUDED.updated_by,updated_at=now()
+     RETURNING settings`,
+    [JSON.stringify({ ...DEFAULT_MONDIAL_RELAY_SETTINGS, sender: validated }),
+      userId, JSON.stringify(validated)],
+  );
+  return parseMondialRelaySettings(result.rows[0].settings);
 }
 
 export function getMondialRelayProductionCredentialStatus(

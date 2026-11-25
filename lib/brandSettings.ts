@@ -9,6 +9,11 @@ export const BRAND_SETTING_DEFAULTS = {
   brand_name: "MAISON MIROIR",
   contact_email: "contact@maison-miroir.fr",
   professional_phone: "",
+  legal_seller_name: "",
+  mediator_name: "",
+  mediator_address: "",
+  mediator_url: "",
+  legal_terms_confirmed: "",
   instagram_url: "",
   tiktok_url: "",
   welcome_copy:

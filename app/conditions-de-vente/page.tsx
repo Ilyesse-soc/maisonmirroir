@@ -2,6 +2,7 @@ import Link from "next/link";
 import LegalPage from "@/components/LegalPage";
 import { getPublicPreparationDays } from "@/lib/publicPreparationDays";
 import { CGV_UPDATED_AT } from "@/lib/legalVersion";
+import { getBrandSettings } from "@/lib/brandSettings";
 
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -10,14 +11,15 @@ export const metadata = {
 };
 
 export default async function SalesTermsPage() {
-  const preparationDays = await getPublicPreparationDays();
+  const [preparationDays, brand] = await Promise.all([
+    getPublicPreparationDays(), getBrandSettings(),
+  ]);
 
   return (
     <LegalPage title="Conditions générales de vente" updatedAt={CGV_UPDATED_AT}>
       <p>
         Les présentes conditions générales de vente s’appliquent aux achats
-        réalisés sur le site MAISON MIROIR. Cette version est provisoire et reste
-        soumise à validation juridique.
+        réalisés sur le site MAISON MIROIR.{brand.legal_terms_confirmed !== "true" && " Cette version est provisoire et reste soumise à validation juridique."}
       </p>
 
       <h2>Article 1 - Identification du vendeur</h2>
@@ -28,6 +30,8 @@ export default async function SalesTermsPage() {
       </p>
       <ul>
         <li>Nom commercial : MAISON MIROIR</li>
+        {brand.legal_seller_name && <li>Entrepreneuse individuelle : {brand.legal_seller_name}</li>}
+        {brand.professional_phone && <li>Téléphone professionnel : {brand.professional_phone}</li>}
         <li>Statut juridique : Entrepreneur individuel, micro-entreprise</li>
         <li>SIREN : 102 982 576</li>
         <li>SIRET : 102 982 576 00013</li>
@@ -292,6 +296,11 @@ export default async function SalesTermsPage() {
         la cliente peut recourir gratuitement à un médiateur de la consommation,
         conformément aux conditions légales.
       </p>
+
+      {brand.mediator_name && brand.mediator_address && brand.mediator_url && <p>
+        Médiateur de la consommation : {brand.mediator_name}, {brand.mediator_address}.{" "}
+        Saisine et modalités : <a href={brand.mediator_url}>{brand.mediator_url}</a>.
+      </p>}
 
       <h2>Article 15 - Droit applicable et litiges</h2>
       <p>

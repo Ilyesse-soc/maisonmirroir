@@ -15,6 +15,11 @@ type Settings = {
   brand_name: string;
   contact_email: string;
   professional_phone: string;
+  legal_seller_name: string;
+  mediator_name: string;
+  mediator_address: string;
+  mediator_url: string;
+  legal_terms_confirmed: string;
   instagram_url: string;
   tiktok_url: string;
   welcome_copy: string;
@@ -27,6 +32,11 @@ const empty: Settings = {
   brand_name: "",
   contact_email: "",
   professional_phone: "",
+  legal_seller_name: "",
+  mediator_name: "",
+  mediator_address: "",
+  mediator_url: "",
+  legal_terms_confirmed: "",
   instagram_url: "",
   tiktok_url: "",
   welcome_copy: "",
@@ -45,6 +55,7 @@ export default function AdminSettingsPage() {
   );
   const [shippingMessage, setShippingMessage] = useState("");
   const [shippingBusy, setShippingBusy] = useState(false);
+  const [shippingLoaded, setShippingLoaded] = useState(false);
   const [relayStatus, setRelayStatus] = useState({
     api1Configured: false,
     api2Configured: false,
@@ -81,6 +92,7 @@ export default function AdminSettingsPage() {
         if (!response.ok) throw new Error(data.error || "Chargement impossible.");
         if (active) {
           setShipping(data.settings);
+          setShippingLoaded(true);
           setRelayStatus(data.credentialsConfigured);
           setRelayReadiness(data.readiness || {});
         }
@@ -121,6 +133,7 @@ export default function AdminSettingsPage() {
 
   async function saveShipping(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!shippingLoaded) return;
     setShippingBusy(true);
     setShippingMessage("");
     try {
@@ -140,6 +153,34 @@ export default function AdminSettingsPage() {
       setShippingMessage(
         error instanceof Error ? error.message : "Enregistrement impossible.",
       );
+    } finally {
+      setShippingBusy(false);
+    }
+  }
+
+  async function saveSender() {
+    if (!shippingLoaded) return;
+    setShippingBusy(true);
+    setShippingMessage("");
+    try {
+      const response = await fetch("/api/admin/shipping-settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(shipping.sender),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Enregistrement impossible.");
+      const verification = await fetch("/api/admin/shipping-settings", { cache: "no-store" });
+      const persisted = await verification.json();
+      if (!verification.ok || Object.keys(shipping.sender).some(
+        (key) => persisted.settings?.sender?.[key] !== data.settings.sender[key],
+      )) throw new Error("La relecture du profil a échoué. Actualisez pour vérifier les données enregistrées.");
+      setShipping((current) => ({ ...current, sender: persisted.settings.sender }));
+      setRelayStatus(persisted.credentialsConfigured);
+      setRelayReadiness(persisted.readiness || {});
+      setShippingMessage("Profil expéditeur enregistré et relu en base avec succès.");
+    } catch (error) {
+      setShippingMessage(error instanceof Error ? error.message : "Enregistrement impossible.");
     } finally {
       setShippingBusy(false);
     }
@@ -680,7 +721,12 @@ export default function AdminSettingsPage() {
         <div className="admin-form-grid">
           <label>Nom de la marque<input value={settings.brand_name} onChange={(event) => field("brand_name", event.target.value)} maxLength={120} required /></label>
           <label>Email de contact<input type="email" value={settings.contact_email} onChange={(event) => field("contact_email", event.target.value)} maxLength={254} required /></label>
-          <label>Téléphone professionnel (facultatif, publié dans les mentions légales)<input type="tel" value={settings.professional_phone} onChange={(event) => field("professional_phone", event.target.value)} maxLength={30} /></label>
+          <label>Téléphone professionnel à publier (renseigner après accord)<input type="tel" value={settings.professional_phone} onChange={(event) => field("professional_phone", event.target.value)} maxLength={30} /></label>
+          <label>Nom et prénom de l’entrepreneuse à publier<input value={settings.legal_seller_name} onChange={(event) => field("legal_seller_name", event.target.value)} maxLength={200} /></label>
+          <label>Médiateur souscrit : nom<input value={settings.mediator_name} onChange={(event) => field("mediator_name", event.target.value)} maxLength={200} /></label>
+          <label>Médiateur : adresse postale<textarea value={settings.mediator_address} onChange={(event) => field("mediator_address", event.target.value)} maxLength={500} /></label>
+          <label>Médiateur : site HTTPS<input type="url" value={settings.mediator_url} onChange={(event) => field("mediator_url", event.target.value)} /></label>
+          <label><input type="checkbox" checked={settings.legal_terms_confirmed === "true"} onChange={(event) => field("legal_terms_confirmed", event.target.checked ? "true" : "")} />Je confirme l’exactitude des informations légales publiées, la souscription au médiateur indiqué et la validation des CGV pour l’ouverture.</label>
           <label>Instagram (URL HTTPS)<input type="url" value={settings.instagram_url} onChange={(event) => field("instagram_url", event.target.value)} /></label>
           <label>TikTok (URL HTTPS)<input type="url" value={settings.tiktok_url} onChange={(event) => field("tiktok_url", event.target.value)} /></label>
           <label>Texte de confirmation<textarea rows={4} value={settings.confirmation_copy} onChange={(event) => field("confirmation_copy", event.target.value)} maxLength={2000} required /></label>
@@ -740,6 +786,7 @@ export default function AdminSettingsPage() {
           Checkout Point Relais (API1 + tarifs) : {relayReadiness.checkoutShippingReady ? "prêt" : "désactivé"}
         </div>
         <form onSubmit={saveShipping}>
+          <fieldset disabled={!shippingLoaded || shippingBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <section style={{ marginTop: 18 }}>
             <h3>Mode de traitement des expéditions</h3>
             <label>
@@ -832,6 +879,9 @@ export default function AdminSettingsPage() {
               Je confirme que ce mode de dépôt ou de collecte est autorisé par
               mon contrat.
             </label>
+            <button type="button" onClick={saveSender} disabled={shippingBusy || !shippingLoaded}>
+              Enregistrer le profil expéditeur
+            </button>
           </section>
           <section style={{ marginTop: 20 }}>
             <h3>Contrat et services autorisés</h3>
@@ -1192,6 +1242,7 @@ export default function AdminSettingsPage() {
               {shippingBusy ? "Enregistrement…" : "Enregistrer les paramètres de livraison"}
             </button>
           </div>
+          </fieldset>
         </form>
       </section>
     </main>

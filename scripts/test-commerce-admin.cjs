@@ -89,6 +89,8 @@ async function main() {
       if (id === "@/lib/adminPaypalRefund") return load("lib/adminPaypalRefund.ts");
       if (id === "@/lib/commerceSecurity") return { getPayPalProductionStatus: () => ({ configured: true }) };
       if (id === "@/lib/products") return load("lib/products.ts");
+      if (id === "@/lib/mondialRelaySettings") return load("lib/mondialRelaySettings.ts");
+      if (id === "@/lib/mondialRelayTypes") return load("lib/mondialRelayTypes.ts");
       if (id.startsWith(".")) {
         const target = path.resolve(path.dirname(filename), `${id}.ts`);
         if (fs.existsSync(target)) return load(target);
@@ -147,6 +149,29 @@ async function main() {
   };
 
   const inventory = load("app/api/admin/inventory/route.ts");
+  const shippingSettings = load("app/api/admin/shipping-settings/route.ts");
+  const sender = {
+    company: "Maison Test", firstName: "Ada", lastName: "Test",
+    street: "rue Test", houseNo: "1", postalCode: "75001", city: "Paris",
+    countryCode: "FR", phone: "0612345678", email: "sender@example.test",
+  };
+  // Sender persistence must work even when unrelated historical settings fail
+  // full validation, and must not erase those settings during the merge.
+  await query("INSERT INTO mm_shipping_settings(id,settings,updated_by) VALUES(1,$1,'test')", [
+    JSON.stringify({ collectionMode: "CCC", sender: { firstName: "Saved" }, manualConnectConfirmed: true }),
+  ]);
+  assert.equal((await (await shippingSettings.GET()).json()).settings.sender.firstName, "Saved");
+  const senderSaved = await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", sender));
+  assert.equal(senderSaved.status, 200);
+  assert.deepEqual((await (await shippingSettings.GET()).json()).settings.sender, sender);
+  const storedShipping = (await query("SELECT settings FROM mm_shipping_settings WHERE id=1")).rows[0].settings;
+  assert.equal(storedShipping.collectionMode, "CCC");
+  assert.equal(storedShipping.manualConnectConfirmed, true);
+  assert.equal((await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", { ...sender, email: "x".repeat(255) }))).status, 400);
+  authorized = false;
+  assert.equal((await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", sender))).status, 401);
+  authorized = true;
+  await query("DELETE FROM mm_shipping_settings WHERE id=1");
   const inventoryRead = await inventory.GET();
   assert.equal(inventoryRead.status, 200);
   assert.equal(inventoryRead.headers.get("cache-control"), "no-store");

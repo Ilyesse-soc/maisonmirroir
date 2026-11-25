@@ -5,6 +5,11 @@ import {
 } from "@/lib/mondialRelaySettings";
 import { getPayPalProductionStatus } from "@/lib/commerceSecurity";
 import { securityEvent } from "@/lib/observability";
+import { getCgvVersion } from "@/lib/legalVersion";
+import {
+  MONDIAL_RELAY_HOME_ID,
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+} from "@/lib/shipping";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,35 +21,59 @@ export async function GET() {
     const paypal = getPayPalProductionStatus();
     const paymentsEnabled =
       process.env.REAL_PAYMENTS_ENABLED === "true" && paypal.configured;
-    const realShippingEnabled = relay.checkoutShippingReady;
-    const realShipmentCreationEnabled = relay.shipmentCreationEnabled;
+    const homeModeReady =
+      relay.homeDeliveryReady &&
+      process.env.REAL_SHIPPING_ENABLED === "true";
+    const realShippingEnabled =
+      relay.checkoutShippingReady || homeModeReady;
+    const realShipmentCreationEnabled =
+      relay.shipmentCreationEnabled ||
+      (homeModeReady &&
+        process.env.REAL_SHIPMENT_CREATION_ENABLED === "true");
     const shopOpen =
       process.env.SHOP_OPEN === "true" &&
       paymentsEnabled &&
       realShippingEnabled &&
       realShipmentCreationEnabled;
-    const publicShippingTiers = relay.checkoutShippingReady
-      ? settings.shippingTiers.filter(
+    const completePublicTier = (tier: (typeof settings.shippingTiers)[number]) =>
+      tier.confirmed &&
+      typeof tier.weightGrams === "number" &&
+      tier.weightGrams > 0 &&
+      typeof tier.lengthCm === "number" &&
+      tier.lengthCm > 0 &&
+      typeof tier.widthCm === "number" &&
+      tier.widthCm > 0 &&
+      typeof tier.depthCm === "number" &&
+      tier.depthCm > 0 &&
+      typeof tier.customerPriceCents === "number" &&
+      tier.customerPriceCents > 0;
+    const publicShippingTiers = settings.shippingTiers.filter(
           (tier) =>
-            tier.confirmed &&
-            typeof tier.weightGrams === "number" &&
-            tier.weightGrams > 0 &&
-            typeof tier.lengthCm === "number" &&
-            tier.lengthCm > 0 &&
-            typeof tier.widthCm === "number" &&
-            tier.widthCm > 0 &&
-            typeof tier.depthCm === "number" &&
-            tier.depthCm > 0 &&
-            typeof tier.customerPriceCents === "number" &&
-            tier.customerPriceCents > 0,
+            completePublicTier(tier),
+        );
+    const publicHomeShippingTiers = settings.homeDeliveryEnabled &&
+      settings.homeDeliveryContractConfirmed
+      ? settings.homeShippingTiers.filter(
+          (tier) =>
+            completePublicTier(tier),
         )
       : [];
+    const availableShippingMethodIds = [
+      ...(relay.checkoutShippingReady ? [MONDIAL_RELAY_POINT_RELAIS_ID] : []),
+      ...(homeModeReady ? [MONDIAL_RELAY_HOME_ID] : []),
+    ];
     return NextResponse.json(
       {
         settings: {
           serviceCode: settings.serviceCode,
           shippingTiers: publicShippingTiers,
+          homeShippingTiers: publicHomeShippingTiers,
+          homeDeliveryEnabled: homeModeReady,
+          homeDeliveryContractConfirmed: homeModeReady,
+          preparationDays: settings.preparationDays,
         },
+        availableShippingMethodIds,
+        cgvVersion: getCgvVersion(settings.preparationDays),
         shopOpen,
         paymentsEnabled,
         realShippingEnabled,

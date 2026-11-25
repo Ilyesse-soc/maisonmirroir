@@ -27,8 +27,11 @@ export async function GET() {
         settings,
         credentialsConfigured,
         readiness,
-        realShipmentCreationEnabled: readiness.shipmentCreationEnabled,
-        realShippingEnabled: readiness.checkoutShippingReady,
+        realShipmentCreationEnabled:
+          readiness.shipmentCreationEnabled ||
+          readiness.homeShipmentCreationReady,
+        realShippingEnabled:
+          readiness.checkoutShippingReady || readiness.homeDeliveryReady,
       },
       { headers: { "Cache-Control": "no-store" } },
     );

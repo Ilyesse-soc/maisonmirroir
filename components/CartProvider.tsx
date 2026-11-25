@@ -13,9 +13,11 @@ import {
 } from "@/lib/cart";
 import {
   getShippingMethodById,
+  MONDIAL_RELAY_HOME_ID,
   MONDIAL_RELAY_POINT_RELAIS_ID,
 } from "@/lib/shipping";
 import {
+  getHomeDeliveryPriceCents,
   getMondialRelayQuote,
   type MondialRelaySettings,
   type RelayPoint,
@@ -40,6 +42,9 @@ type CartContextValue = {
   shippingConfigurationLoaded: boolean;
   checkoutEnabled: boolean;
   paypalClientId: string;
+  availableShippingMethodIds: string[];
+  preparationDays: number;
+  cgvVersion: string;
   catalogLoaded: boolean;
   getProductPrice: (id: string, fallback: number) => number;
   isProductAvailable: (id: string, fallback?: boolean) => boolean;
@@ -180,8 +185,15 @@ export function CartProvider({
   const [shippingConfig, setShippingConfig] = useState<{
     settings: Pick<
       MondialRelaySettings,
-      "serviceCode" | "shippingTiers"
+      | "serviceCode"
+      | "shippingTiers"
+      | "homeDeliveryEnabled"
+      | "homeDeliveryContractConfirmed"
+      | "homeShippingTiers"
+      | "preparationDays"
     >;
+    availableShippingMethodIds: string[];
+    cgvVersion: string;
     shopOpen: boolean;
     paymentsEnabled: boolean;
     realShippingEnabled: boolean;
@@ -215,18 +227,16 @@ export function CartProvider({
   const getShippingPriceQuote = (methodId: string, quantity: number) => {
     const method = getShippingMethodById(methodId);
     if (!method) return { price: null, label: "À confirmer" };
-    if (
-      methodId !== MONDIAL_RELAY_POINT_RELAIS_ID ||
-      !shippingConfig
-    )
+    if (!shippingConfig) return { price: null, label: "À confirmer" };
+    const priceCents =
+      methodId === MONDIAL_RELAY_POINT_RELAIS_ID
+        ? getMondialRelayQuote(shippingConfig.settings, quantity)?.priceCents
+        : methodId === MONDIAL_RELAY_HOME_ID
+          ? getHomeDeliveryPriceCents(shippingConfig.settings, quantity)
+          : null;
+    if (!priceCents)
       return { price: null, label: "À confirmer" };
-    const quote = getMondialRelayQuote(
-      shippingConfig.settings,
-      quantity,
-    );
-    if (!quote)
-      return { price: null, label: "À confirmer" };
-    const price = quote.priceCents / 100;
+    const price = priceCents / 100;
     return {
       price,
       label: euro.format(price),
@@ -252,11 +262,19 @@ export function CartProvider({
     selectedShippingPriceLabel,
     shippingConfigurationLoaded,
     getShippingPriceQuote,
+    availableShippingMethodIds:
+      shippingConfig?.availableShippingMethodIds || [],
+    preparationDays: shippingConfig?.settings.preparationDays || 3,
+    cgvVersion: shippingConfig?.cgvVersion || "",
     checkoutEnabled:
       shippingConfigurationLoaded &&
       Boolean(shippingConfig?.shopOpen) &&
       Boolean(shippingConfig?.paymentsEnabled) &&
-      (!isMondialRelayMethod || Boolean(shippingConfig?.realShippingEnabled)),
+      (!isMondialRelayMethod ||
+        Boolean(shippingConfig?.realShippingEnabled)) &&
+      Boolean(
+        shippingConfig?.availableShippingMethodIds.includes(shippingMethodId),
+      ),
     paypalClientId: shippingConfig?.paypalClientId || "",
     catalogLoaded,
     getProductPrice(id, fallback) {

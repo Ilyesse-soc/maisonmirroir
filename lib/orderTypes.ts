@@ -4,7 +4,13 @@ import type { RelayPoint } from "@/lib/mondialRelayTypes";
 export type PaymentMethod = "PAYPAL" | "CARD";
 
 export type OrderStatus =
-  "En attente" | "Payee" | "En preparation" | "Expediee" | "Livree" | "Annulee";
+  | "En attente"
+  | "Payee"
+  | "En preparation"
+  | "Prete a expedier"
+  | "Expediee"
+  | "Livree"
+  | "Annulee";
 
 export type OrderReturnStatus =
   | "none"
@@ -94,6 +100,8 @@ export type OrderPayload = {
   customer: CustomerInfo;
   shippingMethodId: string;
   relayPoint?: RelayPoint;
+  acceptTerms: boolean;
+  cgvVersion: string;
 };
 
 export type OrderRecord = {
@@ -110,4 +118,10 @@ export type OrderRecord = {
   status: OrderStatus;
   trackingNumber?: string;
   trackingUrl?: string;
+  paidAt?: string;
+  preparationDeadline?: string;
+  legalAcceptance?: {
+    version: string;
+    acceptedAt: string;
+  };
 };

@@ -14,6 +14,7 @@ const informationLinks = [
   { href: "/conditions-de-vente", label: "Conditions de vente" },
   { href: "/livraison", label: "Livraison" },
   { href: "/retours", label: "Retours et remboursements" },
+  { href: "/retractation", label: "Demande de rétractation" },
   { href: "/politique-de-confidentialite", label: "Confidentialité" },
   { href: "/politique-de-cookies", label: "Cookies" },
 ];

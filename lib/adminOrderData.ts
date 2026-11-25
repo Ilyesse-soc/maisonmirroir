@@ -11,6 +11,7 @@ export type AdminOrder = OrderRecord & {
   totalCents: number;
   returnStatus: OrderReturnStatus;
   returnUpdatedAt: string | null;
+  withdrawalRequestedAt: string | null;
   refundEligible: boolean;
   refundAttempt: null | { idempotencyKey: string; amountCents: number; status: string };
   refundHistory: Array<{ refundId: string; amountCents: number; status: string; reason: string; createdAt: string; completedAt: string | null }>;
@@ -20,6 +21,7 @@ const shipmentFor = (status: string) => ({
   "En attente": "unfulfilled",
   Payee: "unfulfilled",
   "En preparation": "preparing",
+  "Prete a expedier": "ready",
   Expediee: "shipped",
   Livree: "delivered",
   Annulee: "cancelled",
@@ -33,6 +35,7 @@ export async function listAdminOrders(search: string, payment: string, shipment:
       const result = await database().query(
         `SELECT f.order_id,f.payment_status,f.shipment_status,f.refunded_cents,
           f.discount_cents,f.total_cents,f.return_status,f.return_updated_at,
+          f.withdrawal_requested_at,
           (f.payment_status IN ('paid','partially_refunded')
             AND f.paypal_capture_id IS NOT NULL
             AND f.refunded_cents<f.total_cents
@@ -74,6 +77,9 @@ export async function listAdminOrders(search: string, payment: string, shipment:
       returnStatus: String(finance?.return_status || "none") as OrderReturnStatus,
       returnUpdatedAt: finance?.return_updated_at
         ? String(finance.return_updated_at)
+        : null,
+      withdrawalRequestedAt: finance?.withdrawal_requested_at
+        ? String(finance.withdrawal_requested_at)
         : null,
       refundEligible: finance?.refund_eligible === true,
       refundAttempt: finance?.idempotency_key ? {

@@ -259,7 +259,10 @@ async function main() {
 
   const orderAdmin = load("app/api/admin/orders/[orderId]/route.ts");
   const shipmentUpdate = await orderAdmin.PATCH(
-    req("https://admin.test/api/admin/orders/MM-2026-AB123456", "PATCH", { status: "Expediee" }),
+    req("https://admin.test/api/admin/orders/MM-2026-AB123456", "PATCH", {
+      status: "Expediee",
+      trackingNumber: "12345678",
+    }),
     { params: Promise.resolve({ orderId: "MM-2026-AB123456" }) },
   );
   assert.equal(shipmentUpdate.status, 200);

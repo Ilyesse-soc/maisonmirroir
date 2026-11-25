@@ -8,12 +8,21 @@ export type ShippingMethod = {
 };
 
 export const MONDIAL_RELAY_POINT_RELAIS_ID = "mondial-relay-point-relais";
+export const MONDIAL_RELAY_HOME_ID = "mondial-relay-home";
 
 export const SHIPPING_METHODS: ShippingMethod[] = [
   {
     id: MONDIAL_RELAY_POINT_RELAIS_ID,
     label: "Mondial Relay - Point Relais",
     shortLabel: "Mondial Relay - Point Relais",
+    carrier: "Mondial Relay",
+    estimatedDelay: "Délai indiqué par Mondial Relay après expédition",
+    trackingBaseUrl: "https://www.mondialrelay.fr/suivi-de-colis/",
+  },
+  {
+    id: MONDIAL_RELAY_HOME_ID,
+    label: "Mondial Relay - Livraison à domicile",
+    shortLabel: "Mondial Relay - Domicile",
     carrier: "Mondial Relay",
     estimatedDelay: "Délai indiqué par Mondial Relay après expédition",
     trackingBaseUrl: "https://www.mondialrelay.fr/suivi-de-colis/",

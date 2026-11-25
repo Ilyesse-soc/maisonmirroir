@@ -14,8 +14,12 @@ import {
 } from "@/lib/mondialRelaySettings";
 import { mutationAllowed } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
-import { MONDIAL_RELAY_POINT_RELAIS_ID } from "@/lib/shipping";
 import {
+  MONDIAL_RELAY_HOME_ID,
+  MONDIAL_RELAY_POINT_RELAIS_ID,
+} from "@/lib/shipping";
+import {
+  getHomeDeliveryParcelProfile,
   getMondialRelayParcelProfile,
   isMondialRelayServiceAllowed,
 } from "@/lib/mondialRelayTypes";
@@ -81,19 +85,24 @@ export async function POST(
     const order = (await readOrders()).find((item) => item.orderId === orderId);
     if (!order)
       return NextResponse.json({ error: "ORDER_NOT_FOUND" }, { status: 404 });
-    if (!order.paypalOrderId || !["Payee", "En preparation"].includes(order.status))
+    if (
+      !order.paypalOrderId ||
+      !["Payee", "En preparation", "Prete a expedier"].includes(order.status)
+    )
       return NextResponse.json({ error: "ORDER_NOT_PAID" }, { status: 409 });
-    if (order.shipping.id !== MONDIAL_RELAY_POINT_RELAIS_ID)
+    const isRelay = order.shipping.id === MONDIAL_RELAY_POINT_RELAIS_ID;
+    const isHome = order.shipping.id === MONDIAL_RELAY_HOME_ID;
+    if (!isRelay && !isHome)
       return NextResponse.json(
         { error: "MONDIAL_RELAY_NOT_SELECTED" },
         { status: 409 },
       );
     const point = order.shipping.relayPoint;
-    if (
+    if (isRelay && (
       !point ||
       point.source !== "production" ||
       !["24R/MED", "24R/APM"].includes(point.serviceCode)
-    )
+    ))
       return NextResponse.json(
         { error: "PRODUCTION_RELAY_POINT_REQUIRED" },
         { status: 409 },
@@ -102,7 +111,11 @@ export async function POST(
     await adminAudit("MONDIAL_RELAY_PRODUCTION_SHIPMENT_REQUESTED", orderId);
     const settings = await getMondialRelaySettings();
     const readiness = getMondialRelayProductionReadiness(settings);
-    if (!readiness.shipmentCreationEnabled)
+    if (
+      isRelay
+        ? !readiness.shipmentCreationEnabled
+        : !readiness.homeShipmentCreationReady
+    )
       return NextResponse.json(
         { error: "MONDIAL_RELAY_SHIPMENT_NOT_READY", readiness },
         { status: 503 },
@@ -111,10 +124,14 @@ export async function POST(
       (total, item) => total + item.quantity,
       0,
     );
-    const parcel = getMondialRelayParcelProfile(settings, itemCount);
+    const parcel = isRelay
+      ? getMondialRelayParcelProfile(settings, itemCount)
+      : getHomeDeliveryParcelProfile(settings, itemCount);
     if (
-      !isMondialRelayServiceAllowed(settings, point.serviceCode) ||
-      point.serviceCode !== settings.serviceCode ||
+      (isRelay &&
+        (!point ||
+          !isMondialRelayServiceAllowed(settings, point.serviceCode) ||
+          point.serviceCode !== settings.serviceCode)) ||
       !parcel
     )
       return NextResponse.json(
@@ -178,8 +195,8 @@ export async function POST(
         {
           orderNo: orderId,
           customerNo: orderId,
-          serviceCode: point.serviceCode,
-          relayLocation: point.location,
+          deliveryMode: isHome ? "HOM" : "24R",
+          ...(isRelay && point ? { relayLocation: point.location } : {}),
           collectionMode: settings.collectionMode,
           sender,
           recipient,

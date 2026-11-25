@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import "server-only";
 import { z } from "zod";
 import { database } from "@/lib/newsletterDb";
@@ -274,8 +275,8 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
   };
 }
 
-export async function getMondialRelaySettings(): Promise<MondialRelaySettings> {
-  const result = await database().query(
+export async function getMondialRelaySettings(client: Pick<PoolClient, "query"> = database()): Promise<MondialRelaySettings> {
+  const result = await client.query(
     "SELECT settings FROM mm_shipping_settings WHERE id=1",
   );
   const settings = result.rows[0]?.settings;

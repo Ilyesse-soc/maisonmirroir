@@ -88,6 +88,8 @@ async function main() {
       if (id === "@/lib/adminOrderPresentation") return load("lib/adminOrderPresentation.ts");
       if (id === "@/lib/adminPaypalRefund") return load("lib/adminPaypalRefund.ts");
       if (id === "@/lib/commerceSecurity") return { getPayPalProductionStatus: () => ({ configured: true }) };
+      if (id === "@/lib/adminSettingsPatch") return load("lib/adminSettingsPatch.ts");
+      if (id === "@/lib/settingsSync") return load("lib/settingsSync.ts");
       if (id === "@/lib/products") return load("lib/products.ts");
       if (id === "@/lib/mondialRelaySettings") return load("lib/mondialRelaySettings.ts");
       if (id === "@/lib/mondialRelayTypes") return load("lib/mondialRelayTypes.ts");
@@ -161,15 +163,15 @@ async function main() {
     JSON.stringify({ collectionMode: "CCC", sender: { firstName: "Saved" }, manualConnectConfirmed: true }),
   ]);
   assert.equal((await (await shippingSettings.GET()).json()).settings.sender.firstName, "Saved");
-  const senderSaved = await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", sender));
+  const senderSaved = await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", { changes: { sender }, expected: { sender: { ...sender, firstName: "Saved", company: "", lastName: "", street: "", houseNo: "", postalCode: "", city: "", countryCode: "", phone: "", email: "" } } }));
   assert.equal(senderSaved.status, 200);
   assert.deepEqual((await (await shippingSettings.GET()).json()).settings.sender, sender);
   const storedShipping = (await query("SELECT settings FROM mm_shipping_settings WHERE id=1")).rows[0].settings;
   assert.equal(storedShipping.collectionMode, "CCC");
   assert.equal(storedShipping.manualConnectConfirmed, true);
-  assert.equal((await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", { ...sender, email: "x".repeat(255) }))).status, 400);
+  assert.equal((await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", { changes: { sender: { ...sender, email: "x".repeat(255) } }, expected: { sender } }))).status, 422);
   authorized = false;
-  assert.equal((await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", sender))).status, 401);
+  assert.equal((await shippingSettings.PATCH(req("https://admin.test/api/admin/shipping-settings", "PATCH", { changes: { sender }, expected: { sender: { ...sender, firstName: "Saved", company: "", lastName: "", street: "", houseNo: "", postalCode: "", city: "", countryCode: "", phone: "", email: "" } } }))).status, 401);
   authorized = true;
   await query("DELETE FROM mm_shipping_settings WHERE id=1");
   const inventoryRead = await inventory.GET();

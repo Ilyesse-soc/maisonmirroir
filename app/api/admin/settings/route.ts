@@ -3,9 +3,9 @@ import { z } from "zod";
 import { adminDenied, adminSession } from "@/lib/adminAuth";
 import { adminAudit } from "@/lib/adminAudit";
 import { getBrandSettings, normalizeBrandText } from "@/lib/brandSettings";
-import { transaction } from "@/lib/newsletterDb";
 import { mutationAllowed, readJson, InputError, inputResponse } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
+import { persistSettingsPatch, SettingsConflict } from "@/lib/adminSettingsPatch";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -52,40 +52,51 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT() {
+  const denied = await adminDenied();
+  if (denied) return denied;
+  return NextResponse.json(
+    { error: "Cette page utilise une ancienne version. La sauvegarde a ete refusee pour proteger les donnees des autres appareils. Conservez vos champs avant de recharger la page." },
+    { status: 409, headers: { "Cache-Control": "no-store" } },
+  );
+}
+
+export async function PATCH(request: NextRequest) {
   const denied = await adminDenied();
   if (denied) return denied;
   const originDenied = mutationAllowed(request);
   if (originDenied) return originDenied;
   try {
-    const settings = await readJson(request, settingsSchema, 70000);
-    for (const key of [
-      "brand_name",
-      "welcome_copy",
-      "confirmation_copy",
-      "launch_copy",
-      "campaign_footer",
-    ] as const) {
-      settings[key] = normalizeBrandText(settings[key]);
-    }
-    await adminAudit("BRAND_SETTINGS_UPDATE_REQUESTED");
+    const body = await readJson(request, z.object({
+      changes: z.record(z.string(), z.unknown()),
+      expected: z.record(z.string(), z.unknown()),
+    }).strict(), 70000);
     const session = await adminSession();
-    if (!session) return NextResponse.json({ error: "Authentification requise" }, { status: 401 });
-    await transaction(async (db) => {
-      for (const [key, value] of Object.entries(settings)) {
-        await db.query(
-          `INSERT INTO mm_brand_settings(key,value,updated_by)
-           VALUES($1,$2,$3)
-           ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,
-             updated_by=EXCLUDED.updated_by,updated_at=now()`,
-          [key, value, session.user.id],
-        );
-      }
+    if (!session) return NextResponse.json({ error: "Authentification requise." }, { status: 401 });
+    const settings = await persistSettingsPatch({
+      ...body,
+      read: client => getBrandSettings(client),
+      validate: value => {
+        const parsed = settingsSchema.parse(value);
+        for (const key of ["brand_name", "welcome_copy", "confirmation_copy", "launch_copy", "campaign_footer"] as const)
+          parsed[key] = normalizeBrandText(parsed[key]);
+        return parsed;
+      },
+      write: async (client, value) => {
+        for (const key of Object.keys(body.changes)) {
+          await client.query(`INSERT INTO mm_brand_settings(key,value,updated_by) VALUES($1,$2,$3)
+            ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value,updated_by=EXCLUDED.updated_by,updated_at=now()`,
+          [key, value[key], session.user.id]);
+        }
+      },
     });
-    return NextResponse.json({ settings: await getBrandSettings() }, { headers: { "Cache-Control": "no-store" } });
+    await adminAudit("BRAND_SETTINGS_UPDATE_CONFIRMED");
+    return NextResponse.json({ settings, persisted: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    if (error instanceof SettingsConflict) return NextResponse.json({ error: error.message }, { status: 409 });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "Champs invalides : " + error.issues.map(issue => issue.path.join(".")).join(", ") }, { status: 422 });
     if (error instanceof InputError) return inputResponse(error);
     securityEvent("ADMIN_SETTINGS_WRITE_FAILED");
-    return NextResponse.json({ error: "Enregistrement des paramètres impossible." }, { status: 503 });
+    return NextResponse.json({ error: "Enregistrement non confirmé. Vos modifications restent dans le formulaire." }, { status: 503 });
   }
 }

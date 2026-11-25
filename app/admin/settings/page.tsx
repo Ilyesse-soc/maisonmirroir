@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { changedSettings, mergeSettings, settingConflicts, type SettingsObject } from "@/lib/settingsSync";
 import {
   DEFAULT_MONDIAL_RELAY_SETTINGS,
   type MondialRelaySettings,
@@ -72,118 +73,173 @@ export default function AdminSettingsPage() {
     Record<string, boolean>
   >({});
 
+  const brandBaseline = useRef<Settings | null>(null);
+  const shippingBaseline = useRef<MondialRelaySettings | null>(null);
+  const saving = useRef(false);
+  const dirty = useRef(false);
+  const [brandLoaded, setBrandLoaded] = useState(false);
+  const [saveError, setSaveError] = useState(false);
+
   useEffect(() => {
-    let active = true;
-    fetch("/api/admin/settings", { cache: "no-store" })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Chargement impossible.");
-        if (active) {
-          setSettings(data.settings);
-          setSecretStatus(data.secretsConfigured);
-        }
-      })
-      .catch((error) => {
-        if (active) setMessage(error instanceof Error ? error.message : "Chargement impossible.");
-      });
-    fetch("/api/admin/shipping-settings", { cache: "no-store" })
-      .then(async (response) => {
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || "Chargement impossible.");
-        if (active) {
-          setShipping(data.settings);
-          setShippingLoaded(true);
-          setRelayStatus(data.credentialsConfigured);
-          setRelayReadiness(data.readiness || {});
-        }
-      })
-      .catch((error) => {
-        if (active)
-          setShippingMessage(
-            error instanceof Error ? error.message : "Chargement impossible.",
-          );
-      });
-    return () => { active = false; };
+    dirty.current = Boolean(
+      brandBaseline.current && Object.keys(changedSettings(settings, brandBaseline.current).changes).length ||
+      shippingBaseline.current && Object.keys(changedSettings(shipping as unknown as SettingsObject, shippingBaseline.current as unknown as SettingsObject).changes).length
+    );
+  }, [settings, shipping]);
+
+  const refreshSettings = useCallback(async () => {
+    const read = async (path: string) => {
+      const response = await fetch(path, { cache: "no-store", credentials: "same-origin" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(response.status === 401
+        ? "Votre session a expiré. Reconnectez-vous ; les modifications restent dans ce formulaire."
+        : data.error || "Chargement des paramètres impossible.");
+      return data;
+    };
+    const [brand, relay] = await Promise.all([
+      read("/api/admin/settings"), read("/api/admin/shipping-settings"),
+    ]);
+    return { brand, relay };
   }, []);
 
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setBusy(true);
-    setMessage("");
-    try {
-      const response = await fetch("/api/admin/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
+  useEffect(() => {
+    let active = true;
+    async function synchronize() {
+      if (saving.current || dirty.current) return;
+      try {
+        const { brand, relay } = await refreshSettings();
+        if (!active || saving.current || dirty.current) return;
+        const oldBrand = brandBaseline.current;
+        const oldShipping = shippingBaseline.current;
+        setSettings(current => oldBrand
+          ? mergeSettings(brand.settings, changedSettings(current, oldBrand).changes) as Settings
+          : brand.settings);
+        setShipping(current => oldShipping
+          ? mergeSettings(relay.settings, changedSettings(current as unknown as SettingsObject, oldShipping as unknown as SettingsObject).changes) as unknown as MondialRelaySettings
+          : relay.settings);
+        brandBaseline.current = brand.settings;
+        shippingBaseline.current = relay.settings;
+        setSecretStatus(brand.secretsConfigured);
+        setRelayStatus(relay.credentialsConfigured);
+        setRelayReadiness(relay.readiness || {});
+        setBrandLoaded(true);
+        setShippingLoaded(true);
+      } catch (error) {
+        if (active) {
+          setSaveError(true);
+          setMessage(error instanceof Error ? error.message : "Chargement impossible.");
+        }
+      }
+    }
+    void synchronize();
+    const interval = window.setInterval(() => void synchronize(), 5000);
+    const focus = () => void synchronize();
+    window.addEventListener("focus", focus);
+    const visible = () => { if (document.visibilityState === "visible") void synchronize(); };
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      window.removeEventListener("focus", focus);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, [refreshSettings]);
+
+  async function saveAll() {
+    if (saving.current || !brandBaseline.current || !shippingBaseline.current) return;
+    // Read native values too: Safari/autofill can update an input before React
+    // receives its change event. Never serialize only a stale state snapshot.
+    const nativeValues = <T,>(draft: T, group: string): T => {
+      const result = JSON.parse(JSON.stringify(draft)) as Record<string, unknown>;
+      document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
+        '[data-settings-group="' + group + '"]',
+      ).forEach(control => {
+        const parts = control.name.split(".");
+        let target = result;
+        for (const part of parts.slice(0, -1)) target = target[part] as Record<string, unknown>;
+        const key = parts[parts.length - 1];
+        target[key] = control instanceof HTMLInputElement && control.type === "checkbox"
+          ? group === "brand" ? control.checked ? "true" : "" : control.checked
+          : control.value;
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Enregistrement impossible.");
-      setSettings(data.settings);
-      setMessage("Paramètres enregistrés. Aucun secret n’a été affiché ou modifié.");
+      return result as T;
+    };
+    const sentBrand = nativeValues(settings, "brand");
+    for (const key of ["brand_name", "welcome_copy", "confirmation_copy", "launch_copy", "campaign_footer"] as const)
+      sentBrand[key] = sentBrand[key].replace(/\bMAISON MIROIRS?\b/gi, "MAISON MIROIR");
+    const sentShipping = nativeValues(shipping, "shipping");
+    setSettings(sentBrand);
+    setShipping(sentShipping);
+    saving.current = true;
+    setBusy(true);
+    setShippingBusy(true);
+    setSaveError(false);
+    setMessage("Enregistrement en cours…");
+    setShippingMessage("");
+    const patches = [
+      { path: "/api/admin/settings", ...changedSettings(sentBrand, brandBaseline.current) },
+      { path: "/api/admin/shipping-settings", ...changedSettings(sentShipping as unknown as SettingsObject, shippingBaseline.current as unknown as SettingsObject) },
+    ];
+    try {
+      // Each button saves all edited sections, with only their changed fields.
+      const outcomes = await Promise.allSettled(patches.map(async patch => {
+        if (!Object.keys(patch.changes).length) return;
+        const response = await fetch(patch.path, {
+          method: "PATCH",
+          credentials: "same-origin",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ changes: patch.changes, expected: patch.expected }),
+        });
+        const data = await response.json();
+        if (!response.ok || data.persisted !== true) throw new Error(
+          response.status === 401 ? "Votre session a expiré. Reconnectez-vous avant de réessayer."
+          : data.error || "Écriture en base non confirmée.");
+      }));
+      const { brand, relay } = await refreshSettings();
+      const failed = outcomes.find(outcome => outcome.status === "rejected");
+      if (failed?.status === "rejected") throw failed.reason;
+      const snapshots = [brand.settings, relay.settings];
+      for (let index = 0; index < patches.length; index++) {
+        const patch = patches[index];
+        if (settingConflicts(snapshots[index], patch.changes, patch.changes).length)
+          throw new Error("La relecture serveur ne confirme pas tous les champs. Les modifications restent dans le formulaire.");
+      }
+      setSettings(current => mergeSettings(brand.settings, changedSettings(current, sentBrand).changes) as Settings);
+      setShipping(current => mergeSettings(relay.settings, changedSettings(current as unknown as SettingsObject, sentShipping as unknown as SettingsObject).changes) as unknown as MondialRelaySettings);
+      brandBaseline.current = brand.settings;
+      shippingBaseline.current = relay.settings;
+      setSecretStatus(brand.secretsConfigured);
+      setRelayStatus(relay.credentialsConfigured);
+      setRelayReadiness(relay.readiness || {});
+      setMessage("Toutes les modifications sont enregistrées dans PostgreSQL et confirmées par relecture serveur.");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Enregistrement impossible.");
+      setSaveError(true);
+      setMessage(error instanceof Error ? error.message : "Enregistrement non confirmé.");
     } finally {
+      saving.current = false;
       setBusy(false);
+      setShippingBusy(false);
     }
   }
 
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await saveAll();
+  }
+
   function field(key: keyof Settings, value: string) {
-    setSettings((current) => ({ ...current, [key]: value }));
+    setMessage("");
+    setSettings(current => ({ ...current, [key]: value }));
   }
 
   async function saveShipping(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!shippingLoaded) return;
-    setShippingBusy(true);
-    setShippingMessage("");
-    try {
-      const response = await fetch("/api/admin/shipping-settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(shipping),
-      });
-      const data = await response.json();
-      if (!response.ok)
-        throw new Error(data.error || "Enregistrement impossible.");
-      setShipping(data.settings);
-      setShippingMessage(
-        "Paramètres de livraison enregistrés. Les commandes restent soumises aux contrôles de disponibilité.",
-      );
-    } catch (error) {
-      setShippingMessage(
-        error instanceof Error ? error.message : "Enregistrement impossible.",
-      );
-    } finally {
-      setShippingBusy(false);
-    }
+    await saveAll();
   }
 
   async function saveSender() {
-    if (!shippingLoaded) return;
-    setShippingBusy(true);
-    setShippingMessage("");
-    try {
-      const response = await fetch("/api/admin/shipping-settings", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(shipping.sender),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Enregistrement impossible.");
-      const verification = await fetch("/api/admin/shipping-settings", { cache: "no-store" });
-      const persisted = await verification.json();
-      if (!verification.ok || Object.keys(shipping.sender).some(
-        (key) => persisted.settings?.sender?.[key] !== data.settings.sender[key],
-      )) throw new Error("La relecture du profil a échoué. Actualisez pour vérifier les données enregistrées.");
-      setShipping((current) => ({ ...current, sender: persisted.settings.sender }));
-      setRelayStatus(persisted.credentialsConfigured);
-      setRelayReadiness(persisted.readiness || {});
-      setShippingMessage("Profil expéditeur enregistré et relu en base avec succès.");
-    } catch (error) {
-      setShippingMessage(error instanceof Error ? error.message : "Enregistrement impossible.");
-    } finally {
-      setShippingBusy(false);
-    }
+    await saveAll();
   }
 
   function updateParcel(
@@ -716,23 +772,24 @@ export default function AdminSettingsPage() {
     <main className="admin-page">
       <h1>Paramètres de la marque</h1>
       <p className="admin-muted">Informations éditables et textes réutilisés par les communications. Les secrets restent côté serveur.</p>
-      {message && <p className={message.includes("impossible") ? "admin-error" : "admin-success"} role="status">{message}</p>}
-      <form className="admin-card" onSubmit={save}>
+      {message && <p className={saveError ? "admin-error" : "admin-success"} role="status">{message}</p>}
+      <form className="admin-card" onSubmit={save} noValidate>
+        <fieldset disabled={!brandLoaded || busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <div className="admin-form-grid">
-          <label>Nom de la marque<input value={settings.brand_name} onChange={(event) => field("brand_name", event.target.value)} maxLength={120} required /></label>
-          <label>Email de contact<input type="email" value={settings.contact_email} onChange={(event) => field("contact_email", event.target.value)} maxLength={254} required /></label>
-          <label>Téléphone professionnel à publier (renseigner après accord)<input type="tel" value={settings.professional_phone} onChange={(event) => field("professional_phone", event.target.value)} maxLength={30} /></label>
-          <label>Nom et prénom de l’entrepreneuse à publier<input value={settings.legal_seller_name} onChange={(event) => field("legal_seller_name", event.target.value)} maxLength={200} /></label>
-          <label>Médiateur souscrit : nom<input value={settings.mediator_name} onChange={(event) => field("mediator_name", event.target.value)} maxLength={200} /></label>
-          <label>Médiateur : adresse postale<textarea value={settings.mediator_address} onChange={(event) => field("mediator_address", event.target.value)} maxLength={500} /></label>
-          <label>Médiateur : site HTTPS<input type="url" value={settings.mediator_url} onChange={(event) => field("mediator_url", event.target.value)} /></label>
-          <label><input type="checkbox" checked={settings.legal_terms_confirmed === "true"} onChange={(event) => field("legal_terms_confirmed", event.target.checked ? "true" : "")} />Je confirme l’exactitude des informations légales publiées, la souscription au médiateur indiqué et la validation des CGV pour l’ouverture.</label>
-          <label>Instagram (URL HTTPS)<input type="url" value={settings.instagram_url} onChange={(event) => field("instagram_url", event.target.value)} /></label>
-          <label>TikTok (URL HTTPS)<input type="url" value={settings.tiktok_url} onChange={(event) => field("tiktok_url", event.target.value)} /></label>
-          <label>Texte de confirmation<textarea rows={4} value={settings.confirmation_copy} onChange={(event) => field("confirmation_copy", event.target.value)} maxLength={2000} required /></label>
-          <label>Texte de bienvenue<textarea rows={6} value={settings.welcome_copy} onChange={(event) => field("welcome_copy", event.target.value)} maxLength={4000} required /></label>
-          <label>Texte d’annonce de lancement<textarea rows={5} value={settings.launch_copy} onChange={(event) => field("launch_copy", event.target.value)} maxLength={4000} required /></label>
-          <label>Signature des campagnes (facultative)<textarea rows={3} value={settings.campaign_footer} onChange={(event) => field("campaign_footer", event.target.value)} maxLength={1000} /></label>
+          <label>Nom de la marque<input data-settings-group="brand" name="brand_name" value={settings.brand_name} onChange={(event) => field("brand_name", event.target.value)} maxLength={120} required /></label>
+          <label>Email de contact<input type="email" data-settings-group="brand" name="contact_email" value={settings.contact_email} onChange={(event) => field("contact_email", event.target.value)} maxLength={254} required /></label>
+          <label>Téléphone professionnel à publier (renseigner après accord)<input type="tel" data-settings-group="brand" name="professional_phone" value={settings.professional_phone} onChange={(event) => field("professional_phone", event.target.value)} maxLength={30} /></label>
+          <label>Nom et prénom de l’entrepreneuse à publier<input data-settings-group="brand" name="legal_seller_name" value={settings.legal_seller_name} onChange={(event) => field("legal_seller_name", event.target.value)} maxLength={200} /></label>
+          <label>Médiateur souscrit : nom<input data-settings-group="brand" name="mediator_name" value={settings.mediator_name} onChange={(event) => field("mediator_name", event.target.value)} maxLength={200} /></label>
+          <label>Médiateur : adresse postale<textarea data-settings-group="brand" name="mediator_address" value={settings.mediator_address} onChange={(event) => field("mediator_address", event.target.value)} maxLength={500} /></label>
+          <label>Médiateur : site HTTPS<input type="url" data-settings-group="brand" name="mediator_url" value={settings.mediator_url} onChange={(event) => field("mediator_url", event.target.value)} /></label>
+          <label><input type="checkbox" data-settings-group="brand" name="legal_terms_confirmed" checked={settings.legal_terms_confirmed === "true"} onChange={(event) => field("legal_terms_confirmed", event.target.checked ? "true" : "")} />Je confirme l’exactitude des informations légales publiées, la souscription au médiateur indiqué et la validation des CGV pour l’ouverture.</label>
+          <label>Instagram (URL HTTPS)<input type="url" data-settings-group="brand" name="instagram_url" value={settings.instagram_url} onChange={(event) => field("instagram_url", event.target.value)} /></label>
+          <label>TikTok (URL HTTPS)<input type="url" data-settings-group="brand" name="tiktok_url" value={settings.tiktok_url} onChange={(event) => field("tiktok_url", event.target.value)} /></label>
+          <label>Texte de confirmation<textarea rows={4} data-settings-group="brand" name="confirmation_copy" value={settings.confirmation_copy} onChange={(event) => field("confirmation_copy", event.target.value)} maxLength={2000} required /></label>
+          <label>Texte de bienvenue<textarea rows={6} data-settings-group="brand" name="welcome_copy" value={settings.welcome_copy} onChange={(event) => field("welcome_copy", event.target.value)} maxLength={4000} required /></label>
+          <label>Texte d’annonce de lancement<textarea rows={5} data-settings-group="brand" name="launch_copy" value={settings.launch_copy} onChange={(event) => field("launch_copy", event.target.value)} maxLength={4000} required /></label>
+          <label>Signature des campagnes (facultative)<textarea rows={3} data-settings-group="brand" name="campaign_footer" value={settings.campaign_footer} onChange={(event) => field("campaign_footer", event.target.value)} maxLength={1000} /></label>
         </div>
         <div className="admin-actions" style={{ marginTop: 18 }}>
           <button disabled={busy}>{busy ? "Enregistrement…" : "Enregistrer"}</button>
@@ -740,6 +797,7 @@ export default function AdminSettingsPage() {
           <span>Gemini : {secretStatus.gemini ? "configuré" : "non configuré"}</span>
           <span>Groq (secours) : {secretStatus.groq ? "configuré" : "non configuré"}</span>
         </div>
+        </fieldset>
       </form>
       <section className="admin-card" style={{ marginTop: 18 }}>
         <h2>Garde-fous de campagne</h2>
@@ -748,6 +806,7 @@ export default function AdminSettingsPage() {
       </section>
       <section className="admin-card" style={{ marginTop: 18 }}>
         <h2>Livraison Mondial Relay</h2>
+        {message && <p className={saveError ? "admin-error" : "admin-success"} role={saveError ? "alert" : "status"}>{message}</p>}
         <p className="admin-muted">
           Les clés et identifiants API restent uniquement dans l’environnement
           serveur et ne sont jamais affichés ici. Les coordonnées d’expédition
@@ -785,14 +844,14 @@ export default function AdminSettingsPage() {
           {" - "}
           Checkout Point Relais (API1 + tarifs) : {relayReadiness.checkoutShippingReady ? "prêt" : "désactivé"}
         </div>
-        <form onSubmit={saveShipping}>
+        <form onSubmit={saveShipping} noValidate>
           <fieldset disabled={!shippingLoaded || shippingBusy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
           <section style={{ marginTop: 18 }}>
             <h3>Mode de traitement des expéditions</h3>
             <label>
               Mode actif
               <select
-                value={shipping.fulfillmentMode}
+                data-settings-group="shipping" name="fulfillmentMode" value={shipping.fulfillmentMode}
                 onChange={(event) =>
                   setShipping((current) => ({
                     ...current,
@@ -820,7 +879,7 @@ export default function AdminSettingsPage() {
                 <label style={{ display: "block", marginTop: 10 }}>
                   <input
                     type="checkbox"
-                    checked={shipping.manualConnectConfirmed}
+                    data-settings-group="shipping" name="manualConnectConfirmed" checked={shipping.manualConnectConfirmed}
                     onChange={(event) =>
                       setShipping((current) => ({
                         ...current,
@@ -850,16 +909,16 @@ export default function AdminSettingsPage() {
               demande un téléphone et un email de contact pour les notifications.
             </p>
             <div className="admin-form-grid">
-              <label>Entreprise<input value={shipping.sender.company} maxLength={120} onChange={(event) => updateSender("company", event.target.value)} /></label>
-              <label>Prénom<input value={shipping.sender.firstName} maxLength={80} onChange={(event) => updateSender("firstName", event.target.value)} /></label>
-              <label>Nom<input value={shipping.sender.lastName} maxLength={80} onChange={(event) => updateSender("lastName", event.target.value)} /></label>
-              <label>Adresse / rue<input value={shipping.sender.street} maxLength={120} onChange={(event) => updateSender("street", event.target.value)} /></label>
-              <label>Numéro<input value={shipping.sender.houseNo} maxLength={20} onChange={(event) => updateSender("houseNo", event.target.value)} /></label>
-              <label>Code postal<input value={shipping.sender.postalCode} maxLength={12} onChange={(event) => updateSender("postalCode", event.target.value)} /></label>
-              <label>Ville<input value={shipping.sender.city} maxLength={80} onChange={(event) => updateSender("city", event.target.value)} /></label>
-              <label>Pays (code ISO à deux lettres, FR requis actuellement)<input value={shipping.sender.countryCode} maxLength={2} onChange={(event) => updateSender("countryCode", event.target.value.toUpperCase())} /></label>
-              <label>Téléphone de contact requis par API2<input type="tel" value={shipping.sender.phone} maxLength={30} onChange={(event) => updateSender("phone", event.target.value)} /></label>
-              <label>Email de contact<input type="email" value={shipping.sender.email} maxLength={254} onChange={(event) => updateSender("email", event.target.value)} /></label>
+              <label>Entreprise<input data-settings-group="shipping" name="sender.company" value={shipping.sender.company} maxLength={120} onChange={(event) => updateSender("company", event.target.value)} /></label>
+              <label>Prénom<input data-settings-group="shipping" name="sender.firstName" value={shipping.sender.firstName} maxLength={80} onChange={(event) => updateSender("firstName", event.target.value)} /></label>
+              <label>Nom<input data-settings-group="shipping" name="sender.lastName" value={shipping.sender.lastName} maxLength={80} onChange={(event) => updateSender("lastName", event.target.value)} /></label>
+              <label>Adresse / rue<input data-settings-group="shipping" name="sender.street" value={shipping.sender.street} maxLength={120} onChange={(event) => updateSender("street", event.target.value)} /></label>
+              <label>Numéro<input data-settings-group="shipping" name="sender.houseNo" value={shipping.sender.houseNo} maxLength={20} onChange={(event) => updateSender("houseNo", event.target.value)} /></label>
+              <label>Code postal<input data-settings-group="shipping" name="sender.postalCode" value={shipping.sender.postalCode} maxLength={12} onChange={(event) => updateSender("postalCode", event.target.value)} /></label>
+              <label>Ville<input data-settings-group="shipping" name="sender.city" value={shipping.sender.city} maxLength={80} onChange={(event) => updateSender("city", event.target.value)} /></label>
+              <label>Pays (code ISO à deux lettres, FR requis actuellement)<input data-settings-group="shipping" name="sender.countryCode" value={shipping.sender.countryCode} maxLength={2} onChange={(event) => updateSender("countryCode", event.target.value.toUpperCase())} /></label>
+              <label>Téléphone de contact requis par API2<input type="tel" data-settings-group="shipping" name="sender.phone" value={shipping.sender.phone} maxLength={30} onChange={(event) => updateSender("phone", event.target.value)} /></label>
+              <label>Email de contact<input type="email" data-settings-group="shipping" name="sender.email" value={shipping.sender.email} maxLength={254} onChange={(event) => updateSender("email", event.target.value)} /></label>
               <label>
                 Mode de dépôt API2
                 <input value="REL - dépôt en Point Relais ou Locker" readOnly />
@@ -868,7 +927,7 @@ export default function AdminSettingsPage() {
             <label style={{ display: "block", marginTop: 12 }}>
               <input
                 type="checkbox"
-                checked={shipping.collectionModeConfirmed}
+                data-settings-group="shipping" name="collectionModeConfirmed" checked={shipping.collectionModeConfirmed}
                 onChange={(event) =>
                   setShipping((current) => ({
                     ...current,
@@ -916,7 +975,7 @@ export default function AdminSettingsPage() {
             <label style={{ display: "block", marginTop: 12 }}>
               <input
                 type="checkbox"
-                checked={shipping.contractConfirmed}
+                data-settings-group="shipping" name="contractConfirmed" checked={shipping.contractConfirmed}
                 onChange={(event) =>
                   setShipping((current) => ({
                     ...current,
@@ -930,7 +989,7 @@ export default function AdminSettingsPage() {
             <label style={{ display: "block", marginTop: 8 }}>
               <input
                 type="checkbox"
-                checked={shipping.serviceConfirmed}
+                data-settings-group="shipping" name="serviceConfirmed" checked={shipping.serviceConfirmed}
                 onChange={(event) =>
                   setShipping((current) => ({
                     ...current,
@@ -954,7 +1013,7 @@ export default function AdminSettingsPage() {
             <label style={{ display: "block", marginBottom: 8 }}>
               <input
                 type="checkbox"
-                checked={shipping.homeDeliveryContractConfirmed}
+                data-settings-group="shipping" name="homeDeliveryContractConfirmed" checked={shipping.homeDeliveryContractConfirmed}
                 onChange={(event) =>
                   setShipping((current) => ({
                     ...current,
@@ -971,7 +1030,7 @@ export default function AdminSettingsPage() {
             <label style={{ display: "block", marginBottom: 14 }}>
               <input
                 type="checkbox"
-                checked={shipping.homeDeliveryEnabled}
+                data-settings-group="shipping" name="homeDeliveryEnabled" checked={shipping.homeDeliveryEnabled}
                 disabled={!shipping.homeDeliveryContractConfirmed}
                 onChange={(event) =>
                   setShipping((current) => ({
@@ -1238,7 +1297,7 @@ export default function AdminSettingsPage() {
             </label>
           </section>
           <div className="admin-actions" style={{ marginTop: 18 }}>
-            <button disabled={shippingBusy}>
+            <button type="button" onClick={() => void saveAll()} disabled={shippingBusy || !brandLoaded || !shippingLoaded}>
               {shippingBusy ? "Enregistrement…" : "Enregistrer les paramètres de livraison"}
             </button>
           </div>

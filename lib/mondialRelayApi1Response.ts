@@ -56,8 +56,20 @@ function openingPeriods(details: string, field: string) {
     raw.matchAll(/<[^>]+>([^<>]*)<\/[^>]+>/g),
     (match) => plainText(match[1]),
   ).filter(Boolean);
-  const plain = plainText(raw);
-  return nested.length ? nested : plain ? [plain] : [];
+  // Empty SOAP <string/> slots are not opening hours. Collect only real clock
+  // values and pair consecutive opening/closing times without inventing slots.
+  const plain = plainText(raw.replace(/<[^>]*>/g, " "));
+  const values = nested.length ? nested : plain ? [plain] : [];
+  const times = values.flatMap(value => Array.from(
+    value.matchAll(/\b(?:(?:[01]\d|2[0-3]):?[0-5]\d|24:?00)\b/g),
+    match => match[0].includes(":") ? match[0] : match[0].slice(0, 2) + ":" + match[0].slice(2),
+  ));
+  const periods: string[] = [];
+  for (let index = 0; index + 1 < times.length; index += 2) {
+    if (times[index] !== times[index + 1] && times[index] !== "24:00")
+      periods.push(`${times[index]}-${times[index + 1]}`);
+  }
+  return periods;
 }
 
 function relayPoints(xml: string, serviceCode: MondialRelayServiceCode) {

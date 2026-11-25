@@ -26,10 +26,23 @@ export default function LegalNotice() {
           <a href="mailto:maison.miroirs@gmail.com">maison.miroirs@gmail.com</a>
         </li>
       </ul>
+      <h2>Hébergeur</h2>
+      <p>OVH SAS, société par actions simplifiée au capital de 50 000 000 €.</p>
+      <ul>
+        <li>RCS Lille Métropole : 424 761 419 00045</li>
+        <li>Code APE : 2620Z</li>
+        <li>Numéro de TVA : FR 22 424 761 419</li>
+        <li>Siège social : 2 rue Kellermann, 59100 Roubaix, France</li>
+      </ul>
       <p>
-        Les informations complémentaires relatives à l’édition et à
-        l’hébergement du site sont en cours de validation. Cette page ne
-        constitue pas une version juridiquement finalisée.
+        Consultez les{" "}
+        <a href="https://www.ovhcloud.com/fr/terms-and-conditions/">
+          mentions légales officielles d’OVHcloud
+        </a>
+        .
+      </p>
+      <p>
+        Cette page ne constitue pas une version juridiquement finalisée.
       </p>
       <p>
         Consultez également les{" "}

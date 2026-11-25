@@ -104,11 +104,22 @@ export default function AdminSettingsPage() {
 
   useEffect(() => {
     let active = true;
+    function hasNativeEdits() {
+      return Array.from(document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("[data-settings-group]")).some(control => {
+        const baseline = control.dataset.settingsGroup === "brand" ? brandBaseline.current : shippingBaseline.current;
+        if (!baseline) return false;
+        let expected: unknown = baseline;
+        for (const key of control.name.split(".")) expected = (expected as Record<string, unknown>)?.[key];
+        if (control instanceof HTMLInputElement && control.type === "checkbox")
+          return control.checked !== (control.dataset.settingsGroup === "brand" ? expected === "true" : expected === true);
+        return control.value !== String(expected ?? "");
+      });
+    }
     async function synchronize() {
-      if (saving.current || dirty.current) return;
+      if (saving.current || dirty.current || hasNativeEdits()) return;
       try {
         const { brand, relay } = await refreshSettings();
-        if (!active || saving.current || dirty.current) return;
+        if (!active || saving.current || dirty.current || hasNativeEdits()) return;
         const oldBrand = brandBaseline.current;
         const oldShipping = shippingBaseline.current;
         setSettings(current => oldBrand

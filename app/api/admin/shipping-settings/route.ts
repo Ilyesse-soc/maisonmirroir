@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { persistSettingsPatch, SettingsConflict } from "@/lib/adminSettingsPatch";
 import { adminAudit } from "@/lib/adminAudit";
 import { adminDenied, adminSession } from "@/lib/adminAuth";
 import {
@@ -6,9 +8,6 @@ import {
   getMondialRelayProductionCredentialStatus,
   getMondialRelayProductionReadiness,
   mondialRelaySettingsSchema,
-  saveMondialRelaySettings,
-  saveMondialRelaySender,
-  senderSchema,
 } from "@/lib/mondialRelaySettings";
 import { mutationAllowed, readJson, InputError, inputResponse } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
@@ -47,31 +46,13 @@ export async function GET() {
   }
 }
 
-export async function PUT(request: NextRequest) {
+export async function PUT() {
   const denied = await adminDenied();
   if (denied) return denied;
-  const originDenied = mutationAllowed(request);
-  if (originDenied) return originDenied;
-  try {
-    const settings = await readJson(request, mondialRelaySettingsSchema, 30000);
-    const session = await adminSession();
-    if (!session)
-      return NextResponse.json(
-        { error: "Authentification requise." },
-        { status: 401 },
-      );
-    await adminAudit("MONDIAL_RELAY_SETTINGS_UPDATE_REQUESTED");
-    await saveMondialRelaySettings(settings, session.user.id);
-    const persisted = await getMondialRelaySettings();
-    return NextResponse.json({ settings: persisted }, { headers: { "Cache-Control": "no-store" } });
-  } catch (error) {
-    if (error instanceof InputError) return inputResponse(error);
-    securityEvent("MONDIAL_RELAY_SETTINGS_WRITE_FAILED");
-    return NextResponse.json(
-      { error: "Enregistrement des paramètres impossible." },
-      { status: 503 },
-    );
-  }
+  return NextResponse.json(
+    { error: "Cette page utilise une ancienne version. La sauvegarde a ete refusee pour proteger les donnees des autres appareils. Conservez vos champs avant de recharger la page." },
+    { status: 409, headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 export async function PATCH(request: NextRequest) {
@@ -80,13 +61,31 @@ export async function PATCH(request: NextRequest) {
   const originDenied = mutationAllowed(request);
   if (originDenied) return originDenied;
   try {
-    const sender = await readJson(request, senderSchema, 6000);
+    const body = await readJson(request,
+      z.object({ changes: z.record(z.string(), z.unknown()), expected: z.record(z.string(), z.unknown()) }).strict(), 30000);
     const session = await adminSession();
     if (!session) return NextResponse.json({ error: "Authentification requise." }, { status: 401 });
-    await adminAudit("MONDIAL_RELAY_SENDER_UPDATE_REQUESTED");
-    const settings = await saveMondialRelaySender(sender, session.user.id);
-    return NextResponse.json({ settings }, { headers: { "Cache-Control": "no-store" } });
+    if ("changes" in body) {
+      const settings = await persistSettingsPatch({
+        ...body,
+        read: client => getMondialRelaySettings(client),
+        validate: value => mondialRelaySettingsSchema.parse(value),
+        write: async (client, value) => {
+          await client.query(`INSERT INTO mm_shipping_settings(id,settings,updated_by) VALUES(1,$1,$2)
+            ON CONFLICT(id) DO UPDATE SET settings=mm_shipping_settings.settings || ($3::jsonb - 'sender') ||
+              CASE WHEN $3::jsonb ? 'sender' THEN jsonb_build_object('sender',
+                COALESCE(mm_shipping_settings.settings->'sender','{}'::jsonb) || ($3::jsonb->'sender'))
+              ELSE '{}'::jsonb END,
+            updated_by=EXCLUDED.updated_by,updated_at=now()`, [JSON.stringify(value), session.user.id, JSON.stringify(body.changes)]);
+        },
+      });
+      await adminAudit("MONDIAL_RELAY_SETTINGS_UPDATE_CONFIRMED");
+      return NextResponse.json({ settings, persisted: true }, { headers: { "Cache-Control": "no-store" } });
+    }
+
   } catch (error) {
+    if (error instanceof SettingsConflict) return NextResponse.json({ error: error.message }, { status: 409 });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: "Champs invalides : " + error.issues.map(issue => issue.path.join(".")).join(", ") }, { status: 422 });
     if (error instanceof InputError) return inputResponse(error);
     securityEvent("MONDIAL_RELAY_SENDER_WRITE_FAILED");
     return NextResponse.json({ error: "Enregistrement du profil expéditeur impossible." }, { status: 503 });

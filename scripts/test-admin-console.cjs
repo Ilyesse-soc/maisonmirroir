@@ -85,6 +85,8 @@ async function main() {
       if (id === "@/lib/email")
         return { getAdminEmail: () => "admin@example.test" };
       if (id === "@/lib/products") return load("lib/products.ts");
+      if (id === "@/lib/adminSettingsPatch") return load("lib/adminSettingsPatch.ts");
+      if (id === "@/lib/settingsSync") return load("lib/settingsSync.ts");
       if (id === "@/lib/brandSettings") {
         const normalizeBrandText = (value) =>
           value.replace(/\bMAISON MIROIRS?\b/gi, "MAISON MIROIR");
@@ -249,13 +251,13 @@ async function main() {
   assert.equal(settingsData.settings.brand_name, "MAISON MIROIR");
   assert.equal(settingsData.settings.professional_phone, "");
   assert.equal(Object.hasOwn(settingsData, "resendApiKey"), false);
-  const updatedSettings = await settings.PUT(req("https://example.test/api/admin/settings", "PUT", {
+  const updatedSettings = await settings.PATCH(req("https://example.test/api/admin/settings", "PATCH", { changes: {
     ...settingsData.settings,
     brand_name: "Maison Miroir",
     professional_phone: "+33 6 12 34 56 78",
     confirmation_copy: "Merci pour Maison Miroir.",
     instagram_url: "https://www.instagram.com/maison-miroir-test/",
-  }));
+  }, expected: settingsData.settings }));
   assert.equal(updatedSettings.status, 200);
   const updatedSettingsData = await updatedSettings.json();
   assert.equal(updatedSettingsData.settings.brand_name, "MAISON MIROIR");

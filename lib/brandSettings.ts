@@ -1,3 +1,4 @@
+import type { PoolClient } from "pg";
 import "server-only";
 import { database } from "./newsletterDb";
 
@@ -28,8 +29,8 @@ export const BRAND_SETTING_DEFAULTS = {
 export type BrandSettingKey = keyof typeof BRAND_SETTING_DEFAULTS;
 export type BrandSettings = Record<BrandSettingKey, string>;
 
-export async function getBrandSettings(): Promise<BrandSettings> {
-  const result = await database().query(
+export async function getBrandSettings(client: Pick<PoolClient, "query"> = database()): Promise<BrandSettings> {
+  const result = await client.query(
     "SELECT key,value FROM mm_brand_settings",
   );
   const settings: BrandSettings = { ...BRAND_SETTING_DEFAULTS };

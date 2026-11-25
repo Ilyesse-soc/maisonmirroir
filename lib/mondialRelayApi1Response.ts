@@ -71,7 +71,7 @@ function relayPoints(xml: string, serviceCode: MondialRelayServiceCode) {
         ...(Number.isFinite(Number(element(details, "Distance")))
           ? { distanceKm: Number(element(details, "Distance")) / 1000 }
           : {}),
-        source: "sandbox",
+        source: "production",
         serviceCode,
       };
     })

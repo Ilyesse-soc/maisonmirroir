@@ -268,7 +268,7 @@ function ProductDetails({ productId }: { productId: string }) {
         { cache: "no-store" },
       );
       const data = (await response.json()) as {
-        source?: "simulation" | "sandbox";
+        source?: "production";
         points?: RelayPoint[];
         message?: string;
         error?: string;
@@ -278,9 +278,7 @@ function ProductDetails({ productId }: { productId: string }) {
       setRelayPoints(Array.isArray(data.points) ? data.points : []);
       setRelaySearchMessage(
         data.message ||
-          (data.source === "sandbox"
-            ? "Résultats issus du compte de test Mondial Relay."
-            : "Résultats de simulation, non utilisables pour une commande."),
+          "Résultats de la recherche Mondial Relay.",
       );
     } catch (error) {
       setRelaySearchError(
@@ -377,12 +375,20 @@ function ProductDetails({ productId }: { productId: string }) {
         setError("Veuillez choisir un mode de livraison pour continuer.");
         return;
       }
+      if (!/^\s*\d+[A-Za-z]?(?:\s*(?:bis|ter|quater))?\s+\S+/i.test(address.street)) {
+        setError("Saisissez le numéro avant le nom de la rue.");
+        return;
+      }
+      if (shippingQuote.price === null) {
+        setError("Le tarif contractuel de livraison n’est pas encore configuré.");
+        return;
+      }
       if (
         selectedShipping.id === MONDIAL_RELAY_POINT_RELAIS_ID &&
-        (!relayPoint || relayPoint.source !== "sandbox")
+        (!relayPoint || relayPoint.source !== "production")
       ) {
         setError(
-          "Un Point Relais issu du compte de test est nécessaire. Les résultats simulés ne sont pas valides pour une commande.",
+          "Choisissez un Point Relais issu de la recherche de production.",
         );
         return;
       }
@@ -393,11 +399,6 @@ function ProductDetails({ productId }: { productId: string }) {
 
   const steps = ["customize", "address", "payment"];
   const stepIndex = steps.indexOf(step);
-
-  const paypalClientId = (
-    process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? ""
-  ).trim();
-  const paypalConfigured = paypalClientId.length > 0;
 
   return (
     <div
@@ -1107,6 +1108,9 @@ function ProductDetails({ productId }: { productId: string }) {
                       handleAddressChange("street", e.target.value)
                     }
                   />
+                  <p role="note" style={{ margin: "6px 0 0", fontSize: 12 }}>
+                    Indiquez le numéro avant le nom de la rue.
+                  </p>
                 </div>
                 <div
                   style={{
@@ -1272,9 +1276,9 @@ function ProductDetails({ productId }: { productId: string }) {
                   {selectedShippingId === MONDIAL_RELAY_POINT_RELAIS_ID && (
                     <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
                       <p role="note" style={{ margin: 0, fontSize: 12 }}>
-                        {shippingQuote.isSimulation
-                          ? "Tarif provisoire de test uniquement, non contractuel."
-                          : "Le tarif contractuel reste à confirmer."}
+                        {shippingQuote.price === null
+                          ? "Le tarif contractuel reste à confirmer."
+                          : "Le tarif est calculé à partir de la grille contractuelle."}
                       </p>
                       <p style={{ margin: 0, fontSize: 12 }}>
                         La recherche utilise le code postal et la ville de
@@ -1330,9 +1334,6 @@ function ProductDetails({ productId }: { productId: string }) {
                       {relayPoint && (
                         <p role="status">
                           Point sélectionné : {relayPoint.location}
-                          {relayPoint.source === "simulation"
-                            ? " - simulation"
-                            : ""}
                         </p>
                       )}
                     </div>
@@ -1623,7 +1624,11 @@ function ProductDetails({ productId }: { productId: string }) {
                       }}
                     >
                       {selectedShipping
-                        ? `${selectedShipping.shortLabel} - ${selectedShipping.price.toFixed(2)} €`
+                        ? `${selectedShipping.shortLabel} - ${
+                            shippingQuote.price === null
+                              ? "À confirmer"
+                              : `${shippingQuote.price.toFixed(2)} €`
+                          }`
                         : "Mode non selectionne"}
                     </span>
                   </div>
@@ -1820,56 +1825,40 @@ function ProductDetails({ productId }: { productId: string }) {
                     Choisissez votre mode de paiement
                   </p>
 
-                  {!paypalConfigured ? (
-                    <p
-                      style={{
-                        fontFamily: fonts.body,
-                        fontSize: 12,
-                        color: theme.textMid,
-                        lineHeight: 1.7,
-                        margin: 0,
-                        textAlign: "center",
-                      }}
-                    >
-                      Configuration requise : définis
-                      NEXT_PUBLIC_PAYPAL_CLIENT_ID dans .env.local.
-                    </p>
-                  ) : (
-                    <PayPalButton
-                      amount={total}
-                      order={{
-                        product: {
-                          id: product.id,
-                          name: product.name,
-                          category: product.category,
-                          categoryLabel: product.categoryLabel,
-                          unitPrice,
-                          quantity: qty ?? 1,
-                        },
-                        customValues: mergedCustomValues,
-                        attachments: artworkFile
-                          ? [
-                              {
-                                filename: artworkFile.filename,
-                                contentType: artworkFile.contentType,
-                                base64: artworkFile.base64,
-                              },
-                            ]
-                          : [],
-                        customer: address,
-                        shipping: {
-                          id: selectedShipping?.id || "",
-                          label: selectedShipping?.label || "",
-                          shortLabel: selectedShipping?.shortLabel || "",
-                          carrier: selectedShipping?.carrier || "",
-                          price: shippingPrice,
-                          estimatedDelay:
-                            selectedShipping?.estimatedDelay || "",
-                        },
-                        ...(relayPoint ? { relayPoint } : {}),
-                      }}
-                    />
-                  )}
+                  <PayPalButton
+                    amount={total}
+                    order={{
+                      product: {
+                        id: product.id,
+                        name: product.name,
+                        category: product.category,
+                        categoryLabel: product.categoryLabel,
+                        unitPrice,
+                        quantity: qty ?? 1,
+                      },
+                      customValues: mergedCustomValues,
+                      attachments: artworkFile
+                        ? [
+                            {
+                              filename: artworkFile.filename,
+                              contentType: artworkFile.contentType,
+                              base64: artworkFile.base64,
+                            },
+                          ]
+                        : [],
+                      customer: address,
+                      shipping: {
+                        id: selectedShipping?.id || "",
+                        label: selectedShipping?.label || "",
+                        shortLabel: selectedShipping?.shortLabel || "",
+                        carrier: selectedShipping?.carrier || "",
+                        price: shippingPrice,
+                        estimatedDelay:
+                          selectedShipping?.estimatedDelay || "",
+                      },
+                      ...(relayPoint ? { relayPoint } : {}),
+                    }}
+                  />
                 </div>
 
                 {error && (

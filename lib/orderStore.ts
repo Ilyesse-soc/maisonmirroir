@@ -1,7 +1,10 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
-import type { OrderRecord } from "./orderTypes";
+import type {
+  MondialRelayShipment,
+  OrderRecord,
+} from "./orderTypes";
 import { database, transaction } from "./newsletterDb";
 const file = () =>
   process.env.ORDERS_FILE_PATH ||
@@ -83,4 +86,164 @@ export async function updateOrder(id: string, patch: Partial<OrderRecord>) {
   orders[index] = { ...orders[index], ...patch };
   await writeOrders(orders);
   return orders[index];
+}
+
+export async function reserveMondialRelayShipment(
+  id: string,
+  attemptId: string,
+  reservedAt: string,
+) {
+  if (!durable()) throw Error("SHIPMENT_CREATION_REQUIRES_DATABASE");
+  return transaction(async (db) => {
+    const row = (
+      await db.query(
+        "SELECT record FROM mm_orders WHERE order_id=$1 FOR UPDATE",
+        [id],
+      )
+    ).rows[0];
+    if (!row) return { status: "missing" as const };
+    const order = row.record as OrderRecord;
+    if (order.shipping.mondialRelayShipment)
+      return { status: "already-reserved" as const };
+    const shipment: MondialRelayShipment = {
+      status: "creating",
+      attemptId,
+      reservedAt,
+    };
+    const updated: OrderRecord = {
+      ...order,
+      shipping: { ...order.shipping, mondialRelayShipment: shipment },
+    };
+    await db.query(
+      "UPDATE mm_orders SET record=$2,updated_at=now() WHERE order_id=$1",
+      [id, JSON.stringify(updated)],
+    );
+    return { status: "reserved" as const, order: updated };
+  });
+}
+
+export async function finishMondialRelayShipment(
+  id: string,
+  attemptId: string,
+  shipment: MondialRelayShipment,
+) {
+  if (!durable()) throw Error("SHIPMENT_CREATION_REQUIRES_DATABASE");
+  return transaction(async (db) => {
+    const row = (
+      await db.query(
+        "SELECT record FROM mm_orders WHERE order_id=$1 FOR UPDATE",
+        [id],
+      )
+    ).rows[0];
+    if (!row) return null;
+    const order = row.record as OrderRecord;
+    if (
+      order.shipping.mondialRelayShipment?.attemptId !== attemptId ||
+      order.shipping.mondialRelayShipment.status !== "creating"
+    )
+      return null;
+    const updated: OrderRecord = {
+      ...order,
+      shipping: { ...order.shipping, mondialRelayShipment: shipment },
+      ...(shipment.shipmentNumber
+        ? {
+            trackingNumber: shipment.shipmentNumber,
+            trackingUrl: order.shipping.trackingBaseUrl,
+          }
+        : {}),
+    };
+    await db.query(
+      "UPDATE mm_orders SET record=$2,updated_at=now() WHERE order_id=$1",
+      [id, JSON.stringify(updated)],
+    );
+    return updated;
+  });
+}
+
+export async function reserveMondialRelayTrackingCheck(
+  id: string,
+  attemptId: string,
+  checkedAt: string,
+  minimumIntervalMs: number,
+) {
+  if (!durable()) throw Error("SHIPMENT_TRACKING_REQUIRES_DATABASE");
+  return transaction(async (db) => {
+    const row = (
+      await db.query(
+        "SELECT record FROM mm_orders WHERE order_id=$1 FOR UPDATE",
+        [id],
+      )
+    ).rows[0];
+    if (!row) return { status: "missing" as const };
+    const order = row.record as OrderRecord;
+    const shipment = order.shipping.mondialRelayShipment;
+    if (!shipment?.shipmentNumber)
+      return { status: "shipment-missing" as const };
+    const lastChecked = shipment.trackingCheckedAt
+      ? Date.parse(shipment.trackingCheckedAt)
+      : 0;
+    const now = Date.parse(checkedAt);
+    if (
+      Number.isFinite(lastChecked) &&
+      Number.isFinite(now) &&
+      now - lastChecked < minimumIntervalMs
+    )
+      return { status: "cooldown" as const, order };
+    const updatedShipment: MondialRelayShipment = {
+      ...shipment,
+      status: "tracking",
+      trackingAttemptId: attemptId,
+      trackingCheckedAt: checkedAt,
+      trackingErrorCode: undefined,
+    };
+    const updated: OrderRecord = {
+      ...order,
+      shipping: {
+        ...order.shipping,
+        mondialRelayShipment: updatedShipment,
+      },
+    };
+    await db.query(
+      "UPDATE mm_orders SET record=$2,updated_at=now() WHERE order_id=$1",
+      [id, JSON.stringify(updated)],
+    );
+    return { status: "reserved" as const, order: updated };
+  });
+}
+
+export async function finishMondialRelayTrackingCheck(
+  id: string,
+  attemptId: string,
+  patch: Partial<MondialRelayShipment>,
+) {
+  if (!durable()) throw Error("SHIPMENT_TRACKING_REQUIRES_DATABASE");
+  return transaction(async (db) => {
+    const row = (
+      await db.query(
+        "SELECT record FROM mm_orders WHERE order_id=$1 FOR UPDATE",
+        [id],
+      )
+    ).rows[0];
+    if (!row) return null;
+    const order = row.record as OrderRecord;
+    const existing = order.shipping.mondialRelayShipment;
+    if (
+      existing?.trackingAttemptId !== attemptId ||
+      existing.status !== "tracking"
+    )
+      return null;
+    const updatedShipment = { ...existing, ...patch, status: "created" as const };
+    const updated: OrderRecord = {
+      ...order,
+      shipping: {
+        ...order.shipping,
+        mondialRelayShipment: updatedShipment,
+      },
+    };
+    await db.query(
+      "UPDATE mm_orders SET record=$2,updated_at=now() WHERE order_id=$1",
+      [id, JSON.stringify(updated)],
+    );
+    return updated;
+  });
 }

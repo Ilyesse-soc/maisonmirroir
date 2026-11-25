@@ -4,7 +4,8 @@ import { adminAudit } from "@/lib/adminAudit";
 import { adminDenied, adminSession } from "@/lib/adminAuth";
 import {
   getMondialRelaySettings,
-  getMondialRelayTestCredentialStatus,
+  getMondialRelayProductionCredentialStatus,
+  getMondialRelayProductionReadiness,
   saveMondialRelaySettings,
 } from "@/lib/mondialRelaySettings";
 import { mutationAllowed, readJson, InputError, inputResponse } from "@/lib/requestSecurity";
@@ -13,7 +14,7 @@ import { securityEvent } from "@/lib/observability";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const serviceCode = z.enum(["24R", "24L"]);
+const serviceCode = z.enum(["24R/MED", "24R/APM", "24R", "24L"]);
 const parcelProfileSchema = z.object({
   itemsPerParcel: z.number().int().min(1).max(30),
   weightGrams: z.number().int().min(1).max(30000).nullable(),
@@ -40,18 +41,17 @@ export async function GET() {
   const denied = await adminDenied();
   if (denied) return denied;
   try {
-    const credentialsConfigured = getMondialRelayTestCredentialStatus();
+    const settings = await getMondialRelaySettings();
+    const credentialsConfigured =
+      getMondialRelayProductionCredentialStatus();
+    const readiness = getMondialRelayProductionReadiness(settings);
     return NextResponse.json(
       {
-        settings: await getMondialRelaySettings(),
+        settings,
         credentialsConfigured,
-        mode:
-          credentialsConfigured.api1 &&
-          credentialsConfigured.api1SandboxEnabled
-            ? "sandbox"
-            : "simulation",
-        realShipmentCreationEnabled: false,
-        realShippingEnabled: false,
+        readiness,
+        realShipmentCreationEnabled: readiness.shipmentCreationEnabled,
+        realShippingEnabled: readiness.checkoutShippingReady,
       },
       { headers: { "Cache-Control": "no-store" } },
     );

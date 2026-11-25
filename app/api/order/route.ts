@@ -1,9 +1,12 @@
 import { markCartOrdered } from "@/lib/abandonedCarts";
 import {
-  canonicalItems,
   incomingOrderSchema,
   verifiedPayPalOrder,
 } from "@/lib/commerceSecurity";
+import {
+  verifyCheckoutQuoteProof,
+  CheckoutQuoteProofError,
+} from "@/lib/checkoutQuoteProof";
 import {
   readJson,
   mutationAllowed,
@@ -36,6 +39,7 @@ import {
 type IncomingBody = {
   paymentMethod?: PaymentMethod;
   paypalOrderId?: string;
+  checkoutProof?: string;
   paypalCapture?: unknown;
   order: OrderPayload;
 };
@@ -143,18 +147,31 @@ export async function POST(req: NextRequest) {
   try {
     const denied = mutationAllowed(req);
     if (denied) return denied;
-    if (process.env.SHOP_OPEN !== "true")
-      return NextResponse.json({ error: "SHOP_CLOSED" }, { status: 403 });
-    if (process.env.REAL_PAYMENTS_ENABLED !== "true")
-      return NextResponse.json({ error: "PAYMENTS_DISABLED" }, { status: 403 });
     const rawBody = (await readJson(
       req,
       incomingOrderSchema,
       5900000,
     )) as Partial<IncomingBody> & DirectOrderBody;
+    if (!rawBody.order || !rawBody.paypalOrderId || !rawBody.checkoutProof)
+      return NextResponse.json(
+        { error: "CHECKOUT_PROOF_REQUIRED" },
+        { status: 400 },
+      );
+    let checkout: ReturnType<typeof verifyCheckoutQuoteProof>;
+    try {
+      checkout = verifyCheckoutQuoteProof(
+        rawBody.checkoutProof,
+        rawBody.paypalOrderId,
+        rawBody.order,
+      );
+    } catch (error) {
+      if (error instanceof CheckoutQuoteProofError)
+        return NextResponse.json({ error: error.code }, { status: 400 });
+      throw error;
+    }
 
     const paymentMethod = rawBody.paymentMethod;
-    if (paymentMethod !== "PAYPAL" && paymentMethod !== "CARD") {
+    if (paymentMethod !== "PAYPAL") {
       return NextResponse.json(
         { error: "Missing or invalid paymentMethod" },
         { status: 400 },
@@ -315,9 +332,9 @@ export async function POST(req: NextRequest) {
     if (!shippingMethod) validationErrors.push("shipping method is invalid");
     if (
       shippingMethodId === MONDIAL_RELAY_POINT_RELAIS_ID &&
-      (!relayPoint || relayPoint.source === "simulation")
+      (!relayPoint || relayPoint.source !== "production")
     )
-      validationErrors.push("a verified Mondial Relay test point is required");
+      validationErrors.push("a production Mondial Relay point is required");
 
     if (validationErrors.length > 0) {
       securityEvent("ORDER_INPUT_REJECTED", "warn");
@@ -333,13 +350,10 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    if (shippingMethod?.carrier === "Mondial Relay")
-      return NextResponse.json(
-        { error: "MONDIAL_RELAY_REAL_SHIPMENTS_DISABLED" },
-        { status: 403 },
-      );
-
-    normalizedItems = canonicalItems(normalizedItems);
+    if (!product || !customer)
+      return NextResponse.json({ error: "Invalid order" }, { status: 400 });
+    normalizedItems = checkout.items;
+    relayPoint = checkout.relayPoint;
     const fromEmail = getEmailFrom();
     const adminEmail = getAdminEmail();
     const hasResendApiKey = Boolean((process.env.RESEND_API_KEY || "").trim());
@@ -358,12 +372,9 @@ export async function POST(req: NextRequest) {
       isAdminEmailValid,
     });
 
-    const subtotal = normalizedItems.reduce(
-      (sum, item) => sum + item.unitPrice * item.quantity,
-      0,
-    );
-    const shippingPrice = shippingMethod?.price ?? 0;
-    const total = subtotal + shippingPrice;
+    const subtotal = checkout.subtotalCents / 100;
+    const shippingPrice = checkout.shippingCents / 100;
+    const total = checkout.totalCents / 100;
     await verifiedPayPalOrder(String(rawBody.paypalOrderId || ""), total);
 
     const safeCustomValues =

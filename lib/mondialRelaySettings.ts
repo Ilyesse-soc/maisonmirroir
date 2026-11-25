@@ -15,13 +15,13 @@ const profileSchema = z.object({
 }).strict();
 const ratesSchema = z.array(
   z.object({
-    serviceCode: z.enum(["24R", "24L"]),
+    serviceCode: z.enum(["24R/MED", "24R/APM", "24R", "24L"]),
     maxWeightGrams: z.number().int().min(1).max(30000),
     priceCents: z.number().int().min(0).max(100000),
   }).strict(),
 ).max(60);
 const settingsSchema = z.object({
-  serviceCode: z.enum(["24R", "24L"]),
+  serviceCode: z.enum(["24R/MED", "24R/APM", "24R", "24L"]),
   testParcel: profileSchema,
   contractParcel: profileSchema,
   testRates: ratesSchema,
@@ -50,18 +50,95 @@ export async function saveMondialRelaySettings(
   );
 }
 
-export function getMondialRelayTestCredentialStatus() {
+export function getMondialRelayProductionCredentialStatus() {
   return {
-    api1:
-      Boolean(process.env.MONDIAL_RELAY_API1_TEST_SHOP) &&
-      Boolean(process.env.MONDIAL_RELAY_API1_TEST_PRIVATE_KEY),
-    api2:
-      Boolean(process.env.MONDIAL_RELAY_API2_TEST_LOGIN) &&
-      Boolean(process.env.MONDIAL_RELAY_API2_TEST_PASSWORD) &&
-      Boolean(process.env.MONDIAL_RELAY_API2_TEST_CUSTOMER_ID),
-    api1SandboxEnabled:
-      process.env.MONDIAL_RELAY_API1_TEST_ENABLED === "true",
-    api2SandboxEnabled:
-      process.env.MONDIAL_RELAY_API2_TEST_ENABLED === "true",
+    api1Configured:
+      Boolean(process.env.MONDIAL_RELAY_API1_PROD_SHOP) &&
+      Boolean(process.env.MONDIAL_RELAY_API1_PROD_PRIVATE_KEY),
+    api2Configured:
+      Boolean(process.env.MONDIAL_RELAY_API2_PROD_LOGIN) &&
+      Boolean(process.env.MONDIAL_RELAY_API2_PROD_PASSWORD) &&
+      Boolean(process.env.MONDIAL_RELAY_API2_PROD_CUSTOMER_ID),
+    api1Enabled: process.env.MONDIAL_RELAY_API1_PROD_ENABLED === "true",
+    api2Enabled: process.env.MONDIAL_RELAY_API2_PROD_ENABLED === "true",
+    api2EndpointConfigured:
+      process.env.MONDIAL_RELAY_API2_PROD_URL ===
+      "https://connect-api.mondialrelay.com/api/shipment",
+    providerConfirmed:
+      process.env.MONDIAL_RELAY_PRODUCTION_CONFIRMED === "true",
+    senderConfigured: [
+      "MONDIAL_RELAY_SENDER_FIRSTNAME",
+      "MONDIAL_RELAY_SENDER_LASTNAME",
+      "MONDIAL_RELAY_SENDER_STREET",
+      "MONDIAL_RELAY_SENDER_HOUSE_NO",
+      "MONDIAL_RELAY_SENDER_POSTCODE",
+      "MONDIAL_RELAY_SENDER_CITY",
+      "MONDIAL_RELAY_SENDER_COUNTRY",
+      "MONDIAL_RELAY_SENDER_PHONE",
+      "MONDIAL_RELAY_SENDER_EMAIL",
+    ].every((key) => Boolean(process.env[key]?.trim())),
+    collectionModeConfigured:
+      (process.env.MONDIAL_RELAY_COLLECTION_MODE || "").trim() === "CCC",
+  };
+}
+
+export function getMondialRelayProductionReadiness(
+  settings: MondialRelaySettings,
+) {
+  const credentials = getMondialRelayProductionCredentialStatus();
+  const modernService =
+    settings.serviceCode === "24R/MED" ||
+    settings.serviceCode === "24R/APM";
+  const parcel = settings.contractParcel;
+  const parcelConfigured = Boolean(
+    parcel.weightGrams &&
+      parcel.lengthCm &&
+      parcel.widthCm &&
+      parcel.depthCm &&
+      parcel.itemsPerParcel,
+  );
+  const rateConfigured = settings.contractRates.some(
+    (rate) =>
+      rate.serviceCode === settings.serviceCode && rate.priceCents > 0,
+  );
+  const api1Ready =
+    credentials.providerConfirmed &&
+    credentials.api1Configured &&
+    credentials.api1Enabled;
+  const api2Ready =
+    credentials.providerConfirmed &&
+    credentials.api2Configured &&
+    credentials.api2EndpointConfigured &&
+    credentials.api2Enabled;
+  return {
+    ...credentials,
+    modernService,
+    parcelConfigured,
+    rateConfigured,
+    api1Ready,
+    api2Ready,
+    searchEnabled:
+      process.env.REAL_SHIPPING_ENABLED === "true" &&
+      api1Ready &&
+      modernService &&
+      parcelConfigured &&
+      rateConfigured,
+    shipmentCreationEnabled:
+      process.env.REAL_SHIPMENT_CREATION_ENABLED === "true" &&
+      api2Ready &&
+      modernService &&
+      parcelConfigured &&
+      rateConfigured &&
+      credentials.senderConfigured &&
+      credentials.collectionModeConfigured,
+    checkoutShippingReady:
+      process.env.REAL_SHIPPING_ENABLED === "true" &&
+      api1Ready &&
+      api2Ready &&
+      modernService &&
+      parcelConfigured &&
+      rateConfigured &&
+      credentials.senderConfigured &&
+      credentials.collectionModeConfigured,
   };
 }

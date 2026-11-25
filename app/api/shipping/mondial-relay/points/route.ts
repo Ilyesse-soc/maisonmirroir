@@ -1,12 +1,16 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { searchTestRelayPoints } from "@/lib/mondialRelayApi1";
+import { searchMondialRelayPoints } from "@/lib/mondialRelayApi1";
 import { MondialRelayApi1ResponseError } from "@/lib/mondialRelayApi1Response";
 import { database } from "@/lib/newsletterDb";
-import { getMondialRelaySettings, getMondialRelayTestCredentialStatus } from "@/lib/mondialRelaySettings";
-import { createSimulatedRelayPoint } from "@/lib/mondialRelayTypes";
+import {
+  getMondialRelayProductionCredentialStatus,
+  getMondialRelayProductionReadiness,
+  getMondialRelaySettings,
+} from "@/lib/mondialRelaySettings";
 import { clientIp } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
+import { signMondialRelayPoint } from "@/lib/mondialRelayPointProof";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,42 +54,30 @@ export async function GET(request: NextRequest) {
       );
 
     const settings = await getMondialRelaySettings();
-    const credentials = getMondialRelayTestCredentialStatus();
-    if (credentials.api1SandboxEnabled && !credentials.api1)
+    const readiness = getMondialRelayProductionReadiness(settings);
+    const credentials = getMondialRelayProductionCredentialStatus();
+    if (!readiness.searchEnabled || !credentials.api1Configured)
       return NextResponse.json(
-        { error: "Les identifiants API1 de test ne sont pas configurés." },
+        { error: "La recherche Mondial Relay n’est pas encore configurée pour la production." },
         { status: 503 },
       );
-    if (credentials.api1SandboxEnabled) {
-      if (!settings.testParcel.weightGrams)
-        return NextResponse.json(
-          { error: "Le poids du colis de test doit être configuré." },
-          { status: 409 },
-        );
-      const points = await searchTestRelayPoints({
-        shop: process.env.MONDIAL_RELAY_API1_TEST_SHOP || "",
-        privateKey: process.env.MONDIAL_RELAY_API1_TEST_PRIVATE_KEY || "",
-        postalCode,
-        city,
-        weightGrams: settings.testParcel.weightGrams,
-        serviceCode: settings.serviceCode,
-      });
+    if (settings.serviceCode !== "24R/MED" && settings.serviceCode !== "24R/APM")
       return NextResponse.json(
-        { source: "sandbox", points },
-        { headers: { "Cache-Control": "no-store" } },
+        { error: "Choisissez un code de service Mondial Relay actuel dans l’administration." },
+        { status: 409 },
       );
-    }
-
-    const point = createSimulatedRelayPoint(
+    const points = await searchMondialRelayPoints({
+      shop: process.env.MONDIAL_RELAY_API1_PROD_SHOP || "",
+      privateKey: process.env.MONDIAL_RELAY_API1_PROD_PRIVATE_KEY || "",
       postalCode,
       city,
-      settings.serviceCode,
-    );
+      weightGrams: settings.contractParcel.weightGrams || 0,
+      serviceCode: settings.serviceCode,
+    });
     return NextResponse.json(
       {
-        source: "simulation",
-        message: "Résultat fictif de simulation, non sélectionnable pour une commande réelle.",
-        points: [point],
+        source: "production",
+        points: points.map((point) => signMondialRelayPoint(point)),
       },
       { headers: { "Cache-Control": "no-store" } },
     );
@@ -97,7 +89,7 @@ export async function GET(request: NextRequest) {
     )
       return NextResponse.json(
         {
-          error: `Mondial Relay a rejeté la recherche (code ${error.code.slice(5)}). Vérifiez la clé API1 de test et les paramètres de recherche.`,
+          error: `Mondial Relay a rejeté la recherche (code ${error.code.slice(5)}). Vérifiez les accès API1 et le code de service de production.`,
         },
         { status: 502, headers: { "Cache-Control": "no-store" } },
       );

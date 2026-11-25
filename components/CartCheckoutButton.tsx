@@ -1,13 +1,14 @@
 "use client";
 import { useRouter } from "next/navigation";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import type { CartAttachment, CartItem } from "@/lib/cart";
 import type { CustomerInfo } from "@/lib/orderTypes";
 import type { ShippingMethod } from "@/lib/shipping";
 import type { RelayPoint } from "@/lib/mondialRelayTypes";
 import { getProductById } from "@/lib/products";
+import { useCart } from "@/components/CartProvider";
 
 export default function CartCheckoutButton({
   items,
@@ -29,7 +30,8 @@ export default function CartCheckoutButton({
   onSuccess?: (orderId: string) => void;
 }) {
   const router = useRouter();
-  const clientId = (process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "").trim();
+  const { paypalClientId: clientId } = useCart();
+  const checkoutProofRef = useRef("");
   const [status, setStatus] = useState<"idle" | "processing" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -44,6 +46,32 @@ export default function CartCheckoutButton({
     const product = getProductById(item.productId);
     return !product || product.availableForSale !== true;
   });
+  const checkoutOrder = {
+    items: items.map((item) => ({
+      id: item.productId,
+      name: item.variantLabel
+        ? `${item.name} - ${item.variantLabel}`
+        : item.name,
+      category: item.category,
+      categoryLabel: item.categoryLabel,
+      unitPrice: item.unitPrice,
+      quantity: item.quantity,
+      variantLabel: item.variantLabel,
+    })),
+    product: {
+      id: items[0]?.productId || "",
+      name: items[0]?.name || "",
+      category: items[0]?.category || "",
+      categoryLabel: items[0]?.categoryLabel,
+      unitPrice: items[0]?.unitPrice || 0,
+      quantity: items[0]?.quantity || 0,
+      variantLabel: items[0]?.variantLabel,
+    },
+    shippingMethodId: shippingMethod.id,
+    relayPoint: relayPoint || undefined,
+    attachments,
+    customer,
+  };
 
   if (unavailableItems.length > 0) {
     return (
@@ -82,8 +110,7 @@ export default function CartCheckoutButton({
           lineHeight: 1.7,
         }}
       >
-        Configuration requise : définis NEXT_PUBLIC_PAYPAL_CLIENT_ID dans
-        .env.local.
+        La configuration PayPal de production n’est pas encore prête.
       </div>
     );
   }
@@ -101,44 +128,36 @@ export default function CartCheckoutButton({
         <PayPalButtons
           style={{ layout: "vertical" }}
           disabled={status === "processing" || items.length === 0}
-          createOrder={(_data, actions) => {
-            const totalValue = total.toFixed(2);
-            return actions.order.create({
-              intent: "CAPTURE",
-              purchase_units: [
-                {
-                  amount: {
-                    currency_code: "EUR",
-                    value: totalValue,
-                    breakdown: {
-                      item_total: {
-                        currency_code: "EUR",
-                        value: subtotal.toFixed(2),
-                      },
-                      shipping: {
-                        currency_code: "EUR",
-                        value: resolvedShippingPrice.toFixed(2),
-                      },
-                    },
-                  },
-                  description: "Commande panier MAISON MIROIR",
-                  items: items.map((item) => ({
-                    name: item.variantLabel
-                      ? `${item.name} - ${item.variantLabel}`
-                      : item.name,
-                    unit_amount: {
-                      currency_code: "EUR",
-                      value: item.unitPrice.toFixed(2),
-                    },
-                    quantity: String(item.quantity),
-                    category: "PHYSICAL_GOODS",
-                  })),
-                },
-              ],
+          createOrder={async () => {
+            checkoutProofRef.current = "";
+            const response = await fetch("/api/paypal/create-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ order: checkoutOrder }),
             });
+            const data = (await response.json()) as {
+              id?: string;
+              checkoutProof?: string;
+              error?: string;
+            };
+            if (
+              !response.ok ||
+              typeof data.id !== "string" ||
+              typeof data.checkoutProof !== "string"
+            )
+              throw new Error(data.error || "PAYMENT_ORDER_CREATION_FAILED");
+            checkoutProofRef.current = data.checkoutProof;
+            return data.id;
           }}
           onApprove={async (data, actions) => {
             if (status === "processing") return;
+            if (!checkoutProofRef.current) {
+              setStatus("error");
+              setErrorMessage(
+                "La vérification du montant a expiré. Recommencez le paiement.",
+              );
+              return;
+            }
             setStatus("processing");
             setErrorMessage("");
 
@@ -168,35 +187,9 @@ export default function CartCheckoutButton({
               const payload = {
                 paymentMethod: "PAYPAL",
                 paypalOrderId: data.orderID,
+                checkoutProof: checkoutProofRef.current,
                 paypalCapture: capture,
-                order: {
-                  items: items.map((item) => ({
-                    id: item.productId,
-                    name: item.variantLabel
-                      ? `${item.name} - ${item.variantLabel}`
-                      : item.name,
-                    category: item.category,
-                    categoryLabel: item.categoryLabel,
-                    unitPrice: item.unitPrice,
-                    quantity: item.quantity,
-                    image: item.image,
-                    variantLabel: item.variantLabel,
-                  })),
-                  product: {
-                    id: items[0].productId,
-                    name: items[0].name,
-                    category: items[0].category,
-                    categoryLabel: items[0].categoryLabel,
-                    unitPrice: items[0].unitPrice,
-                    quantity: items[0].quantity,
-                    image: items[0].image,
-                    variantLabel: items[0].variantLabel,
-                  },
-                  shippingMethodId: shippingMethod.id,
-                  relayPoint: relayPoint || undefined,
-                  attachments,
-                  customer,
-                },
+                order: checkoutOrder,
               };
 
               const res = await fetch("/api/order", {

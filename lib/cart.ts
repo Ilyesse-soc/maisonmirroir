@@ -79,9 +79,8 @@ export function getCartSubtotal(items: CartItem[]) {
 }
 
 export function getCartShippingPrice(shippingMethodId: string) {
-  const method = getShippingMethodById(shippingMethodId);
-  if (!method || method.carrier === "Mondial Relay") return null;
-  return method.price;
+  if (!getShippingMethodById(shippingMethodId)) return null;
+  return null;
 }
 
 export function getCartTotal(items: CartItem[], shippingMethodId: string) {

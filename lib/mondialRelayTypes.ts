@@ -1,5 +1,9 @@
-export type MondialRelayServiceCode = "24R" | "24L";
-export type RelayPointSource = "simulation" | "sandbox";
+export type MondialRelayServiceCode =
+  | "24R/MED"
+  | "24R/APM"
+  | "24R"
+  | "24L";
+export type RelayPointSource = "production";
 
 export type RelayPoint = {
   id: string;
@@ -11,6 +15,7 @@ export type RelayPoint = {
   distanceKm?: number;
   source: RelayPointSource;
   serviceCode: MondialRelayServiceCode;
+  proof?: string;
 };
 
 export type ParcelProfile = {
@@ -39,7 +44,7 @@ export type ShippingQuote = {
   priceCents: number;
   parcelCount: number;
   serviceCode: MondialRelayServiceCode;
-  source: "simulation" | "contract";
+  source: "contract";
 };
 
 export const DEFAULT_MONDIAL_RELAY_SETTINGS: MondialRelaySettings = {
@@ -58,59 +63,48 @@ export const DEFAULT_MONDIAL_RELAY_SETTINGS: MondialRelaySettings = {
     widthCm: null,
     depthCm: null,
   },
-  testRates: [
-    { serviceCode: "24R", maxWeightGrams: 500, priceCents: 410 },
-  ],
+  testRates: [],
   contractRates: [],
 };
 
 export function getMondialRelayQuote(
-  settings: MondialRelaySettings,
+  settings: Pick<
+    MondialRelaySettings,
+    "serviceCode" | "contractParcel" | "contractRates"
+  >,
   itemCount: number,
-  source: ShippingQuote["source"],
 ): ShippingQuote | null {
   if (!Number.isInteger(itemCount) || itemCount < 1) return null;
 
-  const profile =
-    source === "contract" ? settings.contractParcel : settings.testParcel;
-  const rates =
-    source === "contract" ? settings.contractRates : settings.testRates;
+  const profile = settings.contractParcel;
+  const rates = settings.contractRates;
   const weightGrams = profile.weightGrams;
-  if (!weightGrams || profile.itemsPerParcel < 1) return null;
+  if (
+    !weightGrams ||
+    !profile.lengthCm ||
+    !profile.widthCm ||
+    !profile.depthCm ||
+    profile.itemsPerParcel < 1
+  )
+    return null;
 
   const rate = rates
     .filter(
       (candidate) =>
         candidate.serviceCode === settings.serviceCode &&
+        candidate.priceCents > 0 &&
         candidate.maxWeightGrams >= weightGrams,
     )
     .sort((left, right) => left.maxWeightGrams - right.maxWeightGrams)[0];
   if (!rate) return null;
 
   const parcelCount = Math.ceil(itemCount / profile.itemsPerParcel);
+  if (parcelCount > 1 && settings.serviceCode !== "24L") return null;
   return {
     priceCents: rate.priceCents * parcelCount,
     parcelCount,
     serviceCode: settings.serviceCode,
-    source,
-  };
-}
-
-export function createSimulatedRelayPoint(
-  postalCode: string,
-  city: string,
-  serviceCode: MondialRelayServiceCode,
-): RelayPoint {
-  return {
-    id: `SIM-${postalCode}`,
-    location: `SIM-${postalCode}`,
-    label: "Point Relais simulé",
-    address: ["Adresse fictive - résultat de simulation"],
-    postalCode,
-    city,
-    distanceKm: 0,
-    source: "simulation",
-    serviceCode,
+    source: "contract",
   };
 }
 
@@ -125,7 +119,11 @@ export function isRelayPoint(value: unknown): value is RelayPoint {
     point.address.every((line) => typeof line === "string") &&
     typeof point.postalCode === "string" &&
     typeof point.city === "string" &&
-    (point.source === "simulation" || point.source === "sandbox") &&
-    (point.serviceCode === "24R" || point.serviceCode === "24L")
+    point.source === "production" &&
+    (point.serviceCode === "24R/MED" ||
+      point.serviceCode === "24R/APM" ||
+      point.serviceCode === "24R" ||
+      point.serviceCode === "24L") &&
+    (point.proof === undefined || typeof point.proof === "string")
   );
 }

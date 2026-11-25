@@ -1,7 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PayPalButtons, PayPalScriptProvider } from "@paypal/react-paypal-js";
 import { getProductById } from "@/lib/products";
 import type { RelayPoint } from "@/lib/mondialRelayTypes";
@@ -55,7 +55,15 @@ export default function PayPalButton({
 }) {
   const router = useRouter();
   const product = getProductById(order.product.id);
-  const clientId = (process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID ?? "").trim();
+  const checkoutOrder = {
+    product: order.product,
+    items: [order.product],
+    customer: order.customer,
+    shippingMethodId: order.shipping.id,
+    relayPoint: order.relayPoint,
+    attachments: order.attachments,
+    customValues: order.customValues || {},
+  };
 
   const safeAmount = useMemo(() => {
     if (!Number.isFinite(amount) || amount <= 0)
@@ -68,6 +76,8 @@ export default function PayPalButton({
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [paymentEnabled, setPaymentEnabled] = useState(false);
   const [paymentConfigLoaded, setPaymentConfigLoaded] = useState(false);
+  const [clientId, setClientId] = useState("");
+  const checkoutProofRef = useRef("");
 
   useEffect(() => {
     let active = true;
@@ -79,6 +89,8 @@ export default function PayPalButton({
           setPaymentEnabled(
             config.shopOpen === true && config.paymentsEnabled === true,
           );
+        if (active && typeof config.paypalClientId === "string")
+          setClientId(config.paypalClientId);
       })
       .catch(() => {
         if (active) setPaymentEnabled(false);
@@ -118,8 +130,7 @@ export default function PayPalButton({
           lineHeight: 1.7,
         }}
       >
-        Configuration requise : définis NEXT_PUBLIC_PAYPAL_CLIENT_ID dans
-        .env.local.
+        La configuration PayPal de production n’est pas encore prête.
       </div>
     );
   }
@@ -137,42 +148,36 @@ export default function PayPalButton({
         <PayPalButtons
           style={{ layout: "vertical" }}
           disabled={status === "processing"}
-          createOrder={(_data, actions) => {
-            const value = safeAmount.toFixed(2);
-            const unitAmount = order.product.unitPrice.toFixed(2);
-            const qty = String(order.product.quantity);
-            const shippingAmount = order.shipping.price.toFixed(2);
-            const itemTotal = (
-              order.product.unitPrice * order.product.quantity
-            ).toFixed(2);
-            return actions.order.create({
-              intent: "CAPTURE",
-              purchase_units: [
-                {
-                  amount: {
-                    currency_code: "EUR",
-                    value,
-                    breakdown: {
-                      item_total: { currency_code: "EUR", value: itemTotal },
-                      shipping: { currency_code: "EUR", value: shippingAmount },
-                    },
-                  },
-                  description: `${order.product.name} - ${order.shipping.shortLabel}`,
-                  custom_id: order.product.id,
-                  items: [
-                    {
-                      name: order.product.name,
-                      unit_amount: { currency_code: "EUR", value: unitAmount },
-                      quantity: qty,
-                      category: "PHYSICAL_GOODS",
-                    },
-                  ],
-                },
-              ],
+          createOrder={async () => {
+            checkoutProofRef.current = "";
+            const response = await fetch("/api/paypal/create-order", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ order: checkoutOrder }),
             });
+            const data = (await response.json()) as {
+              id?: string;
+              checkoutProof?: string;
+              error?: string;
+            };
+            if (
+              !response.ok ||
+              typeof data.id !== "string" ||
+              typeof data.checkoutProof !== "string"
+            )
+              throw new Error(data.error || "PAYMENT_ORDER_CREATION_FAILED");
+            checkoutProofRef.current = data.checkoutProof;
+            return data.id;
           }}
           onApprove={async (data, actions) => {
             if (status === "processing") return;
+            if (!checkoutProofRef.current) {
+              setStatus("error");
+              setErrorMessage(
+                "La vérification du montant a expiré. Recommencez le paiement.",
+              );
+              return;
+            }
             setStatus("processing");
             setErrorMessage("");
 
@@ -214,15 +219,9 @@ export default function PayPalButton({
                 const payload = {
                   paymentMethod: "PAYPAL",
                   paypalOrderId: data.orderID,
+                  checkoutProof: checkoutProofRef.current,
                   paypalCapture: capture,
-                  order: {
-                    ...order,
-                    product: {
-                      ...order.product,
-                      unitPrice,
-                      quantity,
-                    },
-                  },
+                  order: checkoutOrder,
                 };
 
                 const res = await fetch("/api/order", {

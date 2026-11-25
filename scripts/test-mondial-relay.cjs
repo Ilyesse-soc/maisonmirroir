@@ -58,6 +58,23 @@ const relaySettings = loadTypeScript("lib/mondialRelaySettings.ts", {
     database: () => ({ query: async () => ({ rows: [] }) }),
   },
 });
+const parsedManualHome = relaySettings.parseMondialRelaySettings(manualHomeSettings);
+assert.equal(parsedManualHome.homeDeliveryEnabled, true);
+assert.equal(parsedManualHome.homeDeliveryContractConfirmed, false);
+const savedRealShipping = process.env.REAL_SHIPPING_ENABLED;
+const savedShipmentCreation = process.env.REAL_SHIPMENT_CREATION_ENABLED;
+process.env.REAL_SHIPPING_ENABLED = "true";
+process.env.REAL_SHIPMENT_CREATION_ENABLED = "true";
+const manualHomeReady = relaySettings.getMondialRelayProductionReadiness({
+  ...parsedManualHome,
+  sender: { company: "Fixture", firstName: "Test", lastName: "Test", street: "rue Test", houseNo: "1", postalCode: "75001", city: "Paris", countryCode: "FR", phone: "0600000000", email: "test@example.test" },
+});
+assert.equal(manualHomeReady.homeDeliveryReady, true);
+assert.equal(manualHomeReady.homeShipmentCreationReady, false);
+if (savedRealShipping === undefined) delete process.env.REAL_SHIPPING_ENABLED;
+else process.env.REAL_SHIPPING_ENABLED = savedRealShipping;
+if (savedShipmentCreation === undefined) delete process.env.REAL_SHIPMENT_CREATION_ENABLED;
+else process.env.REAL_SHIPMENT_CREATION_ENABLED = savedShipmentCreation;
 const commerceSecurity = loadTypeScript("lib/commerceSecurity.ts", {
   "./products": {
     products: [

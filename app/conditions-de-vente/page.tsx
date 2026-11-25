@@ -124,17 +124,16 @@ export default async function SalesTermsPage() {
       <h2>Article 7 - Livraison</h2>
       <p>
         Les modes de livraison proposés sont la livraison en Point Relais
-        Mondial Relay et, lorsque le service HOM est autorisé par le contrat de
-        production et activé, la livraison à domicile Mondial Relay en France
-        métropolitaine. La cliente choisit parmi les modes disponibles sur le
-        site.
+        Mondial Relay et la livraison à domicile en France métropolitaine.
+        La cliente choisit parmi les modes disponibles sur le site. Pour une
+        livraison à domicile, aucun Point Relais n’est à sélectionner.
       </p>
       <ul>
         <li>Point Relais, un sac : 4,10 € TTC.</li>
         <li>Point Relais, deux sacs : 4,54 € TTC.</li>
         <li>
-          Domicile, un sac de 500 g : 7,49 € TTC, pour un colis de 30 x 21 x 6
-          cm et une destination en France métropolitaine.
+          Domicile, un ou deux sacs : 7,49 € TTC pour une destination en France
+          métropolitaine.
         </li>
       </ul>
       <p>

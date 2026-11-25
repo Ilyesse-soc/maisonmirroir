@@ -34,10 +34,9 @@ export default async function ShippingPage() {
       </p>
       <h3>Livraison à domicile - Mondial Relay</h3>
       <p>
-        La livraison à domicile est prévue en France métropolitaine au tarif de
-        7,49 € TTC pour un sac de 500 g, dans un colis de 30 x 21 x 6 cm. Ce mode
-        sera proposé au checkout uniquement après confirmation de l’autorisation
-        API2 HOM par le contrat de production Mondial Relay.
+        La livraison à domicile est proposée en France métropolitaine au tarif
+        de 7,49 € TTC pour un ou deux sacs. Votre commande est expédiée à
+        l’adresse renseignée lors de l’achat. Aucun Point Relais n’est à choisir.
       </p>
 
       <h2>2. Frais de livraison</h2>
@@ -45,10 +44,10 @@ export default async function ShippingPage() {
       <ul>
         <li>Point Relais, un sac : 4,10 € TTC.</li>
         <li>Point Relais, deux sacs : 4,54 € TTC.</li>
-        <li>Domicile, un sac : 7,49 € TTC en France métropolitaine.</li>
+        <li>Domicile, un ou deux sacs : 7,49 € TTC en France métropolitaine.</li>
       </ul>
       <p>
-        Pour deux sacs ou plus en livraison à domicile, les paliers sont
+        Pour plus de deux sacs en livraison à domicile, les paliers sont
         configurables par MAISON MIROIR. Pour toute quantité dont le tarif ou
         les dimensions ne sont pas confirmés, aucun tarif supplémentaire n’est
         inventé et la commande n’est pas validable. Le montant applicable est

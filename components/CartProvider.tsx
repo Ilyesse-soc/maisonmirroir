@@ -208,7 +208,7 @@ export function CartProvider({
   const [shippingConfigReload, setShippingConfigReload] = useState(0);
   useEffect(() => {
     let active = true;
-    fetch("/api/shipping/config", { cache: "no-store" })
+    const loadConfiguration = () => fetch("/api/shipping/config", { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "SHIPPING_CONFIG_FAILED");
@@ -226,8 +226,14 @@ export function CartProvider({
       .finally(() => {
         if (active) setShippingConfigurationLoaded(true);
       });
+    void loadConfiguration();
+    const refresh = () => { void loadConfiguration(); };
+    window.addEventListener("focus", refresh);
+    const interval = window.setInterval(refresh, 30000);
     return () => {
       active = false;
+      window.removeEventListener("focus", refresh);
+      clearInterval(interval);
     };
   }, [shippingConfigReload]);
   function retryShippingConfiguration() {
@@ -243,21 +249,40 @@ export function CartProvider({
   }, [flashMessage]);
   const getShippingPriceQuote = (methodId: string, quantity: number) => {
     const method = getShippingMethodById(methodId);
-    if (!method) return { price: null, label: "À calculer" };
-    if (!shippingConfig) return { price: null, label: "À calculer" };
+    if (!method) return { price: null, label: "Indisponible" };
+    if (!shippingConfig) return { price: null, label: "Chargement de la livraison…" };
+    if (!shippingConfig.availableShippingMethodIds.includes(methodId))
+      return { price: null, label: "Indisponible" };
     const priceCents =
       methodId === MONDIAL_RELAY_POINT_RELAIS_ID
         ? getMondialRelayQuote(shippingConfig.settings, quantity)?.priceCents
         : methodId === MONDIAL_RELAY_HOME_ID
           ? getHomeDeliveryPriceCents(shippingConfig.settings, quantity)
           : null;
-    if (!priceCents) return { price: null, label: "À calculer" };
+    if (!priceCents) return { price: null, label: "Indisponible pour cette quantité" };
     const price = priceCents / 100;
     return {
       price,
       label: euro.format(price),
     };
   };
+  useEffect(() => {
+    if (!shippingConfig) return;
+    const quantity = getCartItemCount(items);
+    const allowed = shippingConfig.availableShippingMethodIds.filter(id => {
+      const cents = id === MONDIAL_RELAY_POINT_RELAIS_ID
+        ? getMondialRelayQuote(shippingConfig.settings, quantity)?.priceCents
+        : id === MONDIAL_RELAY_HOME_ID
+          ? getHomeDeliveryPriceCents(shippingConfig.settings, quantity)
+          : null;
+      return typeof cents === "number" && cents > 0;
+    });
+    const cart = readCart();
+    if (allowed.includes(cart.shippingMethodId)) return;
+    const nextMethod = allowed[0] || "";
+    if (cart.shippingMethodId !== nextMethod || cart.relayPoint)
+      writeCart({ ...cart, shippingMethodId: nextMethod, relayPoint: null });
+  }, [shippingConfig, shippingMethodId, items]);
   const selectedMethod = getShippingMethodById(shippingMethodId);
   const isMondialRelayMethod = selectedMethod?.carrier === "Mondial Relay";
   const selectedQuote = getShippingPriceQuote(

@@ -2,10 +2,8 @@
 import Image from "next/image";
 
 import Link from "next/link";
-import { useMemo } from "react";
 import { useCart } from "@/components/CartProvider";
 import {
-  MONDIAL_RELAY_HOME_ID,
   MONDIAL_RELAY_POINT_RELAIS_ID,
   SHIPPING_METHODS,
 } from "@/lib/shipping";
@@ -39,12 +37,10 @@ export default function CartPage() {
     (item) => !isProductAvailable(item.productId, true),
   );
 
-  const selectedShipping = useMemo(
-    () =>
-      SHIPPING_METHODS.find((method) => method.id === shippingMethodId) ||
-      SHIPPING_METHODS[0],
-    [shippingMethodId],
+  const availableShippingMethods = SHIPPING_METHODS.filter(method =>
+    availableShippingMethodIds.includes(method.id) && getShippingPriceQuote(method.id, itemCount).price !== null,
   );
+  const selectedShipping = availableShippingMethods.find(method => method.id === shippingMethodId) || null;
 
   const subtotal = getCartSubtotal(items);
   const shippingPrice = items.length > 0 ? selectedShippingPrice : 0;
@@ -375,7 +371,7 @@ export default function CartPage() {
                   <span>
                     {shippingPrice === null
                       ? "À confirmer"
-                      : selectedShipping.id === MONDIAL_RELAY_POINT_RELAIS_ID
+                      : selectedShipping?.id === MONDIAL_RELAY_POINT_RELAIS_ID
                         ? selectedShippingPriceLabel
                         : `${shippingPrice.toFixed(2)} €`}
                   </span>
@@ -426,7 +422,7 @@ export default function CartPage() {
                 >
                   Choisissez votre mode de livraison
                 </p>
-                {SHIPPING_METHODS.map((method) => {
+                {availableShippingMethods.map((method) => {
                   const checked = shippingMethodId === method.id;
                   const quote = getShippingPriceQuote(method.id, itemCount);
                   const modeAvailable =
@@ -465,12 +461,7 @@ export default function CartPage() {
                           }}
                         >
                           {method.shortLabel} -{" "}
-                          {quote.price !== null
-                            ? quote.label
-                            : method.id === MONDIAL_RELAY_HOME_ID &&
-                                itemCount === 1
-                              ? "7,49 € TTC, service non activé"
-                              : "Tarif ou colis à confirmer"}
+                          {quote.label}
                         </span>
                       </div>
                       <span
@@ -486,6 +477,7 @@ export default function CartPage() {
                     </label>
                   );
                 })}
+                {availableShippingMethods.length === 0 && <p role="status">Aucune livraison validée n’est disponible pour cette quantité.</p>}
                 <p style={{ margin: 0, fontSize: 12, lineHeight: 1.7 }}>
                   Préparation sous {preparationDays} jours ouvrés après paiement.
                   {" "}

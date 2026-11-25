@@ -13,7 +13,6 @@ import { useCart } from "@/components/CartProvider";
 import {
   MONDIAL_RELAY_POINT_RELAIS_ID,
   SHIPPING_METHODS,
-  getShippingMethodById,
 } from "@/lib/shipping";
 import type { RelayPoint } from "@/lib/mondialRelayTypes";
 import {
@@ -83,6 +82,7 @@ function ProductDetails({ productId }: { productId: string }) {
   const {
     addItem,
     getShippingPriceQuote,
+    availableShippingMethodIds,
     getProductPrice,
     isProductAvailable,
   } = useCart();
@@ -217,10 +217,16 @@ function ProductDetails({ productId }: { productId: string }) {
 
   const unitPrice = computeUnitPrice();
   const qty = parseQuantity(quantity);
-  const selectedShipping = getShippingMethodById(selectedShippingId);
+  const availableShippingMethods = SHIPPING_METHODS.filter(
+    method => availableShippingMethodIds.includes(method.id) &&
+      getShippingPriceQuote(method.id, qty ?? 1).price !== null,
+  );
+  const effectiveShippingId = availableShippingMethods.some(method => method.id === selectedShippingId)
+    ? selectedShippingId : availableShippingMethods[0]?.id || "";
+  const selectedShipping = availableShippingMethods.find(method => method.id === effectiveShippingId) || null;
   const subtotal = qty ? unitPrice * qty : 0;
   const shippingQuote = getShippingPriceQuote(
-    selectedShippingId,
+    effectiveShippingId,
     qty ?? 1,
   );
   const shippingPrice = shippingQuote.price ?? 0;
@@ -1295,8 +1301,8 @@ function ProductDetails({ productId }: { productId: string }) {
                     Choisissez votre mode de livraison
                   </p>
                   <div style={{ display: "grid", gap: 10 }}>
-                    {SHIPPING_METHODS.map((method) => {
-                      const checked = selectedShippingId === method.id;
+                    {availableShippingMethods.map((method) => {
+                      const checked = effectiveShippingId === method.id;
                       return (
                         <label
                           key={method.id}
@@ -1354,7 +1360,7 @@ function ProductDetails({ productId }: { productId: string }) {
                       );
                     })}
                   </div>
-                  {selectedShippingId === MONDIAL_RELAY_POINT_RELAIS_ID && (
+                  {effectiveShippingId === MONDIAL_RELAY_POINT_RELAIS_ID && (
                     <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
                       <p role="note" style={{ margin: 0, fontSize: 12 }}>
                         {shippingQuote.price === null

@@ -16,7 +16,8 @@ export const SHIPPING_METHODS: ShippingMethod[] = [
     label: "Mondial Relay - Point Relais",
     shortLabel: "Mondial Relay - Point Relais",
     carrier: "Mondial Relay",
-    estimatedDelay: "Délai indiqué par Mondial Relay après expédition",
+    estimatedDelay:
+      "3 à 5 jours ouvrés en moyenne après prise en charge par Mondial Relay",
     trackingBaseUrl: "https://www.mondialrelay.fr/suivi-de-colis/",
   },
   {
@@ -24,7 +25,8 @@ export const SHIPPING_METHODS: ShippingMethod[] = [
     label: "Mondial Relay - Livraison à domicile",
     shortLabel: "Mondial Relay - Domicile",
     carrier: "Mondial Relay",
-    estimatedDelay: "Délai indiqué par Mondial Relay après expédition",
+    estimatedDelay:
+      "3 à 5 jours ouvrés en moyenne après prise en charge par Mondial Relay",
     trackingBaseUrl: "https://www.mondialrelay.fr/suivi-de-colis/",
   },
 ];
@@ -34,5 +36,16 @@ export function getShippingMethodById(id: string) {
 }
 
 export function formatEuro(value: number): string {
-  return `${value.toFixed(2)} EUR`;
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+  }).format(value);
+}
+
+export function relaySearchErrorMessage(status: number): string {
+  if (status === 400)
+    return "Vérifiez votre code postal ou votre ville, puis réessayez.";
+  if (status === 429)
+    return "Trop de recherches ont été effectuées. Réessayez dans quelques minutes.";
+  return "La recherche des Points Relais est momentanément indisponible. Réessayez plus tard.";
 }

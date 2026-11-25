@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { brandInfo } from "@/lib/brandInfo";
 import { useCart } from "@/components/CartProvider";
+import ManageCookiesButton from "@/components/ManageCookiesButton";
 
 const discoveryLinks = [
   { href: "/catalogue", label: "La collection" },
@@ -17,7 +18,7 @@ const informationLinks = [
   { href: "/retours", label: "Retours et remboursements" },
   { href: "/retractation", label: "Demande de rétractation" },
   { href: "/politique-de-confidentialite", label: "Confidentialité" },
-  { href: "/politique-de-cookies", label: "Cookies" },
+  { href: "/politique-de-cookies", label: "Politique de cookies" },
 ];
 
 function SocialLink({
@@ -124,6 +125,7 @@ export default function Footer({
                 {label}
               </Link>
             ))}
+            <ManageCookiesButton className="storefront-footer-manage-cookies" />
           </nav>
         </div>
 

@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const payment = params.get("payment") || "";
     const shipment = params.get("shipment") || "";
     const paymentOptions = ["", "pending", "paid", "failed", "cancelled", "refunded", "partially_refunded"];
-    const shipmentOptions = ["", "unfulfilled", "preparing", "ready", "shipped", "delivered", "cancelled", "unknown"];
+    const shipmentOptions = ["", "unfulfilled", "preparing", "ready", "shipped", "delivered", "returned", "cancelled", "unknown"];
     if (!paymentOptions.includes(payment) || !shipmentOptions.includes(shipment))
       return NextResponse.json({ error: "Filtre de commande invalide." }, { status: 400, headers: { "Cache-Control": "no-store" } });
     const orders = await listAdminOrders(search, payment, shipment);

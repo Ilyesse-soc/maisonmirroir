@@ -89,6 +89,10 @@ async function main() {
       if (id === "@/lib/adminPaypalRefund") return load("lib/adminPaypalRefund.ts");
       if (id === "@/lib/commerceSecurity") return { getPayPalProductionStatus: () => ({ configured: true }) };
       if (id === "@/lib/products") return load("lib/products.ts");
+      if (id.startsWith(".")) {
+        const target = path.resolve(path.dirname(filename), `${id}.ts`);
+        if (fs.existsSync(target)) return load(target);
+      }
       if (id.startsWith("@/")) throw new Error(`Unexpected commerce-admin import: ${id}`);
       return require(id);
     };

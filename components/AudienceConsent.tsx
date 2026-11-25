@@ -1,185 +1,271 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
+import {
+  AUDIENCE_IDENTITY_KEY,
+  CONSENT_CHANGED_EVENT,
+  COOKIE_PREFERENCES_EVENT,
+  LEGACY_AUDIENCE_CONSENT_KEY,
+  PRIVACY_PREFERENCES_KEY,
+  createPrivacyPreferences,
+  parsePrivacyPreferences,
+} from "@/lib/privacyConsent";
 
-const CONSENT_KEY = "mm-audience-consent-v1";
-const IDENTITY_KEY = "mm-audience-identity-v1";
-
-type Choice = "accepted" | "rejected";
-type ConsentStatus = Choice | "pending" | "unset" | "unavailable";
-
-function getConsentSnapshot(): ConsentStatus {
+function getSnapshot() {
   try {
-    const stored = localStorage.getItem(CONSENT_KEY);
-    return stored === "accepted" || stored === "rejected" ? stored : "unset";
+    return localStorage.getItem(PRIVACY_PREFERENCES_KEY) || "unset";
   } catch {
     return "unavailable";
   }
 }
 
-function subscribeConsent(listener: () => void) {
-  const handleChange = () => listener();
-  window.addEventListener("storage", handleChange);
-  window.addEventListener("mm-audience-consent-change", handleChange);
+function subscribe(listener: () => void) {
+  window.addEventListener("storage", listener);
+  window.addEventListener(CONSENT_CHANGED_EVENT, listener);
   return () => {
-    window.removeEventListener("storage", handleChange);
-    window.removeEventListener("mm-audience-consent-change", handleChange);
+    window.removeEventListener("storage", listener);
+    window.removeEventListener(CONSENT_CHANGED_EVENT, listener);
   };
 }
 
-export default function AudienceConsent() {
-  const consentStatus = useSyncExternalStore(
-    subscribeConsent,
-    getConsentSnapshot,
-    () => "pending",
-  );
-  const choice: Choice | null =
-    consentStatus === "accepted" || consentStatus === "rejected"
-      ? consentStatus
-      : null;
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [error, setError] = useState("");
-  const visible =
-    panelOpen ||
-    consentStatus === "unset" ||
-    consentStatus === "unavailable";
+async function withdrawAudienceIdentity() {
+  const raw = localStorage.getItem(AUDIENCE_IDENTITY_KEY);
+  const identity = raw ? (JSON.parse(raw) as { token?: unknown }) : null;
+  if (typeof identity?.token === "string" && identity.token) {
+    const response = await fetch("/api/audience/consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      keepalive: true,
+      body: JSON.stringify({ token: identity.token }),
+    });
+    if (!response.ok) throw new Error("AUDIENCE_WITHDRAWAL_FAILED");
+  }
+  localStorage.removeItem(AUDIENCE_IDENTITY_KEY);
+  localStorage.removeItem(LEGACY_AUDIENCE_CONSENT_KEY);
+}
 
-  async function saveChoice(next: Choice) {
-    let identity: { token?: string } | null = null;
+export default function AudienceConsent() {
+  const snapshot = useSyncExternalStore(subscribe, getSnapshot, () => "unset");
+  const preferences = parsePrivacyPreferences(snapshot);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [audience, setAudience] = useState(false);
+  const [error, setError] = useState("");
+  const [expiryTick, setExpiryTick] = useState(0);
+  const audienceAllowed = preferences?.audience === true;
+  const preferenceExpiry = preferences?.expiresAt;
+
+  useEffect(() => {
+    if (audienceAllowed) return;
+
+    let active = true;
     try {
-      const raw = localStorage.getItem(IDENTITY_KEY);
-      identity = raw ? (JSON.parse(raw) as { token?: string }) : null;
-      localStorage.setItem(CONSENT_KEY, next);
+      const hasLegacyChoice = Boolean(
+        localStorage.getItem(LEGACY_AUDIENCE_CONSENT_KEY),
+      );
+      const hasIdentity = Boolean(localStorage.getItem(AUDIENCE_IDENTITY_KEY));
+      if (!hasLegacyChoice && !hasIdentity) return;
     } catch {
-      setError("Le choix n’a pas pu être enregistré dans ce navigateur.");
+      return;
+    }
+
+    void withdrawAudienceIdentity().catch(() => {
+      if (!active) return;
+      setError(
+        "La mesure est arrêtée dans ce navigateur, mais la suppression des anciennes données sur le serveur doit être réessayée.",
+      );
+      setPanelOpen(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [audienceAllowed, preferenceExpiry, snapshot]);
+
+  useEffect(() => {
+    window.addEventListener(COOKIE_PREFERENCES_EVENT, openPreferences);
+    return () =>
+      window.removeEventListener(COOKIE_PREFERENCES_EVENT, openPreferences);
+
+    function openPreferences() {
+      setAudience(parsePrivacyPreferences(getSnapshot())?.audience ?? false);
+      setPanelOpen(true);
+      setError("");
+    }
+  }, []);
+
+  useEffect(() => {
+    const expiresAt = preferences?.expiresAt;
+    if (expiresAt === undefined) return;
+    const delay = Math.min(
+      Math.max(0, expiresAt - Date.now() + 1),
+      2_147_000_000,
+    );
+    const timer = window.setTimeout(
+      () => setExpiryTick(Date.now()),
+      delay,
+    );
+    return () => window.clearTimeout(timer);
+  }, [preferences?.expiresAt, expiryTick]);
+
+  function saveChoice(allowAudience: boolean) {
+    try {
+      localStorage.setItem(
+        PRIVACY_PREFERENCES_KEY,
+        JSON.stringify(createPrivacyPreferences(allowAudience)),
+      );
+      localStorage.removeItem(LEGACY_AUDIENCE_CONSENT_KEY);
+      window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
+      setPanelOpen(false);
+      setError("");
+    } catch {
+      setError("Votre choix n’a pas pu être enregistré dans ce navigateur.");
       setPanelOpen(true);
       return;
     }
-    setPanelOpen(false);
-    setError("");
-    window.dispatchEvent(new Event("mm-audience-consent-change"));
+  }
 
-    if (next === "rejected") {
-      try {
-        if (identity?.token) {
-          const response = await fetch("/api/audience/consent", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            cache: "no-store",
-            keepalive: true,
-            body: JSON.stringify({ token: identity.token }),
-          });
-          if (!response.ok)
-            throw new Error("AUDIENCE_WITHDRAWAL_FAILED");
-        }
-        localStorage.removeItem(IDENTITY_KEY);
-      } catch {
-        setError(
-          "La mesure est arrêtée dans ce navigateur, mais la suppression des données sur le serveur doit être réessayée.",
-        );
-        setPanelOpen(true);
-        return;
-      }
+  async function retryWithdrawal() {
+    try {
+      await withdrawAudienceIdentity();
+      setError("");
+    } catch {
+      setError(
+        "La suppression des données sur le serveur a échoué. Réessayez plus tard.",
+      );
     }
   }
 
-  const panelStyle: React.CSSProperties = {
-    position: "fixed",
-    zIndex: 11000,
-    left: 16,
-    bottom: 16,
-    width: "min(420px, calc(100vw - 32px))",
-    boxSizing: "border-box",
-    padding: 18,
-    border: "1px solid #d8c6aa",
-    borderRadius: 8,
-    background: "#fffdfa",
-    color: "#2c2416",
-    boxShadow: "0 8px 30px rgba(44, 36, 22, .18)",
-    font: '400 14px/1.55 "Jost", sans-serif',
-  };
+  const visible = panelOpen || !preferences;
+
+  if (!visible) return null;
 
   return (
-    <>
-      {visible ? (
-        <section
-          role="dialog"
-          aria-labelledby="audience-consent-title"
-          style={panelStyle}
-        >
-          <strong id="audience-consent-title">Mesure d’audience</strong>
-          <p style={{ margin: "8px 0 14px" }}>
-            Avec votre accord, nous mesurons la fréquentation du site. Les
-            statistiques n’enregistrent ni votre adresse IP ni vos coordonnées.
-            Votre choix ne change rien au fonctionnement de la boutique.
-          </p>
-          {error && (
-            <p role="alert" style={{ color: "#7d251e", margin: "0 0 12px" }}>
-              {error}
+    <section
+      className="cookie-consent"
+      aria-labelledby="cookie-consent-title"
+      role="dialog"
+    >
+      <div className="cookie-consent-heading">
+        <div>
+          <p className="cookie-consent-eyebrow">MAISON MIROIR</p>
+          <h2 id="cookie-consent-title">
+            Votre confidentialité compte pour nous
+          </h2>
+        </div>
+        {preferences && (
+          <button
+            type="button"
+            className="cookie-consent-close"
+            aria-label="Fermer les préférences de cookies"
+            onClick={() => setPanelOpen(false)}
+          >
+            Fermer
+          </button>
+        )}
+      </div>
+
+      <p className="cookie-consent-copy">
+        Maison Miroir utilise des cookies nécessaires au bon fonctionnement de
+        sa boutique. Avec votre accord, nous utilisons également des outils de
+        mesure d’audience afin d’améliorer votre expérience de navigation.
+      </p>
+      <p className="cookie-consent-copy">
+        Vous pouvez accepter, refuser ou personnaliser vos préférences à tout
+        moment.
+      </p>
+      <p className="cookie-consent-policy">
+        <Link href="/politique-de-cookies">Politique de cookies</Link>
+      </p>
+
+      {panelOpen && (
+        <div className="cookie-consent-options">
+          <section aria-labelledby="cookie-essential-title">
+            <h3 id="cookie-essential-title">Cookies essentiels</h3>
+            <p>
+              Toujours actifs. Nécessaires au fonctionnement du panier, à la
+              sécurité, à la gestion des sessions et à la mémorisation de vos
+              préférences de confidentialité.
             </p>
-          )}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <button
-              type="button"
-              onClick={() => void saveChoice("rejected")}
-              style={{
-                border: "1px solid #8c6d14",
-                borderRadius: 4,
-                padding: "9px 13px",
-                background: "#fffdfa",
-                color: "#453722",
-                cursor: "pointer",
-                font: '500 13px "Jost", sans-serif',
-              }}
-            >
-              Refuser
-            </button>
-            <button
-              type="button"
-              onClick={() => void saveChoice("accepted")}
-              style={{
-                border: "1px solid #684633",
-                borderRadius: 4,
-                padding: "9px 13px",
-                background: "#684633",
-                color: "#fff9f0",
-                cursor: "pointer",
-                font: '500 13px "Jost", sans-serif',
-              }}
-            >
-              Autoriser les statistiques
-            </button>
-          </div>
-        </section>
-      ) : (
+            <span className="cookie-essential-status">Toujours actifs</span>
+          </section>
+          <section aria-labelledby="cookie-audience-title">
+            <div className="cookie-option-heading">
+              <div>
+                <h3 id="cookie-audience-title">Mesure d’audience</h3>
+                <p>
+                  Facultative. Elle nous aide à comprendre la fréquentation et
+                  à améliorer la boutique. Elle reste désactivée sans votre
+                  accord.
+                </p>
+              </div>
+              <label className="cookie-toggle">
+                <span className="visually-hidden">
+                  Autoriser la mesure d’audience
+                </span>
+                <input
+                  type="checkbox"
+                  checked={audience}
+                  onChange={(event) => setAudience(event.target.checked)}
+                />
+                <span aria-hidden="true" />
+              </label>
+            </div>
+          </section>
+          <p className="cookie-consent-no-marketing">
+            Aucun traceur marketing n’est actuellement utilisé.
+          </p>
+        </div>
+      )}
+
+      {error && (
+        <p className="cookie-consent-error" role="alert">
+          {error}
+          <button
+            type="button"
+            onClick={() => void retryWithdrawal()}
+          >
+            Réessayer la suppression
+          </button>
+        </p>
+      )}
+
+      <div className="cookie-consent-actions">
         <button
           type="button"
-          aria-label="Gérer les préférences de mesure d’audience"
-          onClick={() => setPanelOpen(true)}
-          style={{
-            position: "fixed",
-            zIndex: 10999,
-            left: 12,
-            bottom: 12,
-            border: "1px solid #d8c6aa",
-            borderRadius: 20,
-            padding: "7px 12px",
-            background: "#fffdfa",
-            color: "#5a4a2e",
-            cursor: "pointer",
-            font: '400 11px "Jost", sans-serif',
-            boxShadow: "0 3px 12px rgba(44, 36, 22, .12)",
-          }}
+          className="cookie-consent-action cookie-consent-action--accept"
+          onClick={() => void saveChoice(true)}
         >
-          Préférences statistiques
+          Tout accepter
         </button>
-      )}
-      {!visible && choice && (
-        <span className="visually-hidden" aria-live="polite">
-          Mesure d’audience :{" "}
-          {choice === "accepted" ? "autorisée" : "refusée"}.
-        </span>
-      )}
-    </>
+        <button
+          type="button"
+          className="cookie-consent-action cookie-consent-action--reject"
+          onClick={() => void saveChoice(false)}
+        >
+          Tout refuser
+        </button>
+        {panelOpen ? (
+          <button
+            type="button"
+            className="cookie-consent-action cookie-consent-action--save"
+            onClick={() => void saveChoice(audience)}
+          >
+            Enregistrer mes choix
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="cookie-consent-action cookie-consent-action--customize"
+            onClick={() => {
+              setAudience(preferences?.audience ?? false);
+              setPanelOpen(true);
+            }}
+          >
+            Personnaliser
+          </button>
+        )}
+      </div>
+    </section>
   );
 }

@@ -508,8 +508,8 @@ export async function POST(req: NextRequest) {
           <tr>
             <td style="padding:8px 0;color:#1f1a12;font-size:13px;font-weight:600">${escapeHtml(item.name)}</td>
             <td style="padding:8px 0;color:#7c6b54;font-size:13px">${item.quantity}</td>
-            <td style="padding:8px 0;color:#7c6b54;font-size:13px">${formatEuro(item.unitPrice)} EUR</td>
-            <td style="padding:8px 0;color:#1f1a12;font-size:13px;font-weight:600;text-align:right">${formatEuro(item.unitPrice * item.quantity)} EUR</td>
+            <td style="padding:8px 0;color:#7c6b54;font-size:13px">${formatEuro(item.unitPrice)}</td>
+            <td style="padding:8px 0;color:#1f1a12;font-size:13px;font-weight:600;text-align:right">${formatEuro(item.unitPrice * item.quantity)}</td>
           </tr>
         `,
       )
@@ -535,7 +535,7 @@ export async function POST(req: NextRequest) {
             ["Prenom", customer.firstName],
             ["Nom", customer.lastName],
             ["Email", customer.email],
-            ["Telephone", customer.phone || ""],
+            ["Téléphone", customer.phone || ""],
           ])}
           ${buildSection("Livraison", [
             ["Adresse", customer.street],
@@ -550,7 +550,7 @@ export async function POST(req: NextRequest) {
                 : "",
             ],
             ["Prix de livraison", `${formatEuro(shippingPrice)}`],
-            ["Delai estime", shippingMethod?.estimatedDelay || ""],
+            ["Délai estimé", shippingMethod?.estimatedDelay || ""],
             ["Numero de suivi", "Non disponible"],
           ])}
           <div style="border:1px solid #f3e4b8;padding:18px 18px 10px;margin:0 0 14px;background:#fff">
@@ -603,7 +603,7 @@ export async function POST(req: NextRequest) {
             Merci pour votre commande.<br />
             Votre commande #${escapeHtml(orderId)} a bien ete enregistree.<br />
             Vous avez choisi : ${escapeHtml(shippingMethod?.label || "")}.<br />
-            Delai estime : ${escapeHtml(shippingMethod?.estimatedDelay || "")}.<br />
+            Délai estimé : ${escapeHtml(shippingMethod?.estimatedDelay || "")}.<br />
             Vous recevrez un email avec votre numero de suivi des l'expedition.
           </div>
           ${buildSection("Récapitulatif", [
@@ -644,7 +644,7 @@ export async function POST(req: NextRequest) {
                 : "",
             ],
             ["Prix de livraison", `${formatEuro(shippingPrice)}`],
-            ["Delai estime de reception", shippingMethod?.estimatedDelay || ""],
+            ["Délai estimé de réception", shippingMethod?.estimatedDelay || ""],
           ])}
           <div style="color:#999;font-size:12px;line-height:1.7;margin-top:12px">Si vous avez une question, répondez directement à cet email.</div>
         </div>

@@ -488,6 +488,18 @@ const quantitySettings = {
   shippingTiers: relayTypes.DEFAULT_MONDIAL_RELAY_SETTINGS.shippingTiers,
 };
 assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 1).priceCents, 410);
+assert.equal(
+  relayTypes.getMondialRelayQuote(
+    {
+      ...quantitySettings,
+      allowedServices: [],
+      contractConfirmed: false,
+      serviceConfirmed: false,
+    },
+    1,
+  ).priceCents,
+  410,
+);
 assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 2), null);
 assert.equal(relayTypes.getMondialRelayQuote(quantitySettings, 3), null);
 const confirmedTwoBagTier = {
@@ -572,6 +584,18 @@ const shipmentRoute = readFileSync(
   "app/api/admin/orders/[orderId]/mondial-relay/create/route.ts",
   "utf8",
 );
+const shipmentService = readFileSync(
+  "lib/mondialRelayShipmentService.ts",
+  "utf8",
+);
+const manualShipmentRoute = readFileSync(
+  "app/api/admin/orders/[orderId]/mondial-relay/manual/route.ts",
+  "utf8",
+);
+const shipmentQueueMigration = readFileSync(
+  "migrations/014_mondial_relay_shipment_queue.sql",
+  "utf8",
+);
 assert.match(publicSettings, /SHOP_OPEN/);
 assert.match(publicSettings, /REAL_PAYMENTS_ENABLED/);
 assert.match(publicSettings, /shippingTiers/);
@@ -581,10 +605,21 @@ assert.match(orderRoute, /captureAndVerifyPayPalOrder/);
 assert.match(checkoutQuote, /checkoutShippingReady/);
 assert.match(relayReadiness, /serviceAllowed/);
 assert.match(relayReadiness, /collectionModeConfigured/);
-assert.match(shipmentRoute, /reserveMondialRelayShipment/);
-assert.match(shipmentRoute, /SHIPMENT_RESULT_UNKNOWN/);
+assert.match(relayReadiness, /api1Ready = credentials\.api1Configured && credentials\.api1Enabled/);
+assert.match(relayReadiness, /api2Ready =/);
+assert.match(manualShipmentRoute, /registerManualMondialRelayShipment/);
+assert.match(manualShipmentRoute, /manualConnectConfirmed/);
+assert.match(shipmentService, /reserveMondialRelayShipment/);
+assert.match(shipmentService, /SHIPMENT_RESULT_UNKNOWN/);
+assert.match(shipmentService, /payment_status/);
+assert.match(shipmentRoute, /createProductionShipment/);
+assert.match(shipmentQueueMigration, /CREATE TABLE IF NOT EXISTS mm_mondial_relay_shipment_jobs/);
+assert.doesNotMatch(
+  shipmentQueueMigration,
+  /\b(?:DROP\s+TABLE|TRUNCATE|DELETE\s+FROM)\b/i,
+);
 assert.doesNotMatch(publicSettings, /simulation/);
-assert.doesNotMatch(shipmentRoute, /sandbox/i);
+assert.doesNotMatch(shipmentService, /sandbox/i);
 assert.doesNotMatch(publicSettings, /MONDIAL_RELAY_API[12]_PROD_(?:SHOP|PRIVATE_KEY|LOGIN|PASSWORD|CUSTOMER_ID)/);
 assert.doesNotMatch(publicSettings, /sender|collectionMode|priceCents/);
 

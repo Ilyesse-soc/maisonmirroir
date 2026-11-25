@@ -40,11 +40,13 @@ type CartContextValue = {
   selectedShippingPrice: number | null;
   selectedShippingPriceLabel: string;
   shippingConfigurationLoaded: boolean;
+  shippingConfigurationError: boolean;
   checkoutEnabled: boolean;
   paypalClientId: string;
   availableShippingMethodIds: string[];
   preparationDays: number;
   cgvVersion: string;
+  retryShippingConfiguration: () => void;
   catalogLoaded: boolean;
   getProductPrice: (id: string, fallback: number) => number;
   isProductAvailable: (id: string, fallback?: boolean) => boolean;
@@ -201,16 +203,25 @@ export function CartProvider({
   } | null>(null);
   const [shippingConfigurationLoaded, setShippingConfigurationLoaded] =
     useState(false);
+  const [shippingConfigurationError, setShippingConfigurationError] =
+    useState(false);
+  const [shippingConfigReload, setShippingConfigReload] = useState(0);
   useEffect(() => {
     let active = true;
     fetch("/api/shipping/config", { cache: "no-store" })
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "SHIPPING_CONFIG_FAILED");
-        if (active) setShippingConfig(data);
+        if (active) {
+          setShippingConfig(data);
+          setShippingConfigurationError(false);
+        }
       })
       .catch(() => {
-        if (active) setShippingConfig(null);
+        if (active) {
+          setShippingConfig(null);
+          setShippingConfigurationError(true);
+        }
       })
       .finally(() => {
         if (active) setShippingConfigurationLoaded(true);
@@ -218,7 +229,13 @@ export function CartProvider({
     return () => {
       active = false;
     };
-  }, []);
+  }, [shippingConfigReload]);
+  function retryShippingConfiguration() {
+    setShippingConfigurationLoaded(false);
+    setShippingConfigurationError(false);
+    setShippingConfig(null);
+    setShippingConfigReload((current) => current + 1);
+  }
   useEffect(() => {
     if (!flashMessage) return;
     const timer = setTimeout(() => setFlashMessage(""), 2200);
@@ -226,16 +243,15 @@ export function CartProvider({
   }, [flashMessage]);
   const getShippingPriceQuote = (methodId: string, quantity: number) => {
     const method = getShippingMethodById(methodId);
-    if (!method) return { price: null, label: "À confirmer" };
-    if (!shippingConfig) return { price: null, label: "À confirmer" };
+    if (!method) return { price: null, label: "À calculer" };
+    if (!shippingConfig) return { price: null, label: "À calculer" };
     const priceCents =
       methodId === MONDIAL_RELAY_POINT_RELAIS_ID
         ? getMondialRelayQuote(shippingConfig.settings, quantity)?.priceCents
         : methodId === MONDIAL_RELAY_HOME_ID
           ? getHomeDeliveryPriceCents(shippingConfig.settings, quantity)
           : null;
-    if (!priceCents)
-      return { price: null, label: "À confirmer" };
+    if (!priceCents) return { price: null, label: "À calculer" };
     const price = priceCents / 100;
     return {
       price,
@@ -261,11 +277,13 @@ export function CartProvider({
     selectedShippingPrice,
     selectedShippingPriceLabel,
     shippingConfigurationLoaded,
+    shippingConfigurationError,
     getShippingPriceQuote,
     availableShippingMethodIds:
       shippingConfig?.availableShippingMethodIds || [],
     preparationDays: shippingConfig?.settings.preparationDays || 3,
     cgvVersion: shippingConfig?.cgvVersion || "",
+    retryShippingConfiguration,
     checkoutEnabled:
       shippingConfigurationLoaded &&
       Boolean(shippingConfig?.shopOpen) &&

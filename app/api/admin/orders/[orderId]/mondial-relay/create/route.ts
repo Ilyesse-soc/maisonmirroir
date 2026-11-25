@@ -1,74 +1,20 @@
-import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { adminAudit } from "@/lib/adminAudit";
 import { adminDenied } from "@/lib/adminAuth";
-import { createApi2ProductionShipment, MondialRelayApi2Error } from "@/lib/mondialRelayApi2";
 import {
-  finishMondialRelayShipment,
-  readOrders,
-  reserveMondialRelayShipment,
+  claimMondialRelayShipmentJob,
+  finishMondialRelayShipmentJob,
+  retryMondialRelayShipmentJob,
 } from "@/lib/orderStore";
 import {
-  getMondialRelayProductionReadiness,
-  getMondialRelaySettings,
-} from "@/lib/mondialRelaySettings";
+  createProductionShipment,
+  ShipmentCreationError,
+} from "@/lib/mondialRelayShipmentService";
 import { mutationAllowed } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
-import {
-  MONDIAL_RELAY_HOME_ID,
-  MONDIAL_RELAY_POINT_RELAIS_ID,
-} from "@/lib/shipping";
-import {
-  getHomeDeliveryParcelProfile,
-  getMondialRelayParcelProfile,
-  isMondialRelayServiceAllowed,
-} from "@/lib/mondialRelayTypes";
-import type { ShipmentAddress } from "@/lib/mondialRelayApi2";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const orderIdPattern = /^MM-[0-9]{4}-[A-Z0-9]{8}$/;
-const streetPattern = /^\s*(\d+[A-Za-z]?(?:\s*(?:bis|ter|quater))?)\s+(.+?)\s*$/i;
-
-function senderAddress(
-  sender: Awaited<ReturnType<typeof getMondialRelaySettings>>["sender"],
-): ShipmentAddress | null {
-  const firstName = sender.firstName.trim();
-  const lastName = sender.lastName.trim();
-  const street = sender.street.trim();
-  const houseNo = sender.houseNo.trim();
-  const postalCode = sender.postalCode.trim();
-  const city = sender.city.trim();
-  const country = sender.countryCode.trim().toUpperCase();
-  const phone = sender.phone.trim();
-  const email = sender.email.trim();
-  if (
-    !sender.company.trim() ||
-    !firstName ||
-    !lastName ||
-    !street ||
-    !houseNo ||
-    !/^[0-9]{5}$/.test(postalCode) ||
-    !city ||
-    country !== "FR" ||
-    !phone ||
-    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-  )
-    return null;
-  return {
-    firstName,
-    lastName,
-    street,
-    houseNo,
-    countryCode: "FR",
-    postalCode,
-    city,
-    addressAdd1: sender.company.trim(),
-    mobile: phone,
-    email,
-  };
-}
 
 export async function POST(
   request: NextRequest,
@@ -78,183 +24,45 @@ export async function POST(
   if (denied) return denied;
   const originDenied = mutationAllowed(request, false);
   if (originDenied) return originDenied;
+  let orderId = "";
+  let jobClaimed = false;
   try {
-    const { orderId } = await context.params;
-    if (!orderIdPattern.test(orderId))
-      return NextResponse.json({ error: "ORDER_ID_INVALID" }, { status: 400 });
-    const order = (await readOrders()).find((item) => item.orderId === orderId);
-    if (!order)
-      return NextResponse.json({ error: "ORDER_NOT_FOUND" }, { status: 404 });
-    if (
-      !order.paypalOrderId ||
-      !["Payee", "En preparation", "Prete a expedier"].includes(order.status)
-    )
-      return NextResponse.json({ error: "ORDER_NOT_PAID" }, { status: 409 });
-    const isRelay = order.shipping.id === MONDIAL_RELAY_POINT_RELAIS_ID;
-    const isHome = order.shipping.id === MONDIAL_RELAY_HOME_ID;
-    if (!isRelay && !isHome)
-      return NextResponse.json(
-        { error: "MONDIAL_RELAY_NOT_SELECTED" },
-        { status: 409 },
-      );
-    const point = order.shipping.relayPoint;
-    if (isRelay && (
-      !point ||
-      point.source !== "production" ||
-      !["24R/MED", "24R/APM"].includes(point.serviceCode)
-    ))
-      return NextResponse.json(
-        { error: "PRODUCTION_RELAY_POINT_REQUIRED" },
-        { status: 409 },
-      );
-
+    orderId = (await context.params).orderId;
     await adminAudit("MONDIAL_RELAY_PRODUCTION_SHIPMENT_REQUESTED", orderId);
-    const settings = await getMondialRelaySettings();
-    const readiness = getMondialRelayProductionReadiness(settings);
-    if (
-      isRelay
-        ? !readiness.shipmentCreationEnabled
-        : !readiness.homeShipmentCreationReady
-    )
-      return NextResponse.json(
-        { error: "MONDIAL_RELAY_SHIPMENT_NOT_READY", readiness },
-        { status: 503 },
-      );
-    const itemCount = order.items.reduce(
-      (total, item) => total + item.quantity,
-      0,
-    );
-    const parcel = isRelay
-      ? getMondialRelayParcelProfile(settings, itemCount)
-      : getHomeDeliveryParcelProfile(settings, itemCount);
-    if (
-      (isRelay &&
-        (!point ||
-          !isMondialRelayServiceAllowed(settings, point.serviceCode) ||
-          point.serviceCode !== settings.serviceCode)) ||
-      !parcel
-    )
-      return NextResponse.json(
-        { error: "CONTRACT_SHIPMENT_PROFILE_MISMATCH" },
-        { status: 409 },
-      );
-    if (
-      itemCount < 1 ||
-      itemCount > 30
-    )
-      return NextResponse.json(
-        { error: "CONTRACT_PARCEL_CAPACITY_EXCEEDED" },
-        { status: 409 },
-      );
-
-    const recipientStreet = streetPattern.exec(order.customer.street);
-    if (!recipientStreet)
-      return NextResponse.json(
-        { error: "CUSTOMER_ADDRESS_REQUIRES_HOUSE_NUMBER" },
-        { status: 409 },
-      );
-    const sender = senderAddress(settings.sender);
-    if (!sender)
-      return NextResponse.json(
-        { error: "MONDIAL_RELAY_SENDER_PROFILE_INVALID" },
-        { status: 503 },
-      );
-    const attemptId = randomUUID();
-    const reservation = await reserveMondialRelayShipment(
-      orderId,
-      attemptId,
-      new Date().toISOString(),
-    );
-    if (reservation.status === "missing")
-      return NextResponse.json({ error: "ORDER_NOT_FOUND" }, { status: 404 });
-    if (reservation.status === "already-reserved")
-      return NextResponse.json(
-        { error: "SHIPMENT_ALREADY_RESERVED" },
-        { status: 409 },
-      );
-
-    const recipient: ShipmentAddress = {
-      firstName: order.customer.firstName,
-      lastName: order.customer.lastName,
-      street: recipientStreet[2],
-      houseNo: recipientStreet[1],
-      countryCode: "FR",
-      postalCode: order.customer.zip,
-      city: order.customer.city,
-      phone: order.customer.phone,
-      mobile: order.customer.phone,
-      email: order.customer.email,
-    };
-    try {
-      const result = await createApi2ProductionShipment(
-        {
-          login: process.env.MONDIAL_RELAY_API2_PROD_LOGIN || "",
-          password: process.env.MONDIAL_RELAY_API2_PROD_PASSWORD || "",
-          customerId: process.env.MONDIAL_RELAY_API2_PROD_CUSTOMER_ID || "",
-        },
-        {
-          orderNo: orderId,
-          customerNo: orderId,
-          deliveryMode: isHome ? "HOM" : "24R",
-          ...(isRelay && point ? { relayLocation: point.location } : {}),
-          collectionMode: settings.collectionMode,
-          sender,
-          recipient,
-          parcels: [
-            {
-              content: order.items.map((item) => item.name).join(", ").slice(0, 60),
-              weightGrams: parcel.weightGrams,
-              lengthCm: parcel.lengthCm,
-              widthCm: parcel.widthCm,
-              depthCm: parcel.depthCm,
-            },
-          ],
-        },
-      );
-      const shipment = await finishMondialRelayShipment(orderId, attemptId, {
-        status: "created",
-        attemptId,
-        reservedAt: reservation.order.shipping.mondialRelayShipment!.reservedAt,
-        shipmentNumber: result.shipmentNumber,
-        labelUrl: result.labelUrl,
-      });
-      if (!shipment)
-        return NextResponse.json(
-          { error: "SHIPMENT_RESULT_REQUIRES_RECONCILIATION" },
-          { status: 503 },
+    let claim = await claimMondialRelayShipmentJob(orderId);
+    if (!claim && (await retryMondialRelayShipmentJob(orderId)))
+      claim = await claimMondialRelayShipmentJob(orderId);
+    if (!claim) {
+      const state = await createProductionShipment(orderId);
+      return NextResponse.json(state);
+    }
+    jobClaimed = true;
+    const result = await createProductionShipment(orderId);
+    await finishMondialRelayShipmentJob(orderId, "completed");
+    await adminAudit("MONDIAL_RELAY_PRODUCTION_SHIPMENT_CREATED", orderId);
+    return NextResponse.json(result);
+  } catch (error) {
+    if (error instanceof ShipmentCreationError) {
+      if (jobClaimed)
+        await finishMondialRelayShipmentJob(
+          orderId,
+          error.outcome,
+          error.code,
         );
-      await adminAudit("MONDIAL_RELAY_PRODUCTION_SHIPMENT_CREATED", orderId);
-      return NextResponse.json({
-        status: "created",
-        shipmentNumber: result.shipmentNumber,
-      });
-    } catch (error) {
-      const errorCode =
-        error instanceof MondialRelayApi2Error
-          ? error.code
-          : error instanceof Error
-            ? error.message.replace(/[^A-Z0-9_-]/gi, "").slice(0, 80)
-            : "UNKNOWN";
-      await finishMondialRelayShipment(orderId, attemptId, {
-        status: "unknown",
-        attemptId,
-        reservedAt: reservation.order.shipping.mondialRelayShipment!.reservedAt,
-        ...(error instanceof MondialRelayApi2Error && error.shipmentNumber
-          ? { shipmentNumber: error.shipmentNumber }
-          : {}),
-        providerErrorCode: errorCode,
-      });
-      securityEvent("MONDIAL_RELAY_PRODUCTION_SHIPMENT_FAILED", "warn");
+      if (error.outcome === "unknown")
+        securityEvent("MONDIAL_RELAY_PRODUCTION_SHIPMENT_RESULT_UNKNOWN", "warn");
+      else securityEvent("MONDIAL_RELAY_PRODUCTION_SHIPMENT_FAILED", "warn");
       return NextResponse.json(
         {
-          error: "SHIPMENT_RESULT_UNKNOWN",
+          error: error.code,
           message:
-            "Vérifiez l’état dans Mondial Relay avant toute nouvelle tentative. La protection anti-doublon reste verrouillée.",
+            error.outcome === "unknown"
+              ? "Le résultat est incertain. Vérifiez l’état dans Mondial Relay avant toute nouvelle tentative."
+              : "La génération a échoué sans créer d’expédition. Corrigez la configuration puis réessayez.",
         },
-        { status: 502 },
+        { status: error.httpStatus },
       );
     }
-  } catch {
     securityEvent("MONDIAL_RELAY_PRODUCTION_SHIPMENT_FAILED");
     return NextResponse.json(
       { error: "MONDIAL_RELAY_SHIPMENT_UNAVAILABLE" },

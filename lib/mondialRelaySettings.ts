@@ -12,6 +12,7 @@ import {
 
 const serviceCodeSchema = z.enum(["24R/MED", "24R/APM"]);
 const collectionModeSchema = z.literal("REL");
+const fulfillmentModeSchema = z.enum(["manual_connect", "api2"]);
 const profileSchema = z
   .object({
     itemsPerParcel: z.number().int().min(1).max(30),
@@ -100,6 +101,8 @@ const proposedRateSchema = z
 export const mondialRelaySettingsSchema = z
   .object({
     serviceCode: serviceCodeSchema,
+    fulfillmentMode: fulfillmentModeSchema,
+    manualConnectConfirmed: z.boolean(),
     allowedServices: z.array(serviceCodeSchema).max(2),
     contractConfirmed: z.boolean(),
     serviceConfirmed: z.boolean(),
@@ -208,6 +211,9 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
     : [];
   return {
     serviceCode,
+    fulfillmentMode:
+      source.fulfillmentMode === "api2" ? "api2" : "manual_connect",
+    manualConnectConfirmed: source.manualConnectConfirmed === true,
     allowedServices: [...new Set(allowedServices)],
     contractConfirmed: source.contractConfirmed === true,
     serviceConfirmed:
@@ -230,7 +236,10 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
     ),
     shippingTiers: storedShippingTiers.success
       ? storedShippingTiers.data as ShippingTier[]
-      : DEFAULT_MONDIAL_RELAY_SETTINGS.shippingTiers.map((tier) => ({ ...tier })),
+      : DEFAULT_MONDIAL_RELAY_SETTINGS.shippingTiers.map((tier) => ({
+          ...tier,
+          confirmed: false,
+        })),
     homeDeliveryEnabled:
       source.homeDeliveryEnabled === true &&
       source.homeDeliveryContractConfirmed === true,
@@ -385,10 +394,7 @@ export function getMondialRelayProductionReadiness(
             rate.customerPriceCents !== null &&
             rate.customerPriceCents > 0,
         );
-  const api1Ready =
-    credentials.providerConfirmed &&
-    credentials.api1Configured &&
-    credentials.api1Enabled;
+  const api1Ready = credentials.api1Configured && credentials.api1Enabled;
   const api2Ready =
     credentials.providerConfirmed &&
     credentials.api2Configured &&
@@ -396,6 +402,12 @@ export function getMondialRelayProductionReadiness(
     credentials.api2Enabled;
   const sharedContractReady =
     contractConfirmed && serviceAllowed && parcelConfigured && rateConfigured;
+  const api1SearchReady =
+    api1Ready && isSupportedMondialRelayService(settings.serviceCode);
+  const api1CheckoutReady =
+    api1SearchReady &&
+    parcelConfigured &&
+    rateConfigured;
   const homeShippingTiers = Array.isArray(settings.homeShippingTiers)
     ? settings.homeShippingTiers
     : [];
@@ -442,8 +454,10 @@ export function getMondialRelayProductionReadiness(
       settings.homeDeliveryContractConfirmed === true,
     searchEnabled:
       process.env.REAL_SHIPPING_ENABLED === "true" &&
-      api1Ready &&
-      sharedContractReady,
+      api1SearchReady,
+    manualShippingReady:
+      settings.fulfillmentMode === "manual_connect" &&
+      settings.manualConnectConfirmed,
     shipmentCreationEnabled:
       process.env.REAL_SHIPMENT_CREATION_ENABLED === "true" &&
       api2Ready &&
@@ -452,10 +466,6 @@ export function getMondialRelayProductionReadiness(
       credentials.collectionModeConfigured,
     checkoutShippingReady:
       process.env.REAL_SHIPPING_ENABLED === "true" &&
-      api1Ready &&
-      api2Ready &&
-      sharedContractReady &&
-      credentials.senderConfigured &&
-      credentials.collectionModeConfigured,
+      api1CheckoutReady,
   };
 }

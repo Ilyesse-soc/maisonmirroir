@@ -8,8 +8,12 @@ export type OrderStatus =
   | "Payee"
   | "En preparation"
   | "Prete a expedier"
+  | "Deposee chez Mondial Relay"
+  | "En transit"
+  | "Disponible en Point Relais"
   | "Expediee"
   | "Livree"
+  | "Retournee"
   | "Annulee";
 
 export type OrderReturnStatus =
@@ -52,6 +56,7 @@ export type ShippingSelection = Pick<
   | "trackingBaseUrl"
 > & {
   price: number;
+  fulfillmentMode?: "manual_connect" | "api2";
   relayPoint?: RelayPoint;
   mondialRelayShipment?: MondialRelayShipment;
 };
@@ -68,11 +73,13 @@ export type MondialRelayTrackingEvent = {
 export type MondialRelayShipmentStatus =
   | "creating"
   | "created"
+  | "failed"
   | "unknown"
   | "tracking";
 
 export type MondialRelayShipment = {
   status: MondialRelayShipmentStatus;
+  source?: "api2" | "connect_manual";
   attemptId: string;
   trackingAttemptId?: string;
   reservedAt: string;

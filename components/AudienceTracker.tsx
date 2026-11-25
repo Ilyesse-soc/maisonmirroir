@@ -3,9 +3,11 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
-
-const CONSENT_KEY = "mm-audience-consent-v1";
-const IDENTITY_KEY = "mm-audience-identity-v1";
+import {
+  AUDIENCE_IDENTITY_KEY,
+  CONSENT_CHANGED_EVENT,
+  hasAudienceConsent,
+} from "@/lib/privacyConsent";
 const SESSION_IDLE_MS = 30 * 60 * 1000;
 
 type StoredIdentity = {
@@ -15,17 +17,9 @@ type StoredIdentity = {
   lastSeenAt: number;
 };
 
-function hasConsent() {
-  try {
-    return localStorage.getItem(CONSENT_KEY) === "accepted";
-  } catch {
-    return false;
-  }
-}
-
 function storedIdentity(): StoredIdentity | null {
   try {
-    const raw = localStorage.getItem(IDENTITY_KEY);
+    const raw = localStorage.getItem(AUDIENCE_IDENTITY_KEY);
     if (!raw) return null;
     const value = JSON.parse(raw) as Partial<StoredIdentity>;
     if (
@@ -68,7 +62,7 @@ async function getIdentity(): Promise<StoredIdentity> {
       ...issued,
       lastSeenAt: Date.now(),
     };
-    localStorage.setItem(IDENTITY_KEY, JSON.stringify(next));
+    localStorage.setItem(AUDIENCE_IDENTITY_KEY, JSON.stringify(next));
     return next;
   };
 
@@ -87,14 +81,14 @@ export default function AudienceTracker() {
   useEffect(() => {
     pathRef.current = pathname || "/";
     pageViewIdRef.current = crypto.randomUUID();
-    if (hasConsent())
-      window.dispatchEvent(new Event("mm-audience-consent-change"));
+    if (hasAudienceConsent())
+      window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
   }, [pathname]);
 
   useEffect(() => {
     hasCartItemsRef.current = items.length > 0;
-    if (hasConsent())
-      window.dispatchEvent(new Event("mm-audience-consent-change"));
+    if (hasAudienceConsent())
+      window.dispatchEvent(new Event(CONSENT_CHANGED_EVENT));
   }, [items.length]);
 
   useEffect(() => {
@@ -104,7 +98,7 @@ export default function AudienceTracker() {
       if (
         !active ||
         sending ||
-        !hasConsent()
+        !hasAudienceConsent()
       )
         return;
       sending = true;
@@ -126,7 +120,7 @@ export default function AudienceTracker() {
         const latest = storedIdentity();
         if (latest?.token === identity.token) {
           localStorage.setItem(
-            IDENTITY_KEY,
+            AUDIENCE_IDENTITY_KEY,
             JSON.stringify({ ...latest, lastSeenAt: Date.now() }),
           );
         }
@@ -140,16 +134,16 @@ export default function AudienceTracker() {
     };
 
     const onConsentChange = () => void sendHeartbeat();
-    window.addEventListener("mm-audience-consent-change", onConsentChange);
+    window.addEventListener(CONSENT_CHANGED_EVENT, onConsentChange);
     window.addEventListener("storage", onConsentChange);
     const timer = window.setInterval(() => void sendHeartbeat(), 30_000);
-    if (hasConsent())
+    if (hasAudienceConsent())
       void sendHeartbeat();
     return () => {
       active = false;
       window.clearInterval(timer);
       window.removeEventListener(
-        "mm-audience-consent-change",
+        CONSENT_CHANGED_EVENT,
         onConsentChange,
       );
       window.removeEventListener("storage", onConsentChange);

@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import CartReminderConsent from "@/components/CartReminderConsent";
 import CartCheckoutButton from "@/components/CartCheckoutButton";
 import { useCart } from "@/components/CartProvider";
 import {
-  MONDIAL_RELAY_HOME_ID,
   MONDIAL_RELAY_POINT_RELAIS_ID,
   SHIPPING_METHODS,
+  formatEuro,
+  relaySearchErrorMessage,
 } from "@/lib/shipping";
 import { getCartSubtotal } from "@/lib/cart";
 import type { RelayPoint } from "@/lib/mondialRelayTypes";
@@ -28,13 +29,14 @@ export default function CheckoutPage() {
     setShippingMethodId,
     relayPoint,
     setRelayPoint,
-    selectedShippingPrice,
-    selectedShippingPriceLabel,
     checkoutEnabled,
     getShippingPriceQuote,
     availableShippingMethodIds,
+    shippingConfigurationError,
+    shippingConfigurationLoaded,
     preparationDays,
     cgvVersion,
+    retryShippingConfiguration,
   } = useCart();
   const [relayPoints, setRelayPoints] = useState<RelayPoint[]>([]);
   const [relaySearchError, setRelaySearchError] = useState("");
@@ -58,12 +60,20 @@ export default function CheckoutPage() {
     country: "France",
   });
 
-  const selectedShipping = useMemo(
-    () =>
-      SHIPPING_METHODS.find((method) => method.id === shippingMethodId) ||
-      SHIPPING_METHODS[0],
-    [shippingMethodId],
-  );
+  const availableShippingMethods = SHIPPING_METHODS.filter((method) => {
+    const quote = getShippingPriceQuote(method.id, itemCount);
+    return (
+      availableShippingMethodIds.includes(method.id) && quote.price !== null
+    );
+  });
+  const selectedShipping =
+    availableShippingMethods.find((method) => method.id === shippingMethodId) ||
+    null;
+  const selectedShippingQuote = selectedShipping
+    ? getShippingPriceQuote(selectedShipping.id, itemCount)
+    : { price: null, label: "À calculer" };
+  const selectedShippingPrice = selectedShippingQuote.price;
+  const selectedShippingPriceLabel = selectedShippingQuote.label;
 
   const subtotal = getCartSubtotal(items);
   const currentCartKey = items
@@ -216,22 +226,19 @@ export default function CheckoutPage() {
         source?: "production";
         points?: RelayPoint[];
         message?: string;
-        error?: string;
       };
-      if (!response.ok)
-        throw new Error(data.error || "Recherche des Points Relais impossible.");
+      if (!response.ok) {
+        setRelaySearchError(relaySearchErrorMessage(response.status));
+        return;
+      }
       const points = Array.isArray(data.points) ? data.points : [];
       setRelayPoints(points);
       setRelaySearchMessage(
         data.message ||
           "Résultats de la recherche Mondial Relay.",
       );
-    } catch (error) {
-      setRelaySearchError(
-        error instanceof Error
-          ? error.message
-          : "Recherche des Points Relais impossible.",
-      );
+    } catch {
+      setRelaySearchError(relaySearchErrorMessage(0));
     } finally {
       setRelaySearchBusy(false);
     }
@@ -386,12 +393,9 @@ export default function CheckoutPage() {
               </h2>
               <div style={{ ...dividerStyle(80), margin: "16px 0 18px" }} />
               <div style={{ display: "grid", gap: 10 }}>
-                {SHIPPING_METHODS.map((method) => {
+                {availableShippingMethods.map((method) => {
                   const checked = shippingMethodId === method.id;
                   const quote = getShippingPriceQuote(method.id, itemCount);
-                  const modeAvailable =
-                    availableShippingMethodIds.includes(method.id) &&
-                    quote.price !== null;
                   return (
                     <div key={method.id}>
                       <label
@@ -414,7 +418,6 @@ export default function CheckoutPage() {
                           <input
                             type="radio"
                             checked={checked}
-                            disabled={!modeAvailable}
                             onChange={() => setShippingMethodId(method.id)}
                           />
                           <span
@@ -424,14 +427,17 @@ export default function CheckoutPage() {
                               color: theme.textDark,
                             }}
                           >
-                            {method.shortLabel} -{" "}
-                            {quote.price !== null
-                              ? quote.label
-                              : method.id === MONDIAL_RELAY_HOME_ID &&
-                                  itemCount === 1
-                                ? "7,49 € TTC, service non activé"
-                                : "Tarif ou colis à confirmer"}
+                            {method.shortLabel}
                           </span>
+                          <strong
+                            style={{
+                              fontFamily: fonts.body,
+                              fontSize: 13,
+                              color: theme.textDark,
+                            }}
+                          >
+                            {quote.label}
+                          </strong>
                         </div>
                         <span
                           style={{
@@ -444,17 +450,6 @@ export default function CheckoutPage() {
                           Délai estimé: {method.estimatedDelay}
                         </span>
                       </label>
-                      {method.id === MONDIAL_RELAY_HOME_ID &&
-                        !modeAvailable && (
-                          <p
-                            className="admin-muted"
-                            role="note"
-                            style={{ margin: "8px 0 0", fontSize: 12 }}
-                          >
-                            Le service HOM ne sera proposé qu’après confirmation
-                            de son autorisation dans le contrat Mondial Relay.
-                          </p>
-                        )}
                       {checked && method.id === MONDIAL_RELAY_POINT_RELAIS_ID && (
                         <div
                           style={{
@@ -475,7 +470,7 @@ export default function CheckoutPage() {
                             }}
                           >
                             {selectedShippingPrice === null
-                              ? "Le tarif contractuel reste à confirmer. Aucun paiement ne sera proposé."
+                              ? "Aucune livraison n’est disponible pour cette commande."
                               : checkoutEnabled
                                 ? "Le paiement PayPal sécurisé est proposé à l’étape suivante."
                                 : "Les commandes et paiements ne sont pas encore ouverts."}
@@ -559,6 +554,25 @@ export default function CheckoutPage() {
                     </div>
                   );
                 })}
+                {availableShippingMethods.length === 0 && (
+                  <div role="status" style={{ display: "grid", gap: 8 }}>
+                    <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6 }}>
+                      {!shippingConfigurationLoaded
+                        ? "Chargement des options de livraison…"
+                        : shippingConfigurationError
+                          ? "Les options de livraison sont momentanément indisponibles. Réessayez dans un instant."
+                          : "Aucune option de livraison n’est disponible pour cette quantité. Modifiez le panier ou réessayez."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={retryShippingConfiguration}
+                      disabled={!shippingConfigurationLoaded}
+                      style={buttonOutlineGoldStyle({ fullWidth: false })}
+                    >
+                      Réessayer
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </section>
@@ -616,7 +630,7 @@ export default function CheckoutPage() {
                     </div>
                   </div>
                   <div style={{ color: theme.textDark }}>
-                    {(item.unitPrice * item.quantity).toFixed(2)} €
+                    {formatEuro(item.unitPrice * item.quantity)}
                   </div>
                 </div>
               ))}
@@ -676,12 +690,12 @@ export default function CheckoutPage() {
             >
               <div style={{ display: "flex", justifyContent: "space-between" }}>
                 <span>Sous-total produits</span>
-                <span>{subtotal.toFixed(2)} €</span>
+                <span>{formatEuro(subtotal)}</span>
               </div>
               {currentPromotionDiscount > 0 && (
                 <div style={{ display: "flex", justifyContent: "space-between" }}>
                   <span>Réduction {currentPromotionCode}</span>
-                  <span>-{(currentPromotionDiscount / 100).toFixed(2)} €</span>
+                  <span>-{formatEuro(currentPromotionDiscount / 100)}</span>
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -712,8 +726,8 @@ export default function CheckoutPage() {
                 <span>Total TTC</span>
                 <span>
                   {selectedShippingPrice === null
-                    ? "À confirmer"
-                    : `${total.toFixed(2)} €`}
+                    ? "À calculer"
+                    : formatEuro(total)}
                 </span>
               </div>
             </div>
@@ -721,8 +735,11 @@ export default function CheckoutPage() {
             <div style={{ ...dividerStyle(100), margin: "18px 0" }} />
 
             <p style={{ margin: "0 0 14px", fontSize: 12, lineHeight: 1.7 }}>
-              Préparation sous {preparationDays} jours ouvrés après confirmation
-              du paiement. Le délai d’acheminement dépend du transporteur.
+              <strong>Préparation :</strong> {preparationDays} jours ouvrés après
+              confirmation du paiement.
+              <br />
+              <strong>Acheminement :</strong> 3 à 5 jours ouvrés en moyenne
+              après prise en charge par Mondial Relay.
               {" "}
               <Link href="/livraison">Consulter la politique de livraison</Link>.
             </p>

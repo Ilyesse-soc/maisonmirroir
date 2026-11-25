@@ -94,6 +94,10 @@ const mondialRelayMigration = fs.readFileSync(
     "app/api/admin/orders/[orderId]/mondial-relay/create/route.ts",
     "utf8",
   ),
+  shipmentService = fs.readFileSync(
+    "lib/mondialRelayShipmentService.ts",
+    "utf8",
+  ),
   productionReadiness = fs.readFileSync("lib/mondialRelaySettings.ts", "utf8");
 assert(
   /CREATE TABLE IF NOT EXISTS mm_shipping_settings/.test(mondialRelayMigration) &&
@@ -110,8 +114,9 @@ assert(
     paypalOrderRoute.includes("REAL_PAYMENTS_ENABLED") &&
     productionReadiness.includes("MONDIAL_RELAY_PRODUCTION_CONFIRMED") &&
     productionReadiness.includes("REAL_SHIPMENT_CREATION_ENABLED") &&
-    mondialRelayCreate.includes("reserveMondialRelayShipment") &&
-    mondialRelayCreate.includes("SHIPMENT_RESULT_UNKNOWN"),
+    mondialRelayCreate.includes("createProductionShipment") &&
+    shipmentService.includes("reserveMondialRelayShipment") &&
+    shipmentService.includes("SHIPMENT_RESULT_UNKNOWN"),
   "production checkout and shipments must require explicit readiness and idempotency guards",
 );
 const imageWorkflow = fs.readFileSync(".github/workflows/ovh-images.yml", "utf8"),

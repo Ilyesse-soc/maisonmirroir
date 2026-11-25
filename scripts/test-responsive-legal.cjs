@@ -57,7 +57,16 @@ async function main() {
     });
     const context = await browser.newContext();
     await context.addInitScript(() => {
-      localStorage.setItem("mm-audience-consent-v1", "rejected");
+      localStorage.setItem(
+        "mm:cookie-preferences:v1",
+        JSON.stringify({
+          version: 1,
+          essential: true,
+          audience: false,
+          savedAt: Date.now(),
+          expiresAt: Date.now() + 180 * 24 * 60 * 60 * 1000,
+        }),
+      );
     });
     const page = await context.newPage();
     const openCartDrawer = async (width) => {
@@ -668,6 +677,102 @@ async function main() {
       new URL(page.url()).pathname,
       "/politique-de-confidentialite",
     );
+    await page.goto("http://127.0.0.1:43819/politique-de-cookies");
+    assert(
+      await page
+        .getByRole("heading", {
+          name: /Inventaire des cookies et stockages utilisés/,
+        })
+        .count(),
+    );
+    assert.equal(await page.locator(".cookie-inventory tbody tr").count(), 9);
+
+    const preferenceContext = await browser.newContext();
+    const preferencePage = await preferenceContext.newPage();
+    let audienceSessionRequests = 0;
+    let heartbeatRequests = 0;
+    let withdrawalRequests = 0;
+    await preferencePage.route("**/api/audience/session", async (route) => {
+      audienceSessionRequests += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          token: "qa-consented-session",
+          visitorId: "00000000-0000-4000-8000-000000000001",
+          expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000,
+        }),
+      });
+    });
+    await preferencePage.route("**/api/audience/heartbeat", async (route) => {
+      heartbeatRequests += 1;
+      await route.fulfill({ status: 204 });
+    });
+    await preferencePage.route("**/api/audience/consent", async (route) => {
+      withdrawalRequests += 1;
+      await route.fulfill({ status: 204 });
+    });
+    await preferencePage.goto("http://127.0.0.1:43819/");
+    await preferencePage
+      .getByRole("heading", { name: "Votre confidentialité compte pour nous" })
+      .waitFor();
+    await preferencePage.waitForTimeout(100);
+    assert.equal(audienceSessionRequests, 0);
+    assert.equal(heartbeatRequests, 0);
+    await preferencePage.getByRole("button", { name: "Personnaliser" }).click();
+    const audienceToggle = preferencePage.locator(
+      ".cookie-consent input[type=checkbox]",
+    );
+    assert.equal(await audienceToggle.isChecked(), false);
+    await preferencePage.getByRole("button", { name: "Tout refuser" }).click();
+    assert.equal(
+      await preferencePage.evaluate(
+        () =>
+          JSON.parse(
+            localStorage.getItem("mm:cookie-preferences:v1") || "null",
+          )?.audience,
+      ),
+      false,
+    );
+    assert.equal(audienceSessionRequests, 0);
+    assert.equal(heartbeatRequests, 0);
+
+    await preferencePage
+      .getByRole("button", { name: "Gérer mes cookies" })
+      .click();
+    assert.equal(await audienceToggle.isChecked(), false);
+    await audienceToggle.check();
+    const acceptedHeartbeat = preferencePage.waitForResponse((response) =>
+      response.url().includes("/api/audience/heartbeat"),
+    );
+    await preferencePage
+      .getByRole("button", { name: "Enregistrer mes choix" })
+      .click();
+    assert.equal((await acceptedHeartbeat).status(), 204);
+    assert.equal(audienceSessionRequests, 1);
+    assert.equal(heartbeatRequests, 1);
+
+    await preferencePage
+      .getByRole("button", { name: "Gérer mes cookies" })
+      .click();
+    assert.equal(await audienceToggle.isChecked(), true);
+    await audienceToggle.uncheck();
+    await preferencePage
+      .getByRole("button", { name: "Enregistrer mes choix" })
+      .click();
+    for (let attempt = 0; attempt < 20 && withdrawalRequests === 0; attempt++)
+      await preferencePage.waitForTimeout(50);
+    assert.equal(withdrawalRequests, 1);
+    assert.equal(
+      await preferencePage.evaluate(
+        () =>
+          JSON.parse(
+            localStorage.getItem("mm:cookie-preferences:v1") || "null",
+          )?.audience,
+      ),
+      false,
+    );
+    await preferenceContext.close();
 
     const api = page.request;
     assert.equal(

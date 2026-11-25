@@ -10,7 +10,7 @@ import {
 import {
   getMondialRelayParcelProfile,
   getMondialRelayQuote,
-  isMondialRelayServiceAllowed,
+  isSupportedMondialRelayService,
 } from "@/lib/mondialRelayTypes";
 import { clientIp } from "@/lib/requestSecurity";
 import { securityEvent } from "@/lib/observability";
@@ -92,9 +92,9 @@ export async function GET(request: NextRequest) {
         { error: "La recherche Mondial Relay n’est pas encore configurée pour la production." },
         { status: 503 },
       );
-    if (!isMondialRelayServiceAllowed(settings))
+    if (!isSupportedMondialRelayService(settings.serviceCode))
       return NextResponse.json(
-        { error: "Confirmez un service Mondial Relay autorisé dans l’administration." },
+        { error: "Le service de recherche Mondial Relay n’est pas pris en charge." },
         { status: 409 },
       );
     const parcel = getMondialRelayParcelProfile(settings, quantity);

@@ -25,6 +25,8 @@ type AdminOrderRecord = OrderRecord & {
   refundEligible?: boolean;
   refundAttempt?: null | { idempotencyKey: string; amountCents: number; status: string };
   refundHistory?: Array<{ refundId: string; amountCents: number; status: string; reason: string; createdAt: string; completedAt: string | null }>;
+  shipmentJobStatus?: string | null;
+  shipmentJobError?: string | null;
   newsletterConsent?: null | {
     status: string; consentAt: string | null; confirmedAt: string | null;
     consentVersion: string | null; lastEvent: string | null; lastEventAt: string | null;
@@ -38,8 +40,12 @@ const STATUS_OPTIONS: Array<{ value: OrderStatus; label: string }> = [
   { value: "En attente", label: "En attente" },
   { value: "En preparation", label: "En préparation" },
   { value: "Prete a expedier", label: "Prête à expédier" },
+  { value: "Deposee chez Mondial Relay", label: "Déposée chez Mondial Relay" },
+  { value: "En transit", label: "En transit" },
+  { value: "Disponible en Point Relais", label: "Disponible en Point Relais" },
   { value: "Expediee", label: "Expédiée" },
   { value: "Livree", label: "Livrée" },
+  { value: "Retournee", label: "Retournée" },
   { value: "Annulee", label: "Annulée" },
 ];
 
@@ -55,6 +61,8 @@ const SHIPMENT_STATUS_LABELS: Record<string, string> = {
   Expediee: "Expédiée",
   delivered: "Livrée",
   Livree: "Livrée",
+  returned: "Retournée",
+  Retournee: "Retournée",
   cancelled: "Annulée",
   Annulee: "Annulée",
 };
@@ -69,6 +77,10 @@ export default function AdminOrdersPage() {
   >({});
   const [productionShipmentReady, setProductionShipmentReady] =
     useState(false);
+  const [fulfillmentMode, setFulfillmentMode] = useState<
+    "manual_connect" | "api2"
+  >("manual_connect");
+  const [manualConnectReady, setManualConnectReady] = useState(false);
   const [search, setSearch] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
   const [shipmentFilter, setShipmentFilter] = useState("");
@@ -76,6 +88,7 @@ export default function AdminOrdersPage() {
   const [refundReasons, setRefundReasons] = useState<Record<string, string>>({});
   const [refundMessages, setRefundMessages] = useState<Record<string, string>>({});
   const [refundKeys, setRefundKeys] = useState<Record<string, string>>({});
+  const [selectedLabelOrderIds, setSelectedLabelOrderIds] = useState<string[]>([]);
 
   const returnLabels: Record<OrderReturnStatus, string> = {
     none: "Aucun retour",
@@ -144,10 +157,17 @@ export default function AdminOrdersPage() {
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Chargement impossible.");
-        if (active)
+        if (active) {
           setProductionShipmentReady(
             data.readiness?.shipmentCreationEnabled === true,
           );
+          setFulfillmentMode(
+            data.settings?.fulfillmentMode === "api2"
+              ? "api2"
+              : "manual_connect",
+          );
+          setManualConnectReady(data.manualShippingReady === true);
+        }
       })
       .catch(() => {
         if (active) setProductionShipmentReady(false);
@@ -294,6 +314,105 @@ export default function AdminOrdersPage() {
     }
   };
 
+  const retrieveShipmentLabel = async (orderId: string) => {
+    setPending(orderId);
+    setShipmentMessages((current) => ({ ...current, [orderId]: "" }));
+    try {
+      const response = await fetch(
+        `/api/admin/orders/${orderId}/mondial-relay/create`,
+        { method: "POST" },
+      );
+      const data = (await response.json()) as { error?: string; message?: string };
+      if (!response.ok)
+        throw new Error(data.message || data.error || "Étiquette indisponible.");
+      await refreshOrders();
+      setShipmentMessages((current) => ({
+        ...current,
+        [orderId]: "L’étiquette officielle a été récupérée.",
+      }));
+    } catch (labelError) {
+      setShipmentMessages((current) => ({
+        ...current,
+        [orderId]:
+          labelError instanceof Error
+            ? labelError.message
+            : "Étiquette indisponible.",
+      }));
+    } finally {
+      setPending("");
+    }
+  };
+
+  const registerManualShipment = async (
+    orderId: string,
+    shipmentNumber: string,
+  ) => {
+    setPending(orderId);
+    setShipmentMessages((current) => ({ ...current, [orderId]: "" }));
+    try {
+      const response = await fetch(
+        `/api/admin/orders/${orderId}/mondial-relay/manual`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ shipmentNumber }),
+        },
+      );
+      const data = (await response.json()) as { error?: string };
+      if (!response.ok)
+        throw new Error(data.error || "Enregistrement de l’expédition impossible.");
+      await refreshOrders();
+      setShipmentMessages((current) => ({
+        ...current,
+        [orderId]:
+          "Expédition Connect enregistrée. L’étiquette reste à télécharger et imprimer depuis Connect.",
+      }));
+    } catch (manualError) {
+      setShipmentMessages((current) => ({
+        ...current,
+        [orderId]:
+          manualError instanceof Error
+            ? manualError.message
+            : "Enregistrement de l’expédition impossible.",
+      }));
+    } finally {
+      setPending("");
+    }
+  };
+
+  const downloadSelectedLabels = async () => {
+    if (selectedLabelOrderIds.length < 2 || selectedLabelOrderIds.length > 10) {
+      setError("Sélectionnez entre 2 et 10 commandes avec une étiquette disponible.");
+      return;
+    }
+    setPending("bulk-labels");
+    setError("");
+    try {
+      const response = await fetch("/api/admin/orders/mondial-relay/labels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderIds: selectedLabelOrderIds }),
+      });
+      if (!response.ok)
+        throw new Error("Impossible de télécharger les étiquettes sélectionnées.");
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "Etiquettes-Maison-Miroir.pdf";
+      link.click();
+      window.URL.revokeObjectURL(url);
+    } catch (downloadError) {
+      setError(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Impossible de télécharger les étiquettes sélectionnées.",
+      );
+    } finally {
+      setPending("");
+    }
+  };
+
   const refreshTracking = async (orderId: string) => {
     setPending(orderId);
     setShipmentMessages((current) => ({ ...current, [orderId]: "" }));
@@ -381,11 +500,29 @@ export default function AdminOrdersPage() {
           <label style={{ flex: "0 1 190px" }}>Expédition
             <select value={shipmentFilter} onChange={(event) => setShipmentFilter(event.target.value)}>
               <option value="">Toutes</option><option value="unfulfilled">Non préparée</option><option value="preparing">En préparation</option>
-              <option value="ready">Prête</option><option value="shipped">Expédiée</option><option value="delivered">Livrée</option><option value="cancelled">Annulée</option>
+              <option value="ready">Prête</option><option value="shipped">Expédiée</option><option value="delivered">Livrée</option><option value="returned">Retournée</option><option value="cancelled">Annulée</option>
             </select>
           </label>
           <a className="admin-button" href={`/api/admin/orders/export?${new URLSearchParams({ search, payment: paymentFilter, shipment: shipmentFilter })}`}>Exporter CSV</a>
         </form>
+        <div className="admin-actions" style={{ marginBottom: 18 }}>
+          <button
+            type="button"
+            onClick={() => void downloadSelectedLabels()}
+            disabled={
+              pending === "bulk-labels" ||
+              selectedLabelOrderIds.length < 2 ||
+              selectedLabelOrderIds.length > 10
+            }
+          >
+            {pending === "bulk-labels"
+              ? "Préparation du PDF…"
+              : "Télécharger les étiquettes sélectionnées"}
+          </button>
+          <span className="admin-muted">
+            {selectedLabelOrderIds.length} commande(s) sélectionnée(s)
+          </span>
+        </div>
 
         {!loading && !hasOrders && (
           <div
@@ -573,9 +710,11 @@ export default function AdminOrdersPage() {
                   </div>
                   <div>
                     <strong style={{ color: theme.textDark }}>Statut d’expédition:</strong>{" "}
-                    {SHIPMENT_STATUS_LABELS[
-                      (order as AdminOrderRecord).shipmentStatus || ""
-                    ] || order.status}
+                    {order.paymentStatus === "refunded"
+                      ? "Remboursée"
+                      : SHIPMENT_STATUS_LABELS[
+                          (order as AdminOrderRecord).shipmentStatus || ""
+                        ] || order.status}
                   </div>
                   {order.legalAcceptance && (
                     <div>
@@ -762,11 +901,63 @@ export default function AdminOrdersPage() {
                           {order.shipping.mondialRelayShipment.shipmentNumber}
                         </p>
                         {order.shipping.mondialRelayShipment.labelAvailable && (
-                          <a
-                            href={`/api/admin/orders/${order.orderId}/mondial-relay/label`}
+                          <div className="admin-actions">
+                            <label>
+                              <input
+                                type="checkbox"
+                                checked={selectedLabelOrderIds.includes(order.orderId)}
+                                onChange={(event) =>
+                                  setSelectedLabelOrderIds((current) =>
+                                    event.target.checked
+                                      ? [...current, order.orderId]
+                                      : current.filter((id) => id !== order.orderId),
+                                  )
+                                }
+                              />
+                              Inclure dans le PDF groupé
+                            </label>
+                            <a
+                              href={`/api/admin/orders/${order.orderId}/mondial-relay/label`}
+                            >
+                              Télécharger l’étiquette PDF
+                            </a>
+                            <a
+                              href={`/api/admin/orders/${order.orderId}/mondial-relay/label?print=1`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Imprimer l’étiquette
+                            </a>
+                          </div>
+                        )}
+                        {order.shipping.mondialRelayShipment.source ===
+                          "connect_manual" && (
+                          <p className="admin-muted">
+                            Étiquette créée dans Mondial Relay Connect. Elle
+                            n’est pas stockée dans cette administration.
+                          </p>
+                        )}
+                        {!order.shipping.mondialRelayShipment.labelAvailable &&
+                          order.shipping.mondialRelayShipment.source !==
+                            "connect_manual" && (
+                          <button
+                            type="button"
+                            onClick={() => void retrieveShipmentLabel(order.orderId)}
+                            disabled={pending === order.orderId}
                           >
-                            Télécharger l’étiquette PDF
-                          </a>
+                            {pending === order.orderId
+                              ? "Récupération…"
+                              : "Récupérer l’étiquette officielle"}
+                          </button>
+                        )}
+                        {order.paymentStatus === "paid" && (
+                          <p>
+                            <a
+                              href={`/api/admin/orders/${order.orderId}/preparation-sheet`}
+                            >
+                              Télécharger la fiche de préparation PDF
+                            </a>
+                          </p>
                         )}
                         <button
                           type="button"
@@ -793,6 +984,32 @@ export default function AdminOrdersPage() {
                           ),
                         )}
                       </div>
+                    ) : fulfillmentMode === "manual_connect" ? (
+                      manualConnectReady && order.paymentStatus === "paid" ? (
+                        <>
+                          <p className="admin-muted">
+                            Créez et payez l’étiquette dans Connect, puis
+                            enregistrez son numéro ici. Cette étape n’appelle
+                            pas l’API2 et ne crée pas une seconde étiquette.
+                          </p>
+                          <ManualShipmentEditor
+                            orderId={order.orderId}
+                            pending={pending === order.orderId}
+                            onSave={(shipmentNumber) =>
+                              registerManualShipment(
+                                order.orderId,
+                                shipmentNumber,
+                              )
+                            }
+                          />
+                        </>
+                      ) : (
+                        <p className="admin-error" role="status">
+                          {order.paymentStatus !== "paid"
+                            ? "Le paiement doit être confirmé avant d’enregistrer une expédition."
+                            : "Le mode manuel est sélectionné, mais l’accès à Connect n’a pas été confirmé dans les paramètres de livraison."}
+                        </p>
+                      )
                     ) : (
                       <button
                         type="button"
@@ -801,7 +1018,11 @@ export default function AdminOrdersPage() {
                           pending === order.orderId ||
                           !productionShipmentReady ||
                           Boolean(
-                            order.shipping.mondialRelayShipment?.status,
+                            order.shipping.mondialRelayShipment?.status &&
+                              order.shipping.mondialRelayShipment.status !== "failed",
+                          ) ||
+                          ["processing", "unknown", "completed"].includes(
+                            order.shipmentJobStatus || "",
                           )
                         }
                       >
@@ -810,10 +1031,44 @@ export default function AdminOrdersPage() {
                           : order.shipping.mondialRelayShipment?.status ===
                               "unknown"
                             ? "Vérification manuelle requise"
-                            : "Créer l’expédition réelle"}
+                            : order.shipping.mondialRelayShipment?.status ===
+                                "failed" || order.shipmentJobStatus === "failed"
+                              ? "Relancer la génération"
+                              : "Créer l’expédition réelle"}
                       </button>
                     )}
+                    {["queued", "processing"].includes(
+                      order.shipmentJobStatus || "",
+                    ) && (
+                      <p role="status">
+                        Étiquette en cours de génération après confirmation du paiement.
+                      </p>
+                    )}
+                    {order.shipmentJobStatus === "completed" &&
+                      !order.shipping.mondialRelayShipment?.labelAvailable && (
+                        <p role="status">
+                          Expédition créée. L’étiquette officielle sera disponible dès son téléchargement depuis Mondial Relay.
+                        </p>
+                      )}
+                    {order.shipmentJobStatus === "failed" && (
+                      <p className="admin-error" role="alert">
+                        {order.shipping.mondialRelayShipment?.status === "created"
+                          ? "L’expédition est créée, mais le téléchargement de l’étiquette a échoué. Réessayez de la récupérer."
+                          : "La génération a échoué sans confirmation de création."}
+                        {order.shipmentJobError
+                          ? ` Détail : ${order.shipmentJobError}.`
+                          : ""}
+                      </p>
+                    )}
+                    {order.shipmentJobStatus === "unknown" &&
+                      order.shipping.mondialRelayShipment?.status !==
+                        "created" && (
+                        <p className="admin-error" role="alert">
+                          Le résultat de création est incertain. Vérifiez le compte Mondial Relay avant toute nouvelle tentative.
+                        </p>
+                      )}
                     {!productionShipmentReady &&
+                      fulfillmentMode === "api2" &&
                       !order.shipping.mondialRelayShipment && (
                         <p className="admin-muted" role="status">
                           La configuration de production n’est pas encore prête.
@@ -911,6 +1166,61 @@ function TrackingEditor({
           Ouvrir le lien de suivi
         </a>
       )}
+    </div>
+  );
+}
+
+function ManualShipmentEditor({
+  orderId,
+  pending,
+  onSave,
+}: {
+  orderId: string;
+  pending: boolean;
+  onSave: (shipmentNumber: string) => void;
+}) {
+  const [shipmentNumber, setShipmentNumber] = useState("");
+
+  return (
+    <div>
+      <p>
+        <a
+          href="https://connect.mondialrelay.com"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Ouvrir Mondial Relay Connect
+        </a>
+      </p>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          onSave(shipmentNumber.trim());
+        }}
+      >
+        <label>
+          Numéro de l’expédition créée dans Connect
+          <input
+            value={shipmentNumber}
+            onChange={(event) => setShipmentNumber(event.target.value)}
+            autoComplete="off"
+            maxLength={40}
+            required
+            pattern="[A-Za-z0-9-]{4,40}"
+            disabled={pending}
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={pending || shipmentNumber.trim().length < 4}
+        >
+          {pending ? "Enregistrement…" : "Enregistrer l’expédition Connect"}
+        </button>
+      </form>
+      <p className="admin-muted">
+        Commande {orderId}. Le statut reste « Prête à expédier » jusqu’à son
+        dépôt effectif chez Mondial Relay.
+      </p>
     </div>
   );
 }

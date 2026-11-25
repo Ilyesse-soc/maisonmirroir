@@ -134,7 +134,7 @@ export default function AdminSettingsPage() {
         throw new Error(data.error || "Enregistrement impossible.");
       setShipping(data.settings);
       setShippingMessage(
-        "Paramètres contractuels enregistrés. Les commandes et expéditions restent soumises aux garde-fous de production.",
+        "Paramètres de livraison enregistrés. Les commandes restent soumises aux contrôles de disponibilité.",
       );
     } catch (error) {
       setShippingMessage(
@@ -735,9 +735,66 @@ export default function AdminSettingsPage() {
           {" - "}
           Création API2 : {relayReadiness.shipmentCreationEnabled ? "prête" : "désactivée"}
           {" - "}
-          Paiement et livraison : {relayReadiness.checkoutShippingReady ? "prêts" : "désactivés"}
+          Connect manuel : {relayReadiness.manualShippingReady ? "confirmé" : "à vérifier"}
+          {" - "}
+          Checkout Point Relais (API1 + tarifs) : {relayReadiness.checkoutShippingReady ? "prêt" : "désactivé"}
         </div>
         <form onSubmit={saveShipping}>
+          <section style={{ marginTop: 18 }}>
+            <h3>Mode de traitement des expéditions</h3>
+            <label>
+              Mode actif
+              <select
+                value={shipping.fulfillmentMode}
+                onChange={(event) =>
+                  setShipping((current) => ({
+                    ...current,
+                    fulfillmentMode:
+                      event.target.value === "api2" ? "api2" : "manual_connect",
+                  }))
+                }
+              >
+                <option value="manual_connect">
+                  Manuel - Mondial Relay Connect
+                </option>
+                <option value="api2">
+                  Automatique - API2 Mondial Relay
+                </option>
+              </select>
+            </label>
+            {shipping.fulfillmentMode === "manual_connect" ? (
+              <>
+                <p className="admin-muted">
+                  Après paiement, créez l’étiquette dans l’espace professionnel
+                  Mondial Relay Connect, puis enregistrez son numéro dans la
+                  commande. Cette boutique ne créera pas d’étiquette API2 dans
+                  ce mode.
+                </p>
+                <label style={{ display: "block", marginTop: 10 }}>
+                  <input
+                    type="checkbox"
+                    checked={shipping.manualConnectConfirmed}
+                    onChange={(event) =>
+                      setShipping((current) => ({
+                        ...current,
+                        manualConnectConfirmed: event.target.checked,
+                      }))
+                    }
+                  />{" "}
+                  J’ai vérifié dans mon compte professionnel Connect que mon
+                  contrat permet de créer des étiquettes Point Relais et que je
+                  peux les télécharger et les remettre au transporteur.
+                </label>
+              </>
+            ) : (
+              <p className="admin-muted">
+                Ce mode ne doit être sélectionné que lorsque le contrat, le
+                service 24R/MED, le dépôt REL, l’expéditeur et l’accès API2 sont
+                vérifiés. Les confirmations API2 restent indépendantes de la
+                recherche API1.
+              </p>
+            )}
+          </section>
           <section style={{ marginTop: 18 }}>
             <h3>Expéditeur et dépôt du colis</h3>
             <p className="admin-muted">

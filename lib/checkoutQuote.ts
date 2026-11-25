@@ -75,6 +75,12 @@ export async function prepareCheckoutOrder(order: CheckoutPayload) {
   if (shippingMethodId === MONDIAL_RELAY_POINT_RELAIS_ID) {
     if (!readiness.checkoutShippingReady)
       throw new CheckoutConfigurationError("SHIPPING_NOT_READY", 503);
+    if (
+      settings.fulfillmentMode === "manual_connect"
+        ? !settings.manualConnectConfirmed
+        : !readiness.shipmentCreationEnabled
+    )
+      throw new CheckoutConfigurationError("FULFILLMENT_NOT_READY", 503);
     const submittedPoint = order.relayPoint as RelayPoint | undefined;
     if (
       !submittedPoint ||
@@ -132,5 +138,6 @@ export async function prepareCheckoutOrder(order: CheckoutPayload) {
     preparationDays: settings.preparationDays,
     cgvVersion: getCgvVersion(settings.preparationDays),
     promotionCode: order.promotionCode?.trim().toUpperCase() || undefined,
+    fulfillmentMode: settings.fulfillmentMode,
   };
 }

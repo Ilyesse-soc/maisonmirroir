@@ -38,7 +38,7 @@ export default function PrivacyPolicy() {
         navigation. Les pages consultées et l’étape du parcours sont
         enregistrées sans adresse IP, nom, coordonnées ou contenu de panier.
         Les événements sont supprimés au plus tard après 30 jours. Vous pouvez
-        retirer votre accord depuis « Préférences statistiques ».
+        retirer votre accord depuis « Gérer mes cookies ».
       </p>
     </LegalPage>
   );

@@ -30,11 +30,17 @@ export async function GET() {
       relay.shipmentCreationEnabled ||
       (homeModeReady &&
         process.env.REAL_SHIPMENT_CREATION_ENABLED === "true");
+    const manualShippingReady =
+      relay.manualShippingReady && realShippingEnabled;
+    const fulfillmentReady =
+      settings.fulfillmentMode === "manual_connect"
+        ? manualShippingReady
+        : realShipmentCreationEnabled;
     const shopOpen =
       process.env.SHOP_OPEN === "true" &&
       paymentsEnabled &&
       realShippingEnabled &&
-      realShipmentCreationEnabled;
+      fulfillmentReady;
     const completePublicTier = (tier: (typeof settings.shippingTiers)[number]) =>
       tier.confirmed &&
       typeof tier.weightGrams === "number" &&
@@ -71,6 +77,7 @@ export async function GET() {
           homeDeliveryEnabled: homeModeReady,
           homeDeliveryContractConfirmed: homeModeReady,
           preparationDays: settings.preparationDays,
+          fulfillmentMode: settings.fulfillmentMode,
         },
         availableShippingMethodIds,
         cgvVersion: getCgvVersion(settings.preparationDays),
@@ -78,6 +85,8 @@ export async function GET() {
         paymentsEnabled,
         realShippingEnabled,
         realShipmentCreationEnabled,
+        manualShippingReady,
+        fulfillmentReady,
         paypalClientId: paymentsEnabled && shopOpen ? paypal.clientId : "",
       },
       { headers: { "Cache-Control": "no-store" } },

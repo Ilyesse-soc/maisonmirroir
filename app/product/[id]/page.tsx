@@ -26,6 +26,11 @@ import {
   theme,
 } from "@/lib/uiStyles";
 
+const frenchPriceNumber = new Intl.NumberFormat("fr-FR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 export default function ProductPage() {
   const params = useParams();
   return (
@@ -141,6 +146,8 @@ function ProductDetails({ productId }: { productId: string }) {
     );
   const inventoryManaged =
     product.id === "modest-era" || product.id === "paradise-way";
+  const formatProductAmount = (amount: number) =>
+    inventoryManaged ? frenchPriceNumber.format(amount) : amount.toFixed(2);
   const isAvailable = isProductAvailable(
     product.id,
     product.availableForSale === true,
@@ -218,9 +225,9 @@ function ProductDetails({ productId }: { productId: string }) {
   );
   const shippingPrice = shippingQuote.price ?? 0;
   const total = qty ? subtotal + shippingPrice : 0;
-  const subtotalDisplayAmount = qty ? subtotal.toFixed(2) : "-";
+  const subtotalDisplayAmount = qty ? formatProductAmount(subtotal) : "-";
   const displayAmount =
-    qty && shippingQuote.price !== null ? total.toFixed(2) : "-";
+    qty && shippingQuote.price !== null ? formatProductAmount(total) : "-";
 
   const optionLabels: Record<string, string> = {
     boxColor: "Couleur des boîtes",
@@ -415,53 +422,69 @@ function ProductDetails({ productId }: { productId: string }) {
 
   return (
     <div
-      style={{ paddingTop: 80, background: theme.marble }}
+      className={inventoryManaged ? "storefront" : undefined}
+      style={
+        inventoryManaged
+          ? undefined
+          : { paddingTop: 80, background: theme.marble }
+      }
     >
       <div
-        style={{
-          maxWidth: pageMaxWidth,
-          margin: "0 auto",
-          padding: "64px 24px",
-        }}
+        className={inventoryManaged ? "storefront-wrap" : undefined}
+        style={
+          inventoryManaged
+            ? undefined
+            : {
+                maxWidth: pageMaxWidth,
+                margin: "0 auto",
+                padding: "64px 24px",
+              }
+        }
       >
-        {/* Breadcrumb */}
-        <nav
-          style={{
-            fontSize: 12,
-            fontFamily: fonts.body,
-            letterSpacing: "0.20em",
-            textTransform: "uppercase",
-            marginBottom: 40,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-            color: theme.textMid,
-          }}
-        >
-          <Link
-            href="/"
-            style={{ color: theme.textMid, textDecoration: "none" }}
+        {!inventoryManaged && (
+          <nav
+            style={{
+              fontSize: 12,
+              fontFamily: fonts.body,
+              letterSpacing: "0.20em",
+              textTransform: "uppercase",
+              marginBottom: 40,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              color: theme.textMid,
+            }}
           >
-            Accueil
-          </Link>
-          <span style={{ color: theme.gold }}>◈</span>
-          <Link
-            href={`/category/${product.category}`}
-            style={{ color: theme.textMid, textDecoration: "none" }}
-          >
-            {product.categoryLabel}
-          </Link>
-          <span style={{ color: theme.gold }}>◈</span>
-          <span style={{ color: theme.textDark }}>{product.name}</span>
-        </nav>
+            <Link
+              href="/"
+              style={{ color: theme.textMid, textDecoration: "none" }}
+            >
+              Accueil
+            </Link>
+            <span style={{ color: theme.gold }}>◈</span>
+            <Link
+              href={`/category/${product.category}`}
+              style={{ color: theme.textMid, textDecoration: "none" }}
+            >
+              {product.categoryLabel}
+            </Link>
+            <span style={{ color: theme.gold }}>◈</span>
+            <span style={{ color: theme.textDark }}>{product.name}</span>
+          </nav>
+        )}
 
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-            gap: 56,
-          }}
+          className={inventoryManaged ? "product-coming-soon" : undefined}
+          style={
+            inventoryManaged
+              ? undefined
+              : {
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                  gap: 56,
+                }
+          }
         >
           {/* LEFT: Image gallery */}
           <div>
@@ -475,80 +498,90 @@ function ProductDetails({ productId }: { productId: string }) {
               priority
             />
 
-            {/* Features */}
-            <div
-              style={{
-                marginTop: 32,
-                padding: 24,
-                background: "white",
-                border: `1px solid ${theme.creamDark}`,
-              }}
-            >
-              <h4
+            {!inventoryManaged && (
+              <div
                 style={{
-                  fontFamily: fonts.display,
-                  fontSize: 14,
-                  letterSpacing: "0.25em",
-                  textTransform: "uppercase",
-                  marginBottom: 16,
-                  color: theme.gold,
+                  marginTop: 32,
+                  padding: 24,
+                  background: "white",
+                  border: `1px solid ${theme.creamDark}`,
                 }}
               >
-                Caractéristiques
-              </h4>
-              <ul
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: 8,
-                  padding: 0,
-                  margin: 0,
-                  listStyle: "none",
-                }}
-              >
-                {product.features.map((f) => (
-                  <li
-                    key={f}
-                    style={{
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: 12,
-                      fontSize: 12,
-                      fontFamily: fonts.body,
-                      letterSpacing: "0.04em",
-                      color: theme.textMid,
-                    }}
-                  >
-                    <span style={{ color: theme.gold }}>◇</span>
-                    {f}
-                  </li>
-                ))}
-              </ul>
-            </div>
+                <h4
+                  style={{
+                    fontFamily: fonts.display,
+                    fontSize: 14,
+                    letterSpacing: "0.25em",
+                    textTransform: "uppercase",
+                    marginBottom: 16,
+                    color: theme.gold,
+                  }}
+                >
+                  Caractéristiques
+                </h4>
+                <ul
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                    padding: 0,
+                    margin: 0,
+                    listStyle: "none",
+                  }}
+                >
+                  {product.features.map((f) => (
+                    <li
+                      key={f}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 12,
+                        fontSize: 12,
+                        fontFamily: fonts.body,
+                        letterSpacing: "0.04em",
+                        color: theme.textMid,
+                      }}
+                    >
+                      <span style={{ color: theme.gold }}>◇</span>
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* RIGHT: Form */}
-          <div>
+          <div className={inventoryManaged ? "product-detail-copy" : undefined}>
             <p
-              style={{
-                fontFamily: fonts.display,
-                fontSize: 12,
-                letterSpacing: "0.35em",
-                textTransform: "uppercase",
-                marginBottom: 8,
-                color: theme.gold,
-              }}
+              className={inventoryManaged ? "storefront-eyebrow" : undefined}
+              style={
+                inventoryManaged
+                  ? undefined
+                  : {
+                      fontFamily: fonts.display,
+                      fontSize: 12,
+                      letterSpacing: "0.35em",
+                      textTransform: "uppercase",
+                      marginBottom: 8,
+                      color: theme.gold,
+                    }
+              }
             >
               {product.categoryLabel}
             </p>
             <h1
-              style={{
-                fontFamily: fonts.display,
-                fontSize: "clamp(2rem, 4vw, 2.5rem)",
-                fontWeight: 300,
-                marginBottom: 12,
-                color: theme.textDark,
-              }}
+              style={
+                inventoryManaged
+                  ? undefined
+                  : {
+                      fontFamily: fonts.display,
+                      fontSize: "clamp(2rem, 4vw, 2.5rem)",
+                      fontWeight: 300,
+                      marginBottom: 12,
+                      color: theme.textDark,
+                    }
+              }
             >
               {product.name}
             </h1>
@@ -561,91 +594,111 @@ function ProductDetails({ productId }: { productId: string }) {
                 Bientôt disponible - les commandes ne sont pas encore ouvertes.
               </p>
             ) : null}
-            {typeof product.originalPrice === "number" &&
-            product.originalPrice > unitPrice ? (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: 14,
-                  flexWrap: "wrap",
-                  marginBottom: 20,
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: fonts.body,
-                    fontSize: 14,
-                    color: theme.textMid,
-                    textDecoration: "line-through",
-                    letterSpacing: "0.06em",
-                  }}
+            {inventoryManaged ? (
+              <>
+                <p className="storefront-lede">{product.description}</p>
+                <p className="storefront-product-price">
+                  {formatProductAmount(unitPrice)} €
+                </p>
+                <ul
+                  className="product-feature-list"
+                  aria-label="Caractéristiques du produit"
                 >
-                  {product.originalPrice.toFixed(2)} €
-                </span>
-                <span
-                  style={{
-                    fontFamily: fonts.display,
-                    fontSize: 30,
-                    color: theme.gold,
-                  }}
-                >
-                  {unitPrice.toFixed(2)} €
-                </span>
-                <span
-                  style={{
-                    fontFamily: fonts.body,
-                    fontSize: 11,
-                    letterSpacing: "0.18em",
-                    textTransform: "uppercase",
-                    color: theme.gold,
-                    border: `1px solid ${theme.gold}`,
-                    padding: "6px 10px",
-                  }}
-                >
-                  -{Math.round((1 - unitPrice / product.originalPrice) * 100)}%
-                </span>
-              </div>
+                  {product.features.map((feature) => (
+                    <li key={feature}>{feature}</li>
+                  ))}
+                </ul>
+              </>
             ) : (
-              <p
-                style={{
-                  fontFamily: fonts.display,
-                  fontSize: 26,
-                  marginBottom: 12,
-                  color: theme.gold,
-                }}
-              >
-                {unitPrice.toFixed(2)} €
-              </p>
-            )}
+              <>
+                {typeof product.originalPrice === "number" &&
+                product.originalPrice > unitPrice ? (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: 14,
+                      flexWrap: "wrap",
+                      marginBottom: 20,
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontFamily: fonts.body,
+                        fontSize: 14,
+                        color: theme.textMid,
+                        textDecoration: "line-through",
+                        letterSpacing: "0.06em",
+                      }}
+                    >
+                      {product.originalPrice.toFixed(2)} €
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: fonts.display,
+                        fontSize: 30,
+                        color: theme.gold,
+                      }}
+                    >
+                      {unitPrice.toFixed(2)} €
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: fonts.body,
+                        fontSize: 11,
+                        letterSpacing: "0.18em",
+                        textTransform: "uppercase",
+                        color: theme.gold,
+                        border: `1px solid ${theme.gold}`,
+                        padding: "6px 10px",
+                      }}
+                    >
+                      -{Math.round((1 - unitPrice / product.originalPrice) * 100)}%
+                    </span>
+                  </div>
+                ) : (
+                  <p
+                    style={{
+                      fontFamily: fonts.display,
+                      fontSize: 26,
+                      marginBottom: 12,
+                      color: theme.gold,
+                    }}
+                  >
+                    {unitPrice.toFixed(2)} €
+                  </p>
+                )}
 
-            <p
-              style={{
-                fontFamily: fonts.body,
-                fontSize: 12,
-                letterSpacing: "0.06em",
-                color: theme.textMid,
-                marginBottom: 20,
-              }}
-            >
-              Sous-total produits ({qty ?? "-"} × {unitPrice.toFixed(2)} €) :{" "}
-              <strong style={{ color: theme.textDark }}>
-                {qty ? `${subtotalDisplayAmount} €` : "-"}
-              </strong>
-            </p>
-            <div style={{ ...dividerStyle(120), margin: "0 0 24px" }} />
-            <p
-              style={{
-                fontSize: 14,
-                lineHeight: 1.9,
-                fontFamily: fonts.body,
-                letterSpacing: "0.04em",
-                marginBottom: 32,
-                color: theme.textMid,
-              }}
-            >
-              {product.description}
-            </p>
+                <p
+                  style={{
+                    fontFamily: fonts.body,
+                    fontSize: 12,
+                    letterSpacing: "0.06em",
+                    color: theme.textMid,
+                    marginBottom: 20,
+                  }}
+                >
+                  Sous-total produits ({qty ?? "-"} × {unitPrice.toFixed(2)} €)
+                  :{" "}
+                  <strong style={{ color: theme.textDark }}>
+                    {qty ? `${subtotalDisplayAmount} €` : "-"}
+                  </strong>
+                </p>
+                <div style={{ ...dividerStyle(120), margin: "0 0 24px" }} />
+                <p
+                  style={{
+                    fontSize: 14,
+                    lineHeight: 1.9,
+                    fontFamily: fonts.body,
+                    letterSpacing: "0.04em",
+                    marginBottom: 32,
+                    color: theme.textMid,
+                  }}
+                >
+                  {product.description}
+                </p>
+              </>
+            )}
 
             {/* Step progress */}
             <div
@@ -899,7 +952,7 @@ function ProductDetails({ productId }: { productId: string }) {
                         lineHeight: 1.6,
                       }}
                     >
-                      Prix unitaire : <strong>{unitPrice.toFixed(2)} €</strong>{" "}
+                      Prix unitaire : <strong>{formatProductAmount(unitPrice)} €</strong>{" "}
                       - Total :{" "}
                       <strong>{qty ? `${displayAmount} €` : "-"}</strong>
                     </p>
@@ -1644,7 +1697,7 @@ function ProductDetails({ productId }: { productId: string }) {
                         ? `${selectedShipping.shortLabel} - ${
                             shippingQuote.price === null
                               ? "À confirmer"
-                              : `${shippingQuote.price.toFixed(2)} €`
+                              : `${formatProductAmount(shippingQuote.price)} €`
                           }`
                         : "Mode non selectionne"}
                     </span>

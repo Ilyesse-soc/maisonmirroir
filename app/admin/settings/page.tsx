@@ -8,6 +8,7 @@ import {
   type ParcelProfile,
   type ProposedShippingRate,
   type ShippingRate,
+  type ShippingTier,
 } from "@/lib/mondialRelayTypes";
 
 type Settings = {
@@ -213,6 +214,211 @@ export default function AdminSettingsPage() {
       ...current,
       proposedRate: { ...current.proposedRate, ...patch },
     }));
+  }
+
+  function updateShippingTier(index: number, patch: Partial<ShippingTier>) {
+    setShipping((current) => ({
+      ...current,
+      shippingTiers: current.shippingTiers.map((tier, tierIndex) =>
+        tierIndex === index
+          ? {
+              ...tier,
+              ...patch,
+              ...(Object.keys(patch).length === 1 && "confirmed" in patch
+                ? {}
+                : { confirmed: false }),
+            }
+          : tier,
+      ),
+    }));
+  }
+
+  function addShippingTier() {
+    setShipping((current) => {
+      const quantities = new Set(current.shippingTiers.map((tier) => tier.quantity));
+      let quantity = 1;
+      while (quantities.has(quantity) && quantity <= 30) quantity += 1;
+      if (quantity > 30) return current;
+      return {
+        ...current,
+        shippingTiers: [
+          ...current.shippingTiers,
+          {
+            quantity,
+            weightGrams: null,
+            lengthCm: null,
+            widthCm: null,
+            depthCm: null,
+            customerPriceCents: null,
+            confirmed: false,
+          },
+        ].sort((left, right) => left.quantity - right.quantity),
+      };
+    });
+  }
+
+  function removeShippingTier(index: number) {
+    setShipping((current) => ({
+      ...current,
+      shippingTiers: current.shippingTiers.filter(
+        (_, tierIndex) => tierIndex !== index,
+      ),
+    }));
+  }
+
+  function shippingTierFields() {
+    return (
+      <section style={{ marginTop: 20 }}>
+        <h3>Profils colis et tarifs par quantité</h3>
+        <p className="admin-muted">
+          Les prix affichés sont les frais TTC facturés à l’acheteuse. Chaque
+          quantité doit avoir un poids, des dimensions réelles et un tarif
+          confirmé. Sans palier complet, le checkout et la recherche de Point
+          Relais restent bloqués pour cette quantité.
+        </p>
+        <div style={{ display: "grid", gap: 14 }}>
+          {shipping.shippingTiers.map((tier, index) => {
+            const complete =
+              Boolean(tier.weightGrams) &&
+              Boolean(tier.lengthCm) &&
+              Boolean(tier.widthCm) &&
+              Boolean(tier.depthCm) &&
+              Boolean(tier.customerPriceCents);
+            return (
+              <fieldset
+                key={`quantity-tier-${index}`}
+                className="admin-form-grid"
+                style={{ alignItems: "end" }}
+              >
+                <legend>{tier.quantity} sac{tier.quantity === 1 ? "" : "s"}</legend>
+                <label>
+                  Quantité exacte
+                  <input
+                    type="number"
+                    min="1"
+                    max="30"
+                    step="1"
+                    value={tier.quantity}
+                    onChange={(event) =>
+                      updateShippingTier(index, {
+                        quantity: Number(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  Poids colis (g)
+                  <input
+                    type="number"
+                    min="1"
+                    max="30000"
+                    step="1"
+                    value={tier.weightGrams ?? ""}
+                    onChange={(event) =>
+                      updateShippingTier(index, {
+                        weightGrams:
+                          event.target.value === ""
+                            ? null
+                            : Number(event.target.value),
+                      })
+                    }
+                  />
+                </label>
+                {([
+                  ["lengthCm", "Longueur (cm)"],
+                  ["widthCm", "Largeur (cm)"],
+                  ["depthCm", "Hauteur (cm)"],
+                ] as const).map(([fieldName, label]) => (
+                  <label key={fieldName}>
+                    {label}
+                    <input
+                      type="number"
+                      min="1"
+                      max="200"
+                      step="1"
+                      value={tier[fieldName] ?? ""}
+                      onChange={(event) =>
+                        updateShippingTier(index, {
+                          [fieldName]:
+                            event.target.value === ""
+                              ? null
+                              : Number(event.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                ))}
+                <label>
+                  Livraison facturée TTC (€)
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="1000"
+                    step="0.01"
+                    value={
+                      tier.customerPriceCents === null
+                        ? ""
+                        : (tier.customerPriceCents / 100).toFixed(2)
+                    }
+                    onChange={(event) =>
+                      updateShippingTier(index, {
+                        customerPriceCents:
+                          event.target.value === ""
+                            ? null
+                            : Math.round(Number(event.target.value) * 100),
+                      })
+                    }
+                  />
+                </label>
+                <label>
+                  <span>
+                    <input
+                      type="checkbox"
+                      checked={tier.confirmed}
+                      disabled={!complete}
+                      onChange={(event) =>
+                        updateShippingTier(index, {
+                          confirmed: event.target.checked,
+                        })
+                      }
+                    />{" "}
+                    Colis et tarif confirmés
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  style={{
+                    border: "1px solid #d5c8b3",
+                    background: "#fff",
+                    padding: "10px 12px",
+                    color: "#302017",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => removeShippingTier(index)}
+                >
+                  Supprimer ce palier
+                </button>
+              </fieldset>
+            );
+          })}
+        </div>
+        <button
+          type="button"
+          style={{
+            marginTop: 10,
+            border: "1px solid #d5c8b3",
+            background: "#fff",
+            padding: "10px 12px",
+            color: "#302017",
+            cursor: "pointer",
+          }}
+          disabled={shipping.shippingTiers.length >= 30}
+          onClick={addShippingTier}
+        >
+          Ajouter un palier
+        </button>
+      </section>
+    );
   }
 
   function parcelFields(
@@ -475,11 +681,11 @@ export default function AdminSettingsPage() {
         </div>
         <form onSubmit={saveShipping}>
           <section style={{ marginTop: 18 }}>
-            <h3>Expéditeur et collecte</h3>
+            <h3>Expéditeur et dépôt du colis</h3>
             <p className="admin-muted">
-              Saisissez les coordonnées d’expédition communiquées par votre
-              entreprise. Aucun mode ni pays n’est pré-sélectionné comme
-              autorisé. Le mode de collecte doit correspondre à votre contrat.
+              REL correspond au dépôt du colis en Point Relais ou Locker. Aucun
+              enlèvement ni aucune collecte à domicile ne sera planifié. API2
+              demande un téléphone et un email de contact pour les notifications.
             </p>
             <div className="admin-form-grid">
               <label>Entreprise<input value={shipping.sender.company} maxLength={120} onChange={(event) => updateSender("company", event.target.value)} /></label>
@@ -490,9 +696,12 @@ export default function AdminSettingsPage() {
               <label>Code postal<input value={shipping.sender.postalCode} maxLength={12} onChange={(event) => updateSender("postalCode", event.target.value)} /></label>
               <label>Ville<input value={shipping.sender.city} maxLength={80} onChange={(event) => updateSender("city", event.target.value)} /></label>
               <label>Pays (code ISO à deux lettres, FR requis actuellement)<input value={shipping.sender.countryCode} maxLength={2} onChange={(event) => updateSender("countryCode", event.target.value.toUpperCase())} /></label>
-              <label>Téléphone<input type="tel" value={shipping.sender.phone} maxLength={30} onChange={(event) => updateSender("phone", event.target.value)} /></label>
-              <label>Email<input type="email" value={shipping.sender.email} maxLength={254} onChange={(event) => updateSender("email", event.target.value)} /></label>
-              <label>Mode de collecte fourni par Mondial Relay<input value={shipping.collectionMode} maxLength={20} onChange={(event) => setShipping((current) => ({ ...current, collectionMode: event.target.value, collectionModeConfirmed: false }))} placeholder="À renseigner après confirmation" /></label>
+              <label>Téléphone de contact requis par API2<input type="tel" value={shipping.sender.phone} maxLength={30} onChange={(event) => updateSender("phone", event.target.value)} /></label>
+              <label>Email de contact<input type="email" value={shipping.sender.email} maxLength={254} onChange={(event) => updateSender("email", event.target.value)} /></label>
+              <label>
+                Mode de dépôt API2
+                <input value="REL - dépôt en Point Relais ou Locker" readOnly />
+              </label>
             </div>
             <label style={{ display: "block", marginTop: 12 }}>
               <input
@@ -505,53 +714,38 @@ export default function AdminSettingsPage() {
                   }))
                 }
               />{" "}
-              Je confirme que ce mode de collecte est autorisé par mon contrat.
+              Je confirme que ce mode de dépôt ou de collecte est autorisé par
+              mon contrat.
             </label>
           </section>
           <section style={{ marginTop: 20 }}>
             <h3>Contrat et services autorisés</h3>
             <p className="admin-muted">
-              Seuls 24R/MED (Point Relais) et 24R/APM (Locker) sont pris en
-              charge par l’intégration actuelle. Leur présence ici ne signifie
-              pas qu’ils sont inclus dans votre contrat. Laissez les services
-              décochés jusqu’à confirmation écrite de Mondial Relay.
+              La boutique est configurée en Point Relais uniquement. La recherche
+              utilise l’action API1 MED et les expéditions API2 le mode 24R.
             </p>
             <div className="admin-form-grid">
               <label>
                 Service utilisé pour la recherche et les expéditions
-                <select
-                  value={shipping.serviceCode}
-                  onChange={(event) =>
-                    setShipping((current) => ({
-                      ...current,
-                      serviceCode: event.target.value as ShippingRate["serviceCode"],
-                      serviceConfirmed: false,
-                    }))
-                  }
-                >
-                  <option value="24R/MED">24R/MED - Point Relais</option>
-                  <option value="24R/APM">24R/APM - Locker</option>
-                </select>
+                <input value="24R/MED - Point Relais" readOnly />
               </label>
               <div>
-                {(["24R/MED", "24R/APM"] as const).map((service) => (
-                  <label key={service} style={{ display: "block" }}>
-                    <input
-                      type="checkbox"
-                      checked={shipping.allowedServices.includes(service)}
-                      onChange={(event) =>
-                        setShipping((current) => ({
-                          ...current,
-                          allowedServices: event.target.checked
-                            ? [...new Set([...current.allowedServices, service])]
-                            : current.allowedServices.filter((item) => item !== service),
-                          serviceConfirmed: false,
-                        }))
-                      }
-                    />{" "}
-                    {service} autorisé par mon contrat
-                  </label>
-                ))}
+                <label style={{ display: "block" }}>
+                  <input
+                    type="checkbox"
+                    checked={shipping.allowedServices.includes("24R/MED")}
+                    onChange={(event) =>
+                      setShipping((current) => ({
+                        ...current,
+                        allowedServices: event.target.checked
+                          ? ["24R/MED"]
+                          : [],
+                        serviceConfirmed: false,
+                      }))
+                    }
+                  />{" "}
+                  24R/MED autorisé par mon contrat
+                </label>
               </div>
             </div>
             <label style={{ display: "block", marginTop: 12 }}>
@@ -583,22 +777,25 @@ export default function AdminSettingsPage() {
               par ce contrat.
             </label>
           </section>
-          {parcelFields(
-            "Profil colis contractuel",
-            "contractParcel",
-            shipping.contractParcel,
-          )}
-          <p className="admin-muted">
-            Le poids et les dimensions doivent décrire le colis réellement
-            emballé. « Articles par colis » fixe la limite d’articles couverts
-            par ce profil.
-          </p>
-          {rateFields(
-            "Grille tarifaire par poids",
-            "contractRates",
-            shipping.contractRates,
-            "Pour chaque palier, saisissez le coût transporteur et précisez s’il est HT ou TTC, puis le prix TTC facturé au client. Un palier n’est utilisable qu’après confirmation explicite et avec tous ses paramètres renseignés.",
-          )}
+          {shippingTierFields()}
+          <details style={{ marginTop: 18 }}>
+            <summary>Paramètres historiques par poids</summary>
+            <p className="admin-muted">
+              Ces paramètres sont conservés pour compatibilité. Les profils et
+              tarifs par quantité ci-dessus sont prioritaires.
+            </p>
+            {parcelFields(
+              "Profil colis historique",
+              "contractParcel",
+              shipping.contractParcel,
+            )}
+            {rateFields(
+              "Grille tarifaire historique",
+              "contractRates",
+              shipping.contractRates,
+              "Ces tarifs ne sont pas utilisés lorsque des paliers par quantité sont définis.",
+            )}
+          </details>
           <section style={{ marginTop: 22 }}>
             <h3>Tarif proposé à confirmer</h3>
             <p className="admin-muted">
@@ -610,18 +807,7 @@ export default function AdminSettingsPage() {
             <div className="admin-form-grid">
               <label>
                 Service du tarif proposé
-                <select
-                  value={shipping.proposedRate.serviceCode}
-                  onChange={(event) =>
-                    updateProposedRate({
-                      serviceCode: event.target.value as ProposedShippingRate["serviceCode"],
-                      confirmed: false,
-                    })
-                  }
-                >
-                  <option value="24R/MED">24R/MED - Point Relais</option>
-                  <option value="24R/APM">24R/APM - Locker</option>
-                </select>
+                <input value="24R/MED - Point Relais" readOnly />
               </label>
               <label>
                 Poids maximal correspondant (g)

@@ -35,7 +35,7 @@ export type ProductionShipmentInput = {
   customerNo: string;
   serviceCode: "24R/MED" | "24R/APM";
   relayLocation: string;
-  collectionMode: string;
+  collectionMode: "REL" | "CCC";
   sender: ShipmentAddress;
   recipient: ShipmentAddress;
   parcels: ShipmentParcel[];
@@ -172,7 +172,7 @@ export function buildApi2ProductionRequest(
       <OrderNo>${value(shipment.orderNo)}</OrderNo>
       <CustomerNo>${value(shipment.customerNo)}</CustomerNo>
       <ParcelCount>${shipment.parcels.length}</ParcelCount>
-      <DeliveryMode Mode="${value(shipment.serviceCode)}" Location="${value(shipment.relayLocation)}" />
+      <DeliveryMode Mode="24R" Location="${value(shipment.relayLocation)}" />
       <CollectionMode Mode="${value(shipment.collectionMode)}" Location="" />
       <Parcels>
         ${shipment.parcels

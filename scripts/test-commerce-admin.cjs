@@ -287,6 +287,29 @@ async function main() {
   assert.equal(orderDetailData.order.items[0].catalogImage, "/collection/modest-era-feature.jpeg");
   assert.equal(orderDetailData.order.newsletterConsent.lastEvent, "confirmed");
 
+  const skippedReturnStep = await orderAdmin.PATCH(
+    req("https://admin.test/api/admin/orders/MM-2026-AB123456", "PATCH", {
+      returnStatus: "received",
+    }),
+    { params: Promise.resolve({ orderId: orderRecord.orderId }) },
+  );
+  assert.equal(skippedReturnStep.status, 409);
+  for (const returnStatus of [
+    "requested",
+    "accepted",
+    "awaiting_receipt",
+    "received",
+  ]) {
+    const returnUpdate = await orderAdmin.PATCH(
+      req("https://admin.test/api/admin/orders/MM-2026-AB123456", "PATCH", {
+        returnStatus,
+      }),
+      { params: Promise.resolve({ orderId: orderRecord.orderId }) },
+    );
+    assert.equal(returnUpdate.status, 200);
+    assert.equal((await returnUpdate.json()).returnStatus, returnStatus);
+  }
+
   const refundApi = load("app/api/admin/orders/[orderId]/refund/route.ts");
   const refundKey = randomUUID();
   const refundRequest = {
@@ -306,10 +329,14 @@ async function main() {
   assert.equal((await refundResponse.json()).refund.status, "completed");
   assert.equal(paypalRefundCallCount, 1);
   const refundedFinancials = await query(
-    "SELECT payment_status,refunded_cents FROM mm_commerce_order_financials WHERE order_id=$1",
+    "SELECT payment_status,refunded_cents,return_status FROM mm_commerce_order_financials WHERE order_id=$1",
     [orderRecord.orderId],
   );
-  assert.deepEqual(refundedFinancials.rows[0], { payment_status: "partially_refunded", refunded_cents: 600 });
+  assert.deepEqual(refundedFinancials.rows[0], {
+    payment_status: "partially_refunded",
+    refunded_cents: 600,
+    return_status: "refunded",
+  });
   const repeatedRefund = await refundApi.POST(
     req("https://admin.test/api/admin/orders/MM-2026-AB123456/refund", "POST", refundRequest),
     { params: Promise.resolve({ orderId: "MM-2026-AB123456" }) },
@@ -343,6 +370,22 @@ async function main() {
      VALUES($1,$2,'CAPTURE-EF123456','paid','unfulfilled',2990,490,3480)`,
     [pendingRefundOrder.orderId, pendingRefundOrder.paypalOrderId],
   );
+  const prematureRefundCalls = paypalRefundCallCount;
+  const prematureRefund = await refundApi.POST(
+    req("https://admin.test/api/admin/orders/MM-2026-EF123456/refund", "POST", {
+      amountCents: 250,
+      reason: "Retour pas encore reçu",
+      confirmation: true,
+      idempotencyKey: randomUUID(),
+    }),
+    { params: Promise.resolve({ orderId: pendingRefundOrder.orderId }) },
+  );
+  assert.equal(prematureRefund.status, 409);
+  assert.equal(paypalRefundCallCount, prematureRefundCalls);
+  await query(
+    "UPDATE mm_commerce_order_financials SET return_status='received' WHERE order_id=$1",
+    [pendingRefundOrder.orderId],
+  );
   const pendingKey = randomUUID();
   const pendingBody = { amountCents: 250, reason: "Remboursement partiel test", confirmation: true, idempotencyKey: pendingKey };
   paypalRefundAmountCents = 250;
@@ -367,7 +410,10 @@ async function main() {
   assert.equal(retryPending.status, 200);
   assert.equal(paypalRefundCallCount, 2);
   assert.equal(paypalRefundVerifyCount, 1);
-  assert.equal((await query("SELECT refunded_cents FROM mm_commerce_order_financials WHERE order_id=$1", [pendingRefundOrder.orderId])).rows[0].refunded_cents, 250);
+  assert.deepEqual(
+    (await query("SELECT refunded_cents,return_status FROM mm_commerce_order_financials WHERE order_id=$1", [pendingRefundOrder.orderId])).rows[0],
+    { refunded_cents: 250, return_status: "refunded" },
+  );
 
   const cancelledRecord = {
     ...orderRecord, orderId: "MM-2026-CD123456", paypalOrderId: "PAYPAL-CD123456",

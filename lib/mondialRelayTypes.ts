@@ -30,6 +30,24 @@ export type ParcelProfile = {
   depthCm: number | null;
 };
 
+export type ResolvedParcelProfile = {
+  itemsPerParcel: number;
+  weightGrams: number;
+  lengthCm: number;
+  widthCm: number;
+  depthCm: number;
+};
+
+export type ShippingTier = {
+  quantity: number;
+  weightGrams: number | null;
+  lengthCm: number | null;
+  widthCm: number | null;
+  depthCm: number | null;
+  customerPriceCents: number | null;
+  confirmed: boolean;
+};
+
 export type ShippingRate = {
   serviceCode: SupportedMondialRelayServiceCode;
   maxWeightGrams: number;
@@ -66,11 +84,12 @@ export type MondialRelaySettings = {
   allowedServices: SupportedMondialRelayServiceCode[];
   contractConfirmed: boolean;
   serviceConfirmed: boolean;
-  collectionMode: string;
+  collectionMode: "REL" | "CCC";
   collectionModeConfirmed: boolean;
   sender: MondialRelaySender;
   testParcel: ParcelProfile;
   contractParcel: ParcelProfile;
+  shippingTiers: ShippingTier[];
   testRates: ShippingRate[];
   contractRates: ShippingRate[];
   proposedRate: ProposedShippingRate;
@@ -106,7 +125,7 @@ export const DEFAULT_MONDIAL_RELAY_SETTINGS: MondialRelaySettings = {
   allowedServices: [],
   contractConfirmed: false,
   serviceConfirmed: false,
-  collectionMode: "",
+  collectionMode: "REL",
   collectionModeConfirmed: false,
   sender: EMPTY_MONDIAL_RELAY_SENDER,
   testParcel: {
@@ -123,6 +142,26 @@ export const DEFAULT_MONDIAL_RELAY_SETTINGS: MondialRelaySettings = {
     widthCm: null,
     depthCm: null,
   },
+  shippingTiers: [
+    {
+      quantity: 1,
+      weightGrams: 500,
+      lengthCm: 30,
+      widthCm: 21,
+      depthCm: 6,
+      customerPriceCents: 410,
+      confirmed: true,
+    },
+    {
+      quantity: 2,
+      weightGrams: 1000,
+      lengthCm: null,
+      widthCm: null,
+      depthCm: null,
+      customerPriceCents: 454,
+      confirmed: false,
+    },
+  ],
   testRates: [],
   contractRates: [],
   proposedRate: {
@@ -175,18 +214,67 @@ export function isRelayPoint(value: unknown): value is RelayPoint {
   );
 }
 
+export function getMondialRelayParcelProfile(
+  settings: Partial<
+    Pick<MondialRelaySettings, "contractParcel" | "shippingTiers">
+  >,
+  itemCount: number,
+): ResolvedParcelProfile | null {
+  if (!Number.isInteger(itemCount) || itemCount < 1 || itemCount > 30)
+    return null;
+  if (settings.shippingTiers !== undefined) {
+    const tier = settings.shippingTiers.find(
+      (candidate) => candidate.quantity === itemCount,
+    );
+    if (
+      !tier ||
+      !tier.confirmed ||
+      !tier.weightGrams ||
+      !tier.lengthCm ||
+      !tier.widthCm ||
+      !tier.depthCm
+    )
+      return null;
+    return {
+      itemsPerParcel: tier.quantity,
+      weightGrams: tier.weightGrams,
+      lengthCm: tier.lengthCm,
+      widthCm: tier.widthCm,
+      depthCm: tier.depthCm,
+    };
+  }
+
+  const profile = settings.contractParcel;
+  if (
+    !profile ||
+    !profile.weightGrams ||
+    !profile.lengthCm ||
+    !profile.widthCm ||
+    !profile.depthCm ||
+    itemCount > profile.itemsPerParcel
+  )
+    return null;
+  return {
+    itemsPerParcel: profile.itemsPerParcel,
+    weightGrams: profile.weightGrams,
+    lengthCm: profile.lengthCm,
+    widthCm: profile.widthCm,
+    depthCm: profile.depthCm,
+  };
+}
+
 export function getMondialRelayQuote(
-  settings: Pick<
-    MondialRelaySettings,
-    "serviceCode" | "contractParcel" | "contractRates"
-  > &
+  settings: Pick<MondialRelaySettings, "serviceCode"> &
     Partial<
       Pick<
         MondialRelaySettings,
         | "allowedServices"
         | "serviceConfirmed"
         | "contractConfirmed"
+        | "contractParcel"
+        | "contractRates"
         | "proposedRate"
+        | "shippingTiers"
       >
     >,
   itemCount: number,
@@ -201,16 +289,29 @@ export function getMondialRelayQuote(
   )
     return null;
 
-  const profile = settings.contractParcel;
+  const profile = getMondialRelayParcelProfile(settings, itemCount);
+  if (settings.shippingTiers !== undefined) {
+    const tier = settings.shippingTiers.find(
+      (candidate) => candidate.quantity === itemCount,
+    );
+    if (
+      !profile ||
+      !tier?.confirmed ||
+      !Number.isInteger(tier.customerPriceCents) ||
+      !tier.customerPriceCents ||
+      tier.customerPriceCents < 1
+    )
+      return null;
+    return {
+      priceCents: tier.customerPriceCents,
+      parcelCount: 1,
+      serviceCode: settings.serviceCode,
+      source: "contract",
+    };
+  }
+  if (!profile || !settings.contractRates) return null;
   const weightGrams = profile.weightGrams;
-  if (
-    !weightGrams ||
-    !profile.lengthCm ||
-    !profile.widthCm ||
-    !profile.depthCm ||
-    profile.itemsPerParcel < 1
-  )
-    return null;
+  if (!weightGrams) return null;
 
   const proposed = settings.proposedRate;
   const proposedAsRate: ShippingRate | null =

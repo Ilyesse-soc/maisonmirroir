@@ -1,7 +1,7 @@
 import "server-only";
 import { database } from "@/lib/newsletterDb";
 import { readOrders } from "@/lib/orderStore";
-import type { OrderRecord } from "@/lib/orderTypes";
+import type { OrderRecord, OrderReturnStatus } from "@/lib/orderTypes";
 
 export type AdminOrder = OrderRecord & {
   paymentStatus: string;
@@ -9,6 +9,8 @@ export type AdminOrder = OrderRecord & {
   refundedCents: number;
   discountCents: number;
   totalCents: number;
+  returnStatus: OrderReturnStatus;
+  returnUpdatedAt: string | null;
   refundEligible: boolean;
   refundAttempt: null | { idempotencyKey: string; amountCents: number; status: string };
   refundHistory: Array<{ refundId: string; amountCents: number; status: string; reason: string; createdAt: string; completedAt: string | null }>;
@@ -30,7 +32,7 @@ export async function listAdminOrders(search: string, payment: string, shipment:
     try {
       const result = await database().query(
         `SELECT f.order_id,f.payment_status,f.shipment_status,f.refunded_cents,
-          f.discount_cents,f.total_cents,
+          f.discount_cents,f.total_cents,f.return_status,f.return_updated_at,
           (f.payment_status IN ('paid','partially_refunded')
             AND f.paypal_capture_id IS NOT NULL
             AND f.refunded_cents<f.total_cents
@@ -69,6 +71,10 @@ export async function listAdminOrders(search: string, payment: string, shipment:
       refundedCents: Number(finance?.refunded_cents || 0),
       discountCents: Number(finance?.discount_cents || 0),
       totalCents: Number(finance?.total_cents || Math.round(order.total * 100)),
+      returnStatus: String(finance?.return_status || "none") as OrderReturnStatus,
+      returnUpdatedAt: finance?.return_updated_at
+        ? String(finance.return_updated_at)
+        : null,
       refundEligible: finance?.refund_eligible === true,
       refundAttempt: finance?.idempotency_key ? {
         idempotencyKey: String(finance.idempotency_key),

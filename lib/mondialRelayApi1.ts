@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import type {
-  MondialRelayServiceCode,
+  SupportedMondialRelayServiceCode,
 } from "@/lib/mondialRelayTypes";
 import { parseMondialRelayApi1Response } from "@/lib/mondialRelayApi1Response";
 
@@ -11,7 +11,7 @@ export type MondialRelayApi1SearchInput = {
   postalCode: string;
   city: string;
   weightGrams: number;
-  serviceCode: MondialRelayServiceCode;
+  serviceCode: SupportedMondialRelayServiceCode;
 };
 
 export type MondialRelayApi1TrackingInput = {
@@ -36,6 +36,10 @@ function signature(values: Array<string | number>, privateKey: string) {
     .toUpperCase();
 }
 
+function api1Action(serviceCode: SupportedMondialRelayServiceCode) {
+  return serviceCode === "24R/APM" ? "APM" : "MED";
+}
+
 export function buildApi1PointSearchRequest(
   input: MondialRelayApi1SearchInput,
 ) {
@@ -49,7 +53,7 @@ export function buildApi1PointSearchRequest(
     ["Longitude", ""],
     ["Taille", ""],
     ["Poids", input.weightGrams],
-    ["Action", input.serviceCode],
+    ["Action", api1Action(input.serviceCode)],
     ["DelaiEnvoi", ""],
     ["RayonRecherche", ""],
     ["TypeActivite", ""],

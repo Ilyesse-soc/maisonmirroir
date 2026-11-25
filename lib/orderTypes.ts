@@ -6,6 +6,15 @@ export type PaymentMethod = "PAYPAL" | "CARD";
 export type OrderStatus =
   "En attente" | "Payee" | "En preparation" | "Expediee" | "Livree" | "Annulee";
 
+export type OrderReturnStatus =
+  | "none"
+  | "requested"
+  | "accepted"
+  | "awaiting_receipt"
+  | "received"
+  | "refund_in_progress"
+  | "refunded";
+
 export type CustomerInfo = {
   firstName: string;
   lastName: string;

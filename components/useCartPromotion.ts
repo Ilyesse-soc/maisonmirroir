@@ -14,8 +14,9 @@ async function validate(code: string, signature: string, signal?: AbortSignal) {
   return { code: String(data.code), discountCents: Number(data.discountCents) };
 }
 
-export function useCartPromotion() {
-  const { items, promotionCode, setPromotionCode } = useCart();
+export function useCartPromotion(quoteItems?: { productId: string; quantity: number; unitPrice: number }[]) {
+  const { items: cartItems, promotionCode, setPromotionCode } = useCart();
+  const items = quoteItems ?? cartItems;
   const [draft, setDraft] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
   const [notice, setNotice] = useState("");

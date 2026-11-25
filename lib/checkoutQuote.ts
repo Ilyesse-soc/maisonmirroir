@@ -103,7 +103,9 @@ export async function prepareCheckoutOrder(order: CheckoutPayload) {
     if (
       !readiness.homeDeliveryReady ||
       process.env.REAL_SHIPPING_ENABLED !== "true" ||
-      process.env.REAL_SHIPMENT_CREATION_ENABLED !== "true"
+      (settings.fulfillmentMode === "manual_connect"
+        ? !settings.manualConnectConfirmed
+        : !readiness.homeShipmentCreationReady)
     )
       throw new CheckoutConfigurationError("HOME_DELIVERY_NOT_READY", 503);
     if (!/^(?:0[1-9]|[1-8][0-9]|9[0-5])[0-9]{3}$/.test(customer.zip))

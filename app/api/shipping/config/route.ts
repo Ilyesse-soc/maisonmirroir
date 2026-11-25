@@ -66,7 +66,8 @@ export async function GET() {
         : completePublicTier,
     );
     const publicHomeShippingTiers = settings.homeDeliveryEnabled &&
-      settings.homeDeliveryContractConfirmed
+      (settings.homeDeliveryContractConfirmed ||
+        (settings.fulfillmentMode === "manual_connect" && settings.manualConnectConfirmed))
       ? settings.homeShippingTiers.filter(
           (tier) =>
             completePublicTier(tier),
@@ -83,7 +84,8 @@ export async function GET() {
           shippingTiers: publicShippingTiers,
           homeShippingTiers: publicHomeShippingTiers,
           homeDeliveryEnabled: homeModeReady,
-          homeDeliveryContractConfirmed: homeModeReady,
+          homeDeliveryContractConfirmed: settings.homeDeliveryContractConfirmed,
+          manualConnectConfirmed: settings.manualConnectConfirmed,
           preparationDays: settings.preparationDays,
           fulfillmentMode: settings.fulfillmentMode,
         },

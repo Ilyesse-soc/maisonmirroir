@@ -48,6 +48,10 @@ assert.equal(
   ),
   null,
 );
+const manualHomeSettings = { ...homeSettings, fulfillmentMode: "manual_connect", manualConnectConfirmed: true, homeDeliveryContractConfirmed: false };
+assert.equal(relayTypes.getHomeDeliveryPriceCents(manualHomeSettings, 1), 749);
+assert.equal(relayTypes.getHomeDeliveryPriceCents({ ...manualHomeSettings, manualConnectConfirmed: false }, 1), null);
+assert.equal(relayTypes.getHomeDeliveryPriceCents({ ...manualHomeSettings, fulfillmentMode: "api2" }, 1), null);
 const relaySettings = loadTypeScript("lib/mondialRelaySettings.ts", {
   "@/lib/mondialRelayTypes": relayTypes,
   "@/lib/newsletterDb": {

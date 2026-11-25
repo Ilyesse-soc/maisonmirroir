@@ -142,7 +142,8 @@ export const mondialRelaySettingsSchema = z
       });
     if (
       settings.homeDeliveryEnabled &&
-      !settings.homeDeliveryContractConfirmed
+      !settings.homeDeliveryContractConfirmed &&
+      !(settings.fulfillmentMode === "manual_connect" && settings.manualConnectConfirmed)
     )
       context.addIssue({
         code: "custom",
@@ -249,7 +250,8 @@ export function parseMondialRelaySettings(value: unknown): MondialRelaySettings 
         })),
     homeDeliveryEnabled:
       source.homeDeliveryEnabled === true &&
-      source.homeDeliveryContractConfirmed === true,
+      (source.homeDeliveryContractConfirmed === true ||
+        (source.fulfillmentMode === "manual_connect" && source.manualConnectConfirmed === true)),
     homeDeliveryContractConfirmed:
       source.homeDeliveryContractConfirmed === true,
     homeShippingTiers: shippingTiersSchema.safeParse(source.homeShippingTiers)
@@ -446,7 +448,11 @@ export function getMondialRelayProductionReadiness(
       tier.depthCm &&
       tier.customerPriceCents,
   );
-  const homeDeliveryConfigured =
+  const manualHomeDeliveryConfigured =
+    settings.fulfillmentMode === "manual_connect" &&
+    settings.manualConnectConfirmed && settings.homeDeliveryEnabled &&
+    credentials.senderConfigured && homeTierReady;
+  const apiHomeDeliveryConfigured =
     settings.homeDeliveryEnabled === true &&
     settings.homeDeliveryContractConfirmed === true &&
     credentials.providerConfirmed &&
@@ -458,12 +464,13 @@ export function getMondialRelayProductionReadiness(
     credentials.senderConfigured &&
     credentials.collectionModeConfigured &&
     homeTierReady;
+  const homeDeliveryConfigured = manualHomeDeliveryConfigured || apiHomeDeliveryConfigured;
   const homeDeliveryReady =
     process.env.REAL_SHIPPING_ENABLED === "true" &&
     homeDeliveryConfigured;
   const homeShipmentCreationReady =
     process.env.REAL_SHIPMENT_CREATION_ENABLED === "true" &&
-    homeDeliveryConfigured;
+    settings.fulfillmentMode === "api2" && apiHomeDeliveryConfigured;
   return {
     ...credentials,
     contractConfirmed,

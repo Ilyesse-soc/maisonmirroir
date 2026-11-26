@@ -33,7 +33,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.27",
-    "better-auth": "1.7.25",
+    "better-auth": "1.7.27",
     "next": "16.4.6",
     "pdf-lib": "^1.17.1",
     "pg": "^8.23.1",

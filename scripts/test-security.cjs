@@ -4,6 +4,16 @@ const assert = require("node:assert/strict"),
   Module = require("node:module"),
   ts = require("typescript");
 const { PGlite } = require("@electric-sql/pglite");
+function filesBelow(directory) {
+  return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const filename = path.join(directory, entry.name);
+    return entry.isDirectory()
+      ? filesBelow(filename)
+      : filename.endsWith("route.ts")
+        ? [filename]
+        : [];
+  });
+}
 async function main() {
   const db = new PGlite();
   for (const file of fs
@@ -27,6 +37,7 @@ async function main() {
     }
   };
   const sent = [];
+  const retractionEmails = [];
   const cache = new Map();
   const mocked = { database: () => ({ query }), transaction };
   function load(filename) {
@@ -39,6 +50,15 @@ async function main() {
     mod.require = (id) => {
       if (id === "server-only") return {};
       if (id === "./newsletterDb") return mocked;
+      if (id === "@/lib/newsletterDb") return mocked;
+      if (id === "@/lib/requestSecurity") return load("lib/requestSecurity.ts");
+      if (id === "@/lib/commerceInventory")
+        return {
+          sendCommerceEmailOnce: async (message) => {
+            retractionEmails.push(message);
+          },
+        };
+      if (id === "@/lib/observability") return { securityEvent: () => {} };
       if (id === "./email")
         return {
           getEmailFrom: () => "sender@example.test",
@@ -148,6 +168,82 @@ async function main() {
   );
   const { NextRequest } = require("next/server"),
     requestSecurity = load("lib/requestSecurity.ts");
+  process.env.BETTER_AUTH_SECRET = "security-regression-secret";
+  const retractionOrderId = "MM-2026-AB123456",
+    retractionPayPalId = "PAYPAL-RETRACTION-TEST";
+  await query(
+    "INSERT INTO mm_orders(order_id,paypal_order_id,record) VALUES($1,$2,$3)",
+    [
+      retractionOrderId,
+      retractionPayPalId,
+      JSON.stringify({
+        orderId: retractionOrderId,
+        orderDate: "2026-11-26T00:00:00.000Z",
+        customer: { firstName: "Synthetic", email: "owner@example.test" },
+      }),
+    ],
+  );
+  await query(
+    `INSERT INTO mm_commerce_order_financials
+      (order_id,paypal_order_id,payment_status,subtotal_cents,shipping_cents,total_cents)
+     VALUES($1,$2,'paid',100,0,100)`,
+    [retractionOrderId, retractionPayPalId],
+  );
+  const retraction = load("app/api/retractation/route.ts");
+  const retractionRequest = (email) =>
+    new NextRequest("https://example.test/api/retractation", {
+      method: "POST",
+      headers: {
+        origin: "https://example.test",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        orderId: retractionOrderId,
+        email,
+        confirmRetraction: true,
+      }),
+    });
+  const otherCustomer = await retraction.POST(
+    retractionRequest("other@example.test"),
+  );
+  assert.equal(otherCustomer.status, 202);
+  assert.equal(
+    (
+      await query(
+        "SELECT count(*)::int AS count FROM mm_commerce_withdrawal_requests WHERE order_id=$1",
+        [retractionOrderId],
+      )
+    ).rows[0].count,
+    0,
+  );
+  assert.equal(retractionEmails.length, 0);
+  const orderOwner = await retraction.POST(
+    retractionRequest("owner@example.test"),
+  );
+  assert.equal(orderOwner.status, 202);
+  assert.equal(
+    (
+      await query(
+        "SELECT count(*)::int AS count FROM mm_commerce_withdrawal_requests WHERE order_id=$1",
+        [retractionOrderId],
+      )
+    ).rows[0].count,
+    1,
+  );
+  assert.equal(retractionEmails.length, 1);
+  const adminApiRoutes = filesBelow("app/api/admin");
+  assert(adminApiRoutes.length >= 20);
+  for (const filename of adminApiRoutes) {
+    assert.match(
+      fs.readFileSync(filename, "utf8"),
+      /\badminDenied\s*\(/,
+      `${filename} must invoke the server-side admin guard`,
+    );
+  }
+  assert.match(
+    fs.readFileSync("app/admin/layout.tsx", "utf8"),
+    /await requireAdminPage\(\)/,
+  );
   assert.equal(
     requestSecurity.mutationAllowed(
       new NextRequest("https://example.test/api", {
@@ -271,6 +367,19 @@ async function main() {
       },
     ]),
   );
+  for (const quantity of [-1, 0, 1.5, 1001, NaN, Infinity, "1"]) {
+    assert.throws(() =>
+      commerce.canonicalItems([
+        {
+          id: "modest-era",
+          name: "Modest Era",
+          category: "sacs",
+          unitPrice: 29.9,
+          quantity,
+        },
+      ]),
+    );
+  }
   assert.throws(() =>
     commerce.canonicalItems([
       {
@@ -311,7 +420,7 @@ async function main() {
   assert.equal(canonical.category, "sacs");
   modestEra.availableForSale = false;
   console.log(
-    "PASS: persistent carts across refresh, consent, 48-hour eligibility, deduplication, private-recipient reminder with mocked provider, delivery events, cancellation after order, CSRF, content type, strict schemas, streamed size bounds, production CSP, canonical prices and quantities. No real email or payment.",
+    "PASS: persistent carts across refresh, consent, 48-hour eligibility, deduplication, private-recipient reminder with mocked provider, delivery events, cancellation after order, retraction ownership, all admin page/API guards, CSRF, content type, strict schemas, streamed size bounds, production CSP, canonical prices and invalid quantities. No real email or payment.",
   );
   await db.close();
 }

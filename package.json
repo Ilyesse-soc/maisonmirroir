@@ -18,6 +18,7 @@
     "test:responsive": "node scripts/test-responsive-legal.cjs",
     "test:responsive-admin": "node scripts/test-responsive-admin.cjs",
     "test:security": "node scripts/test-security.cjs && node scripts/test-webhook.cjs",
+    "test:security:concurrency": "node scripts/test-commerce-concurrency.cjs",
     "db:migrate": "node scripts/newsletter-migrate.cjs",
     "auth:setup": "node scripts/setup-auth.mjs",
     "test:ops": "node scripts/test-ops.cjs",

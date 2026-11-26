@@ -181,6 +181,14 @@ assert(
 const previewCompose = fs.readFileSync("ops/preview.compose.yml", "utf8"),
   previewInit = fs.readFileSync("ops/preview/init.sh", "utf8"),
   previewSeed = fs.readFileSync("ops/preview/seed-fixtures.sql", "utf8");
+const previewNginxService =
+  previewCompose.match(
+    /^  nginx:\n([\s\S]*?)(?=^  [a-zA-Z0-9_-]+:\s*$|^networks:|^volumes:)/m,
+  )?.[1] ?? "";
+assert(
+  previewNginxService && !/^\s+ports\s*:/m.test(previewNginxService),
+  "preview nginx must not publish a host port",
+);
 assert(
   previewCompose.includes("postgres:18-alpine@sha256:") &&
     previewCompose.includes("name: maison-miroir-preview-db") &&

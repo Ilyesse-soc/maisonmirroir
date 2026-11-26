@@ -74,6 +74,7 @@ const providerHealthCache = new Map<
   AiProvider,
   { model: string; checkedAt: number; health: Omit<ProviderHealth, "circuitOpen" | "available"> }
 >();
+const providerHealthRequests = new Map<AiProvider, Promise<ProviderHealth>>();
 
 class ProviderFailure extends Error {
   constructor(
@@ -196,6 +197,18 @@ function closeCircuit(provider: AiProvider) {
 }
 
 async function checkProviderHealth(provider: AiProvider): Promise<ProviderHealth> {
+  const pending = providerHealthRequests.get(provider);
+  if (pending) return pending;
+  const request = checkProviderHealthOnce(provider);
+  providerHealthRequests.set(provider, request);
+  try {
+    return await request;
+  } finally {
+    providerHealthRequests.delete(provider);
+  }
+}
+
+async function checkProviderHealthOnce(provider: AiProvider): Promise<ProviderHealth> {
   const config = providerConfig(provider);
   if (!config) {
     return {

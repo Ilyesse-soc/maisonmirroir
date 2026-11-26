@@ -84,6 +84,8 @@ Variables serveur PayPal : `PAYPAL_ENV=production`, `PAYPAL_CLIENT_ID`, `PAYPAL_
 
 Les tests admin isolés sont inclus dans `npm test`; ils utilisent PostgreSQL embarqué, une authentification mockée et un fournisseur Gemini simulé. Aucun email ni campagne réel n'est envoyé.
 
+`npm run test:security:concurrency` vérifie les limites de promotion et de stock avec des transactions PostgreSQL simultanées et des données synthétiques. Il nécessite Docker et l'image locale `postgres:16-alpine`. Il crée une base temporaire accessible uniquement sur l'interface locale et supprime le conteneur après le test. Aucun service de paiement ou d'expédition n'est contacté.
+
 Pour activer Miroir AI, renseigner `GEMINI_API_KEY` uniquement dans l'environnement serveur protégé (`ops/secrets/app.env` sur OVH), après vérification des accès et quotas du compte Google. Avec `GROQ_API_KEY`, Groq prend automatiquement le relais après deux échecs transitoires de Gemini. `GEMINI_MODEL` vaut `gemini-3.8-flash` et `GROQ_MODEL` vaut `llama-3.3-70b-versatile` par défaut. Ne jamais transmettre de clé dans le navigateur, les issues, les journaux ou Git ; sans aucune clé, les autres fonctions admin continuent de marcher.
 
 ## 🔑 Configuration

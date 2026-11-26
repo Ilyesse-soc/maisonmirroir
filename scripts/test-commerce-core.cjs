@@ -247,6 +247,48 @@ async function main() {
   );
   assert.equal(canonical[0].unitPrice, 29.9);
   assert.equal(canonical[0].unitPriceCents, 2990);
+  const checkout = createLoader({
+    "@/lib/commerceInventory": inventory,
+    "@/lib/mondialRelaySettings": {
+      getMondialRelaySettings: async () => ({
+        fulfillmentMode: "manual_connect",
+        manualConnectConfirmed: true,
+        serviceCode: "24R/MED",
+        preparationDays: 3,
+      }),
+      getMondialRelayProductionReadiness: () => ({ checkoutShippingReady: true }),
+    },
+    "@/lib/mondialRelayPointProof": {
+      verifyMondialRelayPointProof: () => true,
+      withoutMondialRelayPointProof: (point) => point,
+    },
+    "@/lib/mondialRelayTypes": {
+      getMondialRelayQuote: () => ({ priceCents: 425 }),
+      getHomeDeliveryPriceCents: () => 749,
+    },
+    "@/lib/shipping": {
+      getShippingMethodById: (id) => ({ id }),
+      MONDIAL_RELAY_POINT_RELAIS_ID: "mondial-relay-point-relais",
+      MONDIAL_RELAY_HOME_ID: "mondial-relay-home",
+    },
+    "@/lib/legalVersion": { getCgvVersion: () => orderSnapshot.cgvVersion },
+  })("lib/checkoutQuote.ts");
+  for (const forgedShippingPrice of [0, 0.01, 99999]) {
+    const forgedOrder = {
+      ...orderPayload(submitted("modest-era", 1, 0.01)),
+      shipping: { id: "mondial-relay-point-relais", price: forgedShippingPrice },
+    };
+    const quote = await checkout.prepareCheckoutOrder(forgedOrder);
+    assert.equal(quote.subtotalCents, 2990);
+    assert.equal(quote.shippingCents, 425);
+    assert.equal(quote.totalCents, 3415);
+  }
+  const proofExpiry = Date.now() + 60000;
+  const signedProof = inventory.createCommerceCheckoutProof("reservation-test", "PAYPALTEST0001", proofExpiry);
+  inventory.verifyCommerceCheckoutProof(signedProof, "reservation-test", "PAYPALTEST0001", proofExpiry);
+  assert.throws(() => inventory.verifyCommerceCheckoutProof(signedProof, "other-reservation", "PAYPALTEST0001", proofExpiry));
+  assert.throws(() => inventory.verifyCommerceCheckoutProof(signedProof, "reservation-test", "PAYPALTEST0002", proofExpiry));
+  assert.throws(() => inventory.verifyCommerceCheckoutProof(signedProof, "reservation-test", "PAYPALTEST0001", proofExpiry + 1));
   const promo = await inventory.validatePromotion(
     "FIRSTPRINCESS1",
     submitted("modest-era", 1),

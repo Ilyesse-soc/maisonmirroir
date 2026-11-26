@@ -407,7 +407,12 @@ async function main() {
     };
   };
   try {
-    const aiStatus = await (await ai.GET()).json();
+    const simultaneousStatuses = await Promise.all(
+      Array.from({ length: 20 }, async () => (await ai.GET()).json()),
+    );
+    assert.equal(aiCalls, 4, "Concurrent health checks must share provider requests");
+    const aiStatus = simultaneousStatuses[0];
+    assert(simultaneousStatuses.every((status) => status.provider === "gemini"));
     assert.equal(aiStatus.provider, "gemini");
     assert.equal(aiStatus.model, "gemini-3.8-flash");
     assert.equal(aiStatus.fallbackEnabled, true);

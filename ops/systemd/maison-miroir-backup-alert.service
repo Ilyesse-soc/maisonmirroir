@@ -1,0 +1,13 @@
+[Unit]
+Description=Notify the administrator of a Maison Miroir backup failure
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/python3 /opt/maison-miroir/ops/backup/alert.py
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict

@@ -1,0 +1,18 @@
+[Unit]
+Description=Maison Miroir encrypted database and configuration backup
+After=docker.service network-online.target
+Wants=network-online.target
+OnFailure=maison-miroir-backup-alert.service
+
+[Service]
+Type=oneshot
+User=root
+RuntimeDirectory=maison-miroir-backup
+RuntimeDirectoryMode=0700
+ExecStart=/bin/bash /opt/maison-miroir/ops/backup/run.sh
+TimeoutStartSec=6h
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/maison-miroir-backup

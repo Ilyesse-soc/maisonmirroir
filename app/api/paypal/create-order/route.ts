@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
   createPayPalCheckoutOrder,
-  orderPayloadSchema,
+  checkoutOrderSchema,
 } from "@/lib/commerceSecurity";
 import {
   CheckoutConfigurationError,
@@ -26,7 +26,7 @@ import { securityEvent } from "@/lib/observability";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const checkoutSchema = z.object({ order: orderPayloadSchema }).strict();
+const checkoutSchema = z.object({ order: checkoutOrderSchema }).strict();
 
 export async function POST(request: NextRequest) {
   const denied = mutationAllowed(request);

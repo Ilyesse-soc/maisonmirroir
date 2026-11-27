@@ -90,6 +90,22 @@ export const orderPayloadSchema = z
     cgvVersion: z.string().trim().min(1).max(80),
   })
   .strict();
+export const checkoutOrderSchema = orderPayloadSchema.superRefine((order, ctx) => {
+  for (const [index, attachment] of (order.attachments || []).entries()) {
+    const encoded = attachment.base64;
+    const canonicalBase64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
+    if (!encoded || !canonicalBase64.test(encoded)) {
+      ctx.addIssue({ code: "custom", path: ["attachments", index, "base64"], message: "Invalid attachment encoding" });
+      continue;
+    }
+    const bytes = Buffer.from(encoded, "base64");
+    const signature = attachment.contentType === "application/pdf"
+      ? Buffer.from("%PDF-")
+      : Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    if (bytes.toString("base64") !== encoded || !bytes.subarray(0, signature.length).equals(signature))
+      ctx.addIssue({ code: "custom", path: ["attachments", index, "base64"], message: "Attachment does not match its declared type" });
+  }
+});
 export const incomingOrderSchema = z
   .object({
     paymentMethod: z.enum(["PAYPAL", "CARD"]),

@@ -27,3 +27,4 @@ jobs:
       - run: npm run test:security
       - run: npm run build
       - run: npm run typecheck
+      - run: bash scripts/test-backup.sh
